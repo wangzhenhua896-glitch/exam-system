@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能评分系统 v2.0</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon">📝</span>
+                <span class="logo-text">AI 评分系统</span>
+            </div>
+            <p class="subtitle">国产大模型 · 高精度评分</p>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-page="single">
+                <span class="nav-icon">✏️</span>
+                <span class="nav-text">单题评分</span>
+            </a>
+            <a href="#" class="nav-item" data-page="batch">
+                <span class="nav-icon">📊</span>
+                <span class="nav-text">批量测试</span>
+            </a>
+            <a href="#" class="nav-item" data-page="validation">
+                <span class="nav-icon">✅</span>
+                <span class="nav-text">规则验证</span>
+            </a>
+            <a href="#" class="nav-item" data-page="tuning">
+                <span class="nav-icon">🎯</span>
+                <span class="nav-text">自动调优</span>
+            </a>
+            <a href="#" class="nav-item" data-page="config">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-text">评分配置</span>
+            </a>
+            <a href="#" class="nav-item" data-page="history">
+                <span class="nav-icon">📜</span>
+                <span class="nav-text">历史记录</span>
+            </a>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="status-badge" id="system-status">
+                <span class="status-dot"></span>
+                <span class="status-text">系统就绪</span>
+            </div>
+            <p class="version">v2.0.0</p>
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <!-- 顶部导航 -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <h1 class="page-title" id="page-title">单题评分</h1>
+            </div>
+            <div class="top-bar-right">
+                <div class="model-status" id="model-status">
+                    <span class="model-count">加载中...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 页面内容 -->
+        <div class="page-content">
+            <!-- 单题评分页面 -->
+            <div class="page active" id="page-single">
+                <div class="content-grid">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <h2>题目与答案</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label class="form-label">题目</label>
+                                <textarea class="form-textarea" id="question" rows="4" placeholder="请输入简答题题目..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">学生答案</label>
+                                <textarea class="form-textarea" id="answer" rows="6" placeholder="请输入学生的答案..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">满分</label>
+                                    <input type="number" class="form-input" id="max-score" value="10" min="1" max="100">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">采样次数</label>
+                                    <select class="form-select" id="sample-count">
+                                        <option value="1">1 次</option>
+                                        <option value="3" selected>3 次</option>
+                                        <option value="5">5 次</option>
+                                        <option value="7">7 次</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">聚合策略</label>
+                                    <select class="form-select" id="strategy">
+                                        <option value="confidence_weighted" selected>置信度加权</option>
+                                        <option value="weighted_average">加权平均</option>
+                                        <option value="majority_vote">多数投票</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary btn-large" id="grade-btn">
+                                <span>🚀</span>
+                                <span>开始评分</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="content-card">
+                        <div class="card-header">
+                            <h2>评分结果</h2>
+                        </div>
+                        <div class="card-body">
+                            <div id="result-container" class="result-container">
+                                <div class="empty-state">
+                                    <span class="empty-icon">📝</span>
+                                    <p>提交评分后将在此显示结果</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 批量测试页面 -->
+            <div class="page" id="page-batch">
+                <div class="content-card full-width">
+                    <div class="card-header">
+                        <h2>批量性能测试</h2>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" id="batch-test-btn">
+                                <span>📊</span>
+                                <span>开始测试</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">测试题数</label>
+                                <select class="form-select" id="test-count">
+                                    <option value="10">10 题</option>
+                                    <option value="50">50 题</option>
+                                    <option value="100" selected>100 题</option>
+                                    <option value="500">500 题</option>
+                                    <option value="1000">1000 题</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">采样次数</label>
+                                <select class="form-select" id="batch-sample-count">
+                                    <option value="1">1 次</option>
+                                    <option value="3" selected>3 次</option>
+                                    <option value="5">5 次</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">策略</label>
+                                <select class="form-select" id="batch-strategy">
+                                    <option value="confidence_weighted" selected>置信度加权</option>
+                                    <option value="weighted_average">加权平均</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="stats-grid" id="batch-stats">
+                            <div class="stat-card">
+                                <div class="stat-label">总题数</div>
+                                <div class="stat-value" id="stat-total">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">成功</div>
+                                <div class="stat-value success" id="stat-success">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">失败</div>
+                                <div class="stat-value error" id="stat-failed">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">总耗时</div>
+                                <div class="stat-value" id="stat-time">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">平均耗时</div>
+                                <div class="stat-value" id="stat-avg">-</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">吞吐量</div>
+                                <div class="stat-value" id="stat-throughput">-</div>
+                            </div>
+                        </div>
+
+                        <div class="progress-container" id="progress-container" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <p class="progress-text" id="progress-text">处理中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 自动调优页面 -->
+            <div class="page" id="page-tuning">
+                <div class="content-card full-width">
+                    <div class="card-header">
+                        <h2>自动调优</h2>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" id="start-tuning-btn">
+                                <span>🎯</span>
+                                <span>开始调优</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 调优配置 -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">最大迭代次数</label>
+                                <input type="number" class="form-input" id="tuning-max-iterations" value="10" min="1" max="20">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">目标准确率 (%)</label>
+                                <input type="number" class="form-input" id="tuning-target-accuracy" value="80" min="50" max="100" step="5">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">目标相关系数</label>
+                                <input type="number" class="form-input" id="tuning-target-correlation" value="0.85" min="0.5" max="1" step="0.05">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">聚合策略</label>
+                                <select class="form-select" id="tuning-strategy">
+                                    <option value="confidence_weighted" selected>置信度加权</option>
+                                    <option value="weighted_average">加权平均</option>
+                                    <option value="majority_vote">多数投票</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 调优进度 -->
+                        <div id="tuning-progress" style="display: none;">
+                            <h3>调优进度</h3>
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="tuning-progress-fill"></div>
+                                </div>
+                                <p class="progress-text" id="tuning-progress-text">准备中...</p>
+                            </div>
+
+                            <!-- 当前状态 -->
+                            <div class="tuning-status-grid">
+                                <div class="status-item">
+                                    <span class="status-label">当前迭代</span>
+                                    <span class="status-value" id="tuning-current-iteration">-</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">当前温度</span>
+                                    <span class="status-value" id="tuning-current-temp">-</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">当前准确率</span>
+                                    <span class="status-value" id="tuning-current-accuracy">-</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">当前相关系数</span>
+                                    <span class="status-value" id="tuning-current-correlation">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 调优结果 -->
+                        <div id="tuning-result" style="display: none;">
+                            <h3>调优结果</h3>
+                            
+                            <!-- 结果统计卡片 -->
+                            <div class="stats-grid" id="tuning-result-stats">
+                                <div class="stat-card">
+                                    <div class="stat-label">是否成功</div>
+                                    <div class="stat-value" id="tuning-success">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">总迭代次数</div>
+                                    <div class="stat-value" id="tuning-total-iterations">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">最佳迭代</div>
+                                    <div class="stat-value" id="tuning-best-iteration">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">最佳准确率</div>
+                                    <div class="stat-value" id="tuning-best-accuracy">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">最佳相关系数</div>
+                                    <div class="stat-value" id="tuning-best-correlation">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">最佳平均误差</div>
+                                    <div class="stat-value" id="tuning-best-error">-</div>
+                                </div>
+                            </div>
+
+                            <!-- 迭代历史表格 -->
+                            <div class="tuning-table-container">
+                                <h4>迭代历史</h4>
+                                <table class="tuning-table">
+                                    <thead>
+                                        <tr>
+                                            <th>迭代</th>
+                                            <th>温度</th>
+                                            <th>准确率</th>
+                                            <th>相关系数</th>
+                                            <th>平均误差</th>
+                                            <th>最大误差</th>
+                                            <th>改进</th>
+                                            <th>达标</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tuning-history-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="empty-state" id="tuning-empty">
+                            <span class="empty-icon">🎯</span>
+                            <p>点击"开始调优"自动调整评分规则</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 规则验证页面 -->
+            <div class="page" id="page-validation">
+                <div class="content-card full-width">
+                    <div class="card-header">
+                        <h2>评分规则验证</h2>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" id="run-validation-btn">
+                                <span>✅</span>
+                                <span>开始验证</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">聚合策略</label>
+                                <select class="form-select" id="validation-strategy">
+                                    <option value="confidence_weighted" selected>置信度加权</option>
+                                    <option value="weighted_average">加权平均</option>
+                                    <option value="majority_vote">多数投票</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">采样次数</label>
+                                <select class="form-select" id="validation-sample-count">
+                                    <option value="1">1 次</option>
+                                    <option value="3" selected>3 次</option>
+                                    <option value="5">5 次</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 数据集信息 -->
+                        <div class="dataset-info" id="dataset-info">
+                            <h3>测试数据集</h3>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">数据集名称</span>
+                                    <span class="info-value" id="info-dataset-name">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">题目数量</span>
+                                    <span class="info-value" id="info-question-count">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">测试项数量</span>
+                                    <span class="info-value" id="info-test-count">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">满分</span>
+                                    <span class="info-value" id="info-max-score">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 验证结果 -->
+                        <div id="validation-result" style="display: none;">
+                            <h3>验证结果</h3>
+                            
+                            <!-- 统计卡片 -->
+                            <div class="stats-grid" id="validation-stats">
+                                <div class="stat-card">
+                                    <div class="stat-label">准确率</div>
+                                    <div class="stat-value" id="val-accuracy">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">平均误差</div>
+                                    <div class="stat-value" id="val-mean-error">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">最大误差</div>
+                                    <div class="stat-value" id="val-max-error">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">相关系数</div>
+                                    <div class="stat-value" id="val-correlation">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">成功</div>
+                                    <div class="stat-value success" id="val-success">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">失败</div>
+                                    <div class="stat-value error" id="val-failed">-</div>
+                                </div>
+                            </div>
+
+                            <!-- 详细结果表格 -->
+                            <div class="validation-table-container">
+                                <table class="validation-table">
+                                    <thead>
+                                        <tr>
+                                            <th>题目</th>
+                                            <th>答案描述</th>
+                                            <th>预期分数</th>
+                                            <th>实际分数</th>
+                                            <th>误差</th>
+                                            <th>置信度</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="validation-results-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="empty-state" id="validation-empty">
+                            <span class="empty-icon">✅</span>
+                            <p>点击"开始验证"运行评分规则测试</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 配置页面 -->
+            <div class="page" id="page-config">
+                <div class="content-grid">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <h2>模型配置</h2>
+                        </div>
+                        <div class="card-body">
+                            <div id="models-list" class="models-list">
+                                <!-- 模型列表将通过 JS 动态加载 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="content-card">
+                        <div class="card-header">
+                            <h2>评分设置</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label class="form-label">默认采样次数</label>
+                                <select class="form-select" id="config-sample-count">
+                                    <option value="1">1 次</option>
+                                    <option value="3" selected>3 次</option>
+                                    <option value="5">5 次</option>
+                                    <option value="7">7 次</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">默认聚合策略</label>
+                                <select class="form-select" id="config-strategy">
+                                    <option value="confidence_weighted" selected>置信度加权</option>
+                                    <option value="weighted_average">加权平均</option>
+                                    <option value="majority_vote">多数投票</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">低置信度阈值</label>
+                                <input type="number" class="form-input" id="config-low-threshold" value="0.6" step="0.1" min="0" max="1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">中置信度阈值</label>
+                                <input type="number" class="form-input" id="config-medium-threshold" value="0.7" step="0.1" min="0" max="1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">高置信度阈值</label>
+                                <input type="number" class="form-input" id="config-high-threshold" value="0.8" step="0.1" min="0" max="1">
+                            </div>
+                            <button class="btn btn-primary" id="save-config-btn">保存配置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史记录页面 -->
+            <div class="page" id="page-history">
+                <div class="content-card full-width">
+                    <div class="card-header">
+                        <h2>评分历史</h2>
+                        <div class="card-actions">
+                            <button class="btn" id="clear-history-btn">清空历史</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="history-list" class="history-list">
+                            <div class="empty-state">
+                                <span class="empty-icon">📜</span>
+                                <p>暂无评分记录</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
