@@ -190,7 +190,7 @@ class GradingApp {
     }
 
     // 开始调优
-    async function startTuning() {
+    async startTuning() {
         const maxIterations = parseInt(document.getElementById('tuning-max-iterations').value);
         const targetAccuracy = parseInt(document.getElementById('tuning-target-accuracy').value) / 100;
         const targetCorrelation = parseFloat(document.getElementById('tuning-target-correlation').value);
@@ -306,10 +306,22 @@ class GradingApp {
         const maxScore = parseFloat(document.getElementById('max-score').value);
         const sampleCount = parseInt(document.getElementById('sample-count').value);
         const strategy = document.getElementById('strategy').value;
+        const rubricInput = document.getElementById('rubric').value.trim();
 
         if (!question || !answer) {
             this.showToast('请填写题目和答案', 'error');
             return;
+        }
+
+        // 解析评分规则
+        let rubric = {};
+        if (rubricInput) {
+            try {
+                rubric = JSON.parse(rubricInput);
+            } catch (e) {
+                this.showToast('评分规则JSON格式错误', 'error');
+                return;
+            }
         }
 
         const btn = document.getElementById('grade-btn');
@@ -326,7 +338,7 @@ class GradingApp {
                     max_score: maxScore,
                     sample_count: sampleCount,
                     strategy,
-                    rubric: {}
+                    rubric
                 })
             });
 
@@ -334,7 +346,7 @@ class GradingApp {
 
             if (data.success) {
                 this.renderResult(data.result, data.elapsed);
-                this.addToHistory(question, answer, data.result);
+                this.addToHistory(question, answer, data.result, rubric);
                 this.showToast('评分完成', 'success');
             } else {
                 this.showToast(data.error || '评分失败', 'error');
@@ -443,13 +455,14 @@ class GradingApp {
     }
 
     // 添加到历史
-    addToHistory(question, answer, result) {
+    addToHistory(question, answer, result, rubric) {
         const item = {
             question,
             answer: answer.substring(0, 50) + '...',
             score: result.final_score,
             confidence: result.confidence,
-            time: new Date().toLocaleString()
+            time: new Date().toLocaleString(),
+            rubric: rubric
         };
 
         this.history.unshift(item);
