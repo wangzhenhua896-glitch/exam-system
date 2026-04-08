@@ -91,3 +91,9 @@ def init_models(config: Dict[str, Any]) -> None:
             model_registry.register(ernie)
         except ImportError:
             print("⚠️  百度文心需要安装 SDK: pip install qianfan")
+
+    # 字节跳动豆包（火山引擎，使用 openai 兼容接口，无需额外 SDK）
+    if config.get("doubao", {}).get("enabled", False):
+        from .doubao import DoubaoClient
+        doubao = DoubaoClient(config["doubao"])
+        model_registry.register(doubao)

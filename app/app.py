@@ -38,17 +38,35 @@ def register_routes(app: Flask):
     from .batch_routes import batch_bp
     from .validation_routes import validation_bp
     from .tuning_routes import tuning_bp
-    
-    # 主页
+    from .api_routes import api_bp
+    from flask import send_from_directory, render_template
+    import os
+
+    # 题库管理 - Vue 完整界面（直接发送文件，避免 Jinja2 解析 Vue {{ }} 语法冲突）
+    @app.route("/management")
+    def management():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-bank.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 根路径跳转到题库管理
     @app.route("/")
     def index():
-        return render_template("index.html")
-    
+        from flask import redirect
+        return redirect("/management")
+
+    # 聚焦单题评分 - 深色主题纯净界面
+    @app.route("/grading")
+    def grading():
+        dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'dist')
+        return send_from_directory(dist_dir, 'index.html')
+
     # 注册蓝图
     app.register_blueprint(grading_bp, url_prefix="/api/grading")
     app.register_blueprint(batch_bp, url_prefix="/api/batch")
     app.register_blueprint(validation_bp, url_prefix="/api/validation")
     app.register_blueprint(tuning_bp, url_prefix="/api/tuning")
+    app.register_blueprint(api_bp, url_prefix="/api")
 
 
 def register_error_handlers(app: Flask):

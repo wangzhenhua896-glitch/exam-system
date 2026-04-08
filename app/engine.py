@@ -189,16 +189,16 @@ class AggregationEngine:
         """置信度加权策略（默认）"""
         if not responses:
             return GradingResult(
-                final_score=0,
-                confidence=0,
-                strategy="confidence_weighted",
-                model_scores=responses,
-            )
-        
+            final_score=0,
+            confidence=0,
+            strategy="confidence_weighted",
+            model_scores=responses,
+        )
+
         # 使用置信度作为权重
         scores = np.array([r["score"] for r in responses])
         weights = np.array([r["confidence"] for r in responses])
-        
+
         # 过滤掉错误响应
         valid_mask = weights > 0
         if not np.any(valid_mask):
@@ -209,23 +209,39 @@ class AggregationEngine:
                 model_scores=responses,
                 warning="所有模型都返回错误",
             )
-        
+
         scores = scores[valid_mask]
         weights = weights[valid_mask]
-        
+
+        # 一致性提升：当有多个采样结果时，过滤掉偏离过大的异常值
+        if len(scores) >= 4:
+            # 使用中位数绝对偏差法检测异常值
+            median = np.median(scores)
+            mad = np.median(np.abs(scores - median))
+            if mad > 0:
+                # 保留离中位数在 2*MAD 范围内的结果
+                mask = np.abs(scores - median) < 2 * mad
+                if np.sum(mask) > 0:
+                    scores = scores[mask]
+                    weights = weights[mask]
+
         # 加权平均
         final_score = float(np.average(scores, weights=weights))
-        
+
         # 综合置信度
         confidence = float(np.average(weights, weights=weights))
-        
-        # 计算一致性
+
+        # 计算一致性（分数间的标准差越小，一致性越高）
         consistency = 1 - float(np.std(scores) / max_score) if max_score > 0 else 0
         consistency = max(0, min(consistency, 1))
-        
+
         # 最终置信度是置信度和一致性的平均
         confidence = (confidence + consistency) / 2
-        
+
+        # 一致性特别差时，进一步降低置信度触发人工复核
+        if consistency < 0.5:
+            confidence = confidence * 0.5
+
         return GradingResult(
             final_score=round(final_score, 2),
             confidence=round(confidence, 2),

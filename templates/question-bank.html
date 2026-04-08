@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能评分系统 - 题库管理</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
+        .subtitle { font-size: 12px; color: #909399; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 220px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; }
+        .menu-group-title { padding: 12px 20px 8px; font-size: 12px; color: #909399; font-weight: 500; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .page-header { margin-bottom: 20px; }
+        .page-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+        .page-desc { font-size: 14px; color: #909399; }
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .stat-value { font-size: 28px; font-weight: bold; color: #409EFF; }
+        .stat-label { font-size: 13px; color: #909399; margin-top: 8px; }
+        .form-section { margin-bottom: 20px; }
+        .section-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; }
+        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
+        .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
+        .progress-text { text-align: center; margin-top: 10px; font-size: 14px; color: #606266; }
+        .question-table { margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="layout">
+        <!-- 顶部导航 -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">📝 AI 评分系统</div>
+                <div class="subtitle">国产大模型 · 高精度评分</div>
+            </div>
+            <div class="header-right">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>系统就绪</span>
+                </div>
+                <el-tag size="small" type="info">题库管理</el-tag>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- 左侧导航 -->
+            <div class="sidebar">
+                <div class="menu-group-title">系统管理</div>
+                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                    <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
+                </el-menu>
+
+                <div class="menu-group-title">题库管理</div>
+                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                    <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>新建题目</span></el-menu-item>
+                    <el-menu-item index="question-list"><el-icon><Document /></el-icon><span>题目列表</span></el-menu-item>
+                    <el-menu-item index="ai-generate"><el-icon><MagicStick /></el-icon><span>AI 批量出题</span></el-menu-item>
+                </el-menu>
+
+                <div class="menu-group-title">考试资料</div>
+                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                    <el-menu-item index="exam-syllabus"><el-icon><Notebook /></el-icon><span>考试大纲</span></el-menu-item>
+                    <el-menu-item index="textbook"><el-icon><Reading /></el-icon><span>教材内容</span></el-menu-item>
+                </el-menu>
+
+                <div class="menu-group-title">评分工具</div>
+                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                    <el-menu-item url="/grading" target="_blank"><el-icon><Maximize /></el-icon><span>新窗口评分</span></el-menu-item>
+                </el-menu>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="content">
+                <!-- 科目管理 -->
+                <div v-if="currentPage === 'subject-manage'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">科目管理</div>
+                            <div class="page-desc">自定义管理可用科目，增删改后题目表单会自动更新选项</div>
+                        </div>
+                        <el-row :gutter="16" style="margin-bottom: 20px;">
+                            <el-col :span="12">
+                                <el-input v-model="newSubjectName" placeholder="输入新科目名称" clearable></el-input>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-button type="primary" @click="addSubject" :disabled="!newSubjectName.trim()">添加科目</el-button>
+                            </el-col>
+                        </el-row>
+                        <el-table :data="subjectList" stripe style="width: 100%">
+                            <el-table-column prop="label" label="科目名称" width="200"></el-table-column>
+                            <el-table-column prop="value" label="标识" width="200"></el-table-column>
+                            <el-table-column label="操作" width="120" fixed="right">
+                                <template #default="scope">
+                                    <el-button type="danger" size="small" @click="deleteSubject(scope.row.value)" :disabled="subjectList.length <= 1">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <el-empty v-if="subjectList.length === 0" description="暂无科目，请添加至少一个科目"></el-empty>
+                    </div>
+                </div>
+
+                <!-- 命题管理 -->
+                <div v-if="currentPage === 'question-manage'">
+                    <div class="page-card">
+                        <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div class="page-title">
+                                    <span v-if="viewMode === 'create'">新建题目</span>
+                                    <span v-else-if="viewMode === 'view'">查看题目 #{{ editingQuestionId }}</span>
+                                    <span v-else>编辑题目 #{{ editingQuestionId }}</span>
+                                    <el-tag v-if="viewMode === 'view'" type="info" size="small" style="margin-left: 12px;">只读模式</el-tag>
+                                    <el-tag v-else-if="viewMode === 'edit'" type="warning" size="small" style="margin-left: 12px;">编辑模式</el-tag>
+                                </div>
+                                <div class="page-desc" v-if="viewMode === 'create'" style="margin-top: 4px;">
+                                    题目 <b>{{ stats.total_questions || 0 }}</b> / 已评分 <b>{{ stats.total_gradings || 0 }}</b> / 科目 <b>{{ subjectList.length }}</b> / 均分 <b>{{ stats.average_score || 0 }}</b>
+                                </div>
+                            </div>
+                            <div v-if="viewMode === 'view'">
+                                <el-button type="primary" size="small" @click="viewMode = 'edit'">进入编辑</el-button>
+                                <el-button size="small" @click="resetForm">返回新建</el-button>
+                            </div>
+                            <div v-else-if="viewMode === 'edit'">
+                                <el-button size="small" @click="resetForm">取消编辑</el-button>
+                            </div>
+                        </div>
+
+                        <!-- 快速导入（可折叠） -->
+                        <el-collapse style="margin-bottom: 20px;">
+                            <el-collapse-item title="快速导入 — 粘贴整段内容自动识别提取" name="import">
+                                <el-input
+                                    v-model="autoImportText"
+                                    type="textarea"
+                                    :rows="6"
+                                    placeholder="粘贴完整题目内容，例如：&#10;题目：请简述什么是人工智能，满分10分&#10;评分标准：&#10;1. 正确定义概念（3分）&#10;2. 列举三个应用（每个2分，共6分）&#10;3. 语言清晰（1分）&#10;评分提示词：请严格按要点给分，部分答对给部分分数"
+                                ></el-input>
+                                <div style="margin-top: 10px;">
+                                    <el-button type="primary" size="small" @click="autoParseText" :disabled="!autoImportText.trim()">
+                                        <el-icon><MagicStick /></el-icon>自动识别转换
+                                    </el-button>
+                                    <el-button size="small" @click="clearAutoImport">清空</el-button>
+                                </div>
+                                <div v-if="parseResult" style="margin-top: 10px; padding: 10px; background: #ecfdf5; border-radius: 6px;">
+                                    <el-tag size="small" type="success">总分 {{parseResult.maxScore}}</el-tag>
+                                    <el-tag size="small" style="margin-left: 6px;">分数分布 {{parseResult.points}}</el-tag>
+                                    <el-tag v-if="parseResult.hasAnswer" size="small" type="success" style="margin-left: 6px;">参考答案 ✓</el-tag>
+                                </div>
+                            </el-collapse-item>
+                        </el-collapse>
+
+                        <el-form label-position="top" :disabled="viewMode === 'view'">
+
+                            <!-- 基本信息 -->
+                            <div style="margin-bottom: 24px;">
+                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">基本信息</div>
+                                <el-row :gutter="16">
+                                    <el-col :span="6">
+                                        <el-form-item label="学科">
+                                            <el-select v-model="questionForm.subject" style="width: 100%;" placeholder="选择科目">
+                                                <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                    </el-col>
+                                    <el-col :span="4"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;"></el-input-number></el-form-item></el-col>
+                                    <el-col :span="4"><el-form-item label="难度"><el-select v-model="questionForm.difficulty" style="width: 100%;"><el-option label="简单" value="easy"></el-option><el-option label="中等" value="medium"></el-option><el-option label="困难" value="hard"></el-select></el-form-item></el-col>
+                                    <el-col :span="5"><el-form-item label="知识点"><el-input v-model="questionForm.knowledge" type="text" placeholder="本题考查的知识点"></el-input></el-form-item></el-col>
+                                    <el-col :span="5"><el-form-item label="考核内容"><el-input v-model="questionForm.contentType" type="text" placeholder="简答题/选择题/计算题"></el-input></el-form-item></el-col>
+                                </el-row>
+                            </div>
+
+                            <!-- 题目内容 -->
+                            <div style="margin-bottom: 24px;">
+                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">题目内容</div>
+                                <el-form-item label="原题（原始未处理）"><el-input v-model="questionForm.originalText" type="textarea" :rows="3" placeholder="粘贴的原始原题，保存供对照参考"></el-input></el-form-item>
+                                <el-form-item label="题干（处理后）"><el-input v-model="questionForm.content" type="textarea" :rows="4" placeholder="请输入题目内容..."></el-input></el-form-item>
+                                <el-form-item label="标准答案">
+                                    <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="3" placeholder="输入参考答案/标准答案，方便AI评分参考"></el-input>
+                                    <div style="margin-top: 8px;">
+                                        <el-button type="warning" size="small" @click="cleanAnswerScores">
+                                            <el-icon><MagicStick /></el-icon>一键清除分数标注
+                                        </el-button>
+                                        <span style="margin-left: 8px; font-size: 12px; color: #909399;">
+                                            去除「（2分，其中...不得分）」这类评分说明，得到纯标准答案
+                                        </span>
+                                    </div>
+                                </el-form-item>
+                            </div>
+
+                            <!-- 评分规则 -->
+                            <div style="margin-bottom: 24px;">
+                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">评分规则</div>
+                                <el-form-item label="评分规则">
+                                    <el-input v-model="questionForm.rubricRules" type="textarea" :rows="2" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分"></el-input>
+                                </el-form-item>
+                                <el-row :gutter="16">
+                                    <el-col :span="12">
+                                        <el-form-item label="分数分布（每行一个得分点，带分值）">
+                                            <el-input v-model="questionForm.rubricPoints" type="textarea" :rows="3" placeholder="每行一个得分点，例如：正确回答出公有制为主体 (2分)"></el-input>
+                                        </el-form-item>
+                                    </el-col>
+                                    <el-col :span="12">
+                                        <el-form-item label="评分提示词">
+                                            <el-input v-model="questionForm.aiRubric" type="textarea" :rows="3" placeholder="补充评分注意事项，例如：请严格按要点给分，部分答对给部分分数"></el-input>
+                                        </el-form-item>
+                                    </el-col>
+                                </el-row>
+                                <el-form-item label="评分脚本">
+                                    <el-input v-model="questionForm.rubricScript" type="textarea" :rows="4" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定"></el-input>
+                                    <div style="margin-top: 8px; display: flex; gap: 8px;">
+                                        <el-button type="primary" plain size="small" @click="generateRubric" :loading="generatingScript">
+                                            <el-icon><MagicStick /></el-icon>AI 生成评分脚本
+                                        </el-button>
+                                        <el-button type="success" plain size="small" @click="openTestCaseDialog" :disabled="!editingQuestionId">
+                                            <el-icon><CircleCheck /></el-icon>验证脚本
+                                            <span v-if="testCaseCount > 0">（{{testCaseCount}}个用例）</span>
+                                        </el-button>
+                                    </div>
+                                </el-form-item>
+                            </div>
+
+                            <!-- 操作栏 -->
+                            <el-form-item v-if="viewMode !== 'view'">
+                                <el-button type="success" plain @click="evaluateQuality" :loading="evaluatingQuality">
+                                    <el-icon><Search /></el-icon>
+                                    {{ qualityScore !== null ? '质量评估: ' + qualityScore + '分' : 'AI 质量评估' }}
+                                </el-button>
+                                <el-button type="primary" @click="saveQuestion">{{ viewMode === 'edit' ? '更新题目' : '保存题目' }}</el-button>
+                                <el-button @click="resetForm">{{ viewMode === 'edit' ? '取消' : '重置' }}</el-button>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                </div>
+
+                <!-- 题目列表 -->
+                <div v-if="currentPage === 'question-list'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">题目列表</div>
+                            <div class="page-desc">浏览所有题目，点击「开始评分」进入聚焦评分模式（题目自动预填）</div>
+                        </div>
+                        <!-- 搜索/筛选栏 -->
+                        <el-row :gutter="12" style="margin-bottom: 16px;">
+                            <el-col :span="5">
+                                <el-select v-model="filterSubject" placeholder="全部科目" clearable style="width: 100%;">
+                                    <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                </el-select>
+                            </el-col>
+                            <el-col :span="10">
+                                <el-input v-model="searchKeyword" placeholder="搜索标题或题干内容..." clearable>
+                                    <template #prefix><el-icon><Search /></el-icon></template>
+                                </el-input>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-select v-model="filterQuality" placeholder="全部质量" clearable style="width: 100%;">
+                                    <el-option label="合格 (≥80)" value="pass"></el-option>
+                                    <el-option label="待改 (60-79)" value="warning"></el-option>
+                                    <el-option label="差题 (<60)" value="fail"></el-option>
+                                    <el-option label="未评估" value="unrated"></el-option>
+                                </el-select>
+                            </el-col>
+                            <el-col :span="4" style="text-align: right; line-height: 32px; color: #909399; font-size: 13px;">
+                                共 {{ filteredQuestions.length }} 题
+                            </el-col>
+                        </el-row>
+                        <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
+                            <el-table-column prop="id" label="ID" width="60"></el-table-column>
+                            <el-table-column prop="subject" label="学科" width="100">
+                                <template #default="scope">
+                                    {{ getSubjectLabel(scope.row.subject) }}
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="title" label="标题" width="150"></el-table-column>
+                            <el-table-column prop="content" label="题干" show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="max_score" label="分值" width="60"></el-table-column>
+                            <el-table-column label="质量" width="90">
+                                <template #default="scope">
+                                    <el-tag v-if="scope.row.quality_score !== null && scope.row.quality_score !== undefined"
+                                            :type="scope.row.quality_score >= 80 ? 'success' : scope.row.quality_score >= 60 ? 'warning' : 'danger'"
+                                            size="small">
+                                        {{ scope.row.quality_score }}分
+                                    </el-tag>
+                                    <el-tag v-else type="info" size="small">未评</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="280" fixed="right">
+                                <template #default="scope">
+                                    <el-button type="info" size="small" plain @click="viewQuestion(scope.row.id)">查看</el-button>
+                                    <el-button type="warning" size="small" plain @click="editQuestion(scope.row.id)">编辑</el-button>
+                                    <el-button type="primary" size="small" @click="startGrading(scope.row.id)">评分</el-button>
+                                    <el-button type="danger" size="small" plain @click="deleteQuestion(scope.row.id)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <el-empty v-if="filteredQuestions.length === 0" description="暂无题目，请先在「新建题目」中创建题目"></el-empty>
+                        <div v-if="filteredQuestions.length > 0" style="margin-top: 16px; display: flex; justify-content: flex-end;">
+                            <el-pagination
+                                v-model:current-page="listPage"
+                                :page-size="20"
+                                :total="filteredQuestions.length"
+                                layout="prev, pager, next"
+                                small
+                            ></el-pagination>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI 批量出题 -->
+                <div v-if="currentPage === 'ai-generate'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">AI 批量出题</div>
+                            <div class="page-desc">选择科目和数量，系统自动调用大模型生成完整题目（含评分脚本和测试用例），生成后可直接在题目列表中查看和编辑。</div>
+                        </div>
+
+                        <!-- 配置区 -->
+                        <div style="display: flex; align-items: flex-end; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 160px;">
+                                <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">科目</div>
+                                <el-select v-model="autoGenSubject" style="width: 100%;">
+                                    <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                </el-select>
+                            </div>
+                            <div style="flex: 1; min-width: 140px;">
+                                <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">题目数量</div>
+                                <el-input-number v-model="autoGenCount" :min="1" :max="50" style="width: 100%;"></el-input-number>
+                            </div>
+                            <div style="flex: 1; min-width: 140px;">
+                                <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">每题用例数</div>
+                                <el-input-number v-model="autoGenTestCases" :min="1" :max="10" style="width: 100%;"></el-input-number>
+                            </div>
+                            <div>
+                                <el-button type="warning" size="large" @click="runAutoGenerate" :loading="autoGenRunning" :disabled="autoGenRunning">
+                                    <el-icon><MagicStick /></el-icon>开始生成
+                                </el-button>
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 20px;">
+                            预估 {{ autoGenCount * 3 }} 次 LLM 调用（每道题 = 出题 + 评分脚本 + 测试用例）
+                        </div>
+
+                        <!-- 进度 -->
+                        <div v-if="autoGenRunning" style="margin-bottom: 20px;">
+                            <el-progress :percentage="autoGenProgress" :format="(p) => p >= 100 ? '完成' : `生成中 ${p}%`" :status="autoGenProgress >= 100 ? 'success' : ''"></el-progress>
+                            <div style="text-align: center; margin-top: 8px; font-size: 13px; color: #909399;">{{ autoGenStatus }}</div>
+                        </div>
+
+                        <!-- 结果 -->
+                        <div v-if="autoGenResult">
+                            <el-alert :title="'成功生成 ' + autoGenResult.generated + ' 道题目'" type="success" :closable="false" show-icon style="margin-bottom: 12px;"></el-alert>
+                            <el-table :data="autoGenResult.questions" stripe size="small">
+                                <el-table-column prop="question_id" label="ID" width="60"></el-table-column>
+                                <el-table-column prop="title" label="标题"></el-table-column>
+                                <el-table-column label="评分脚本" width="100">
+                                    <template #default="scope">
+                                        <el-tag :type="scope.row.has_rubric_script ? 'success' : 'warning'" size="small">
+                                            {{ scope.row.has_rubric_script ? '已生成' : '失败' }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="test_cases" label="测试用例" width="90"></el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 考试大纲 -->
+                <div v-if="currentPage === 'exam-syllabus'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">考试大纲</div>
+                            <div class="page-desc">保存各科目的考试大纲内容，供命题和评分参考</div>
+                        </div>
+                        <el-form label-position="top">
+                            <el-row :gutter="16">
+                                <el-col :span="8">
+                                    <el-form-item label="选择科目">
+                                        <el-select v-model="syllabusForm.subject" style="width: 100%;" placeholder="选择科目" @change="loadSyllabusContent('syllabus')">
+                                            <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                        </el-select>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="16">
+                                    <el-form-item label="大纲标题">
+                                        <el-input v-model="syllabusForm.title" placeholder="例如：2026年湖南省对口升学考试大纲（思想政治）"></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="大纲内容">
+                                <el-input v-model="syllabusForm.content" type="textarea" :rows="18" placeholder="粘贴或输入考试大纲的完整内容，包括考试范围、知识点要求、考核目标等"></el-input>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="primary" @click="saveSyllabusContent('syllabus')" :loading="syllabusSaving">
+                                    <el-icon><Check /></el-icon>保存大纲
+                                </el-button>
+                                <el-button @click="syllabusForm.title = ''; syllabusForm.content = ''">清空</el-button>
+                                <span style="margin-left: 16px; font-size: 12px; color: #909399;" v-if="syllabusForm.updatedAt">
+                                    上次保存：{{ syllabusForm.updatedAt }}
+                                </span>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                </div>
+
+                <!-- 教材内容 -->
+                <div v-if="currentPage === 'textbook'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">教材内容</div>
+                            <div class="page-desc">保存各科目的教材核心内容，辅助 AI 理解知识体系</div>
+                        </div>
+                        <el-form label-position="top">
+                            <el-row :gutter="16">
+                                <el-col :span="8">
+                                    <el-form-item label="选择科目">
+                                        <el-select v-model="textbookForm.subject" style="width: 100%;" placeholder="选择科目" @change="loadSyllabusContent('textbook')">
+                                            <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                        </el-select>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="16">
+                                    <el-form-item label="教材标题">
+                                        <el-input v-model="textbookForm.title" placeholder="例如：中职思想政治·中国特色社会主义"></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="教材内容">
+                                <el-input v-model="textbookForm.content" type="textarea" :rows="18" placeholder="粘贴或输入教材的核心内容，包括各章节知识点、概念定义、原理说明等"></el-input>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="primary" @click="saveSyllabusContent('textbook')" :loading="textbookSaving">
+                                    <el-icon><Check /></el-icon>保存教材
+                                </el-button>
+                                <el-button @click="textbookForm.title = ''; textbookForm.content = ''">清空</el-button>
+                                <span style="margin-left: 16px; font-size: 12px; color: #909399;" v-if="textbookForm.updatedAt">
+                                    上次保存：{{ textbookForm.updatedAt }}
+                                </span>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <p>© 2026 AI 评分系统 · 国产大模型 · 高精度评分 · <a href="/management">题库管理</a> · <a href="/grading">聚焦评分</a></p>
+            <p style="margin-top: 5px; color: #c0c4cc;">Created with Claude Code</p>
+        </div>
+
+        <!-- 测试用例验证 Dialog -->
+        <el-dialog v-model="showTestCaseDialog" title="评分脚本验证" width="900px" :close-on-click-modal="false">
+            <!-- 测试用例列表 -->
+            <div style="margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; font-size: 15px;">测试用例</span>
+                    <el-button size="small" type="primary" plain @click="showTestCaseForm = !showTestCaseForm">
+                        {{ showTestCaseForm ? '收起表单' : '添加用例' }}
+                    </el-button>
+                </div>
+                <el-table :data="testCaseList" stripe v-loading="testCaseLoading" size="small" max-height="250">
+                    <el-table-column prop="description" label="描述" width="120"></el-table-column>
+                    <el-table-column label="类型" width="70">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.case_type === 'real' ? 'success' : 'info'" size="small">
+                                {{ scope.row.case_type === 'real' ? '真实' : '模拟' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="期望分" width="70">
+                        <template #default="scope">{{ scope.row.expected_score }}</template>
+                    </el-table-column>
+                    <el-table-column label="上次验证" width="110">
+                        <template #default="scope">
+                            <span v-if="scope.row.last_run_at">
+                                {{ scope.row.last_actual_score }} 分
+                                <el-tag :type="scope.row.last_error <= tolerance ? 'success' : 'danger'" size="small">
+                                    {{ scope.row.last_error <= tolerance ? '通过' : '未通过' }}
+                                </el-tag>
+                            </span>
+                            <span v-else style="color: #c0c4cc;">未运行</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="answer_text" label="答案预览" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="操作" width="100" fixed="right">
+                        <template #default="scope">
+                            <el-button size="small" type="warning" plain @click="editTestCase(scope.row)">编辑</el-button>
+                            <el-button size="small" type="danger" plain @click="deleteTestCase(scope.row.id)">删除</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <el-empty v-if="testCaseList.length === 0 && !testCaseLoading" description="暂无测试用例" :image-size="60"></el-empty>
+            </div>
+
+            <!-- 添加/编辑用例表单 -->
+            <div v-if="showTestCaseForm" style="padding: 12px; background: #f8fafc; border-radius: 8px; margin-bottom: 16px;">
+                <div style="font-size: 13px; font-weight: 500; margin-bottom: 10px;">
+                    {{ editingTestCaseId ? '编辑用例' : '添加用例' }}
+                </div>
+                <el-form label-position="top" size="small">
+                    <el-row :gutter="12">
+                        <el-col :span="6">
+                            <el-form-item label="描述">
+                                <el-input v-model="testCaseForm.description" placeholder="例如：满分答案"></el-input>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="5">
+                            <el-form-item label="类型">
+                                <el-select v-model="testCaseForm.case_type" style="width: 100%;">
+                                    <el-option label="模拟作答" value="simulated"></el-option>
+                                    <el-option label="真实作答" value="real"></el-option>
+                                </el-select>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="4">
+                            <el-form-item label="期望分数">
+                                <el-input-number v-model="testCaseForm.expected_score" :min="0" :max="100" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="9">
+                            <el-form-item label="考生答案">
+                                <el-input v-model="testCaseForm.answer_text" type="textarea" :rows="3" placeholder="粘贴考生作答内容"></el-input>
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+                    <el-button size="small" type="primary" @click="saveTestCase" :disabled="!testCaseForm.answer_text.trim() || testCaseForm.expected_score === null">
+                        {{ editingTestCaseId ? '更新' : '添加' }}
+                    </el-button>
+                    <el-button size="small" @click="resetTestCaseForm">取消</el-button>
+                </el-form>
+            </div>
+
+            <!-- 验证控制 -->
+            <el-divider content-position="left">验证控制</el-divider>
+            <el-row :gutter="16" align="middle" style="margin-bottom: 12px;">
+                <el-col :span="8">
+                    <span style="font-size: 13px; margin-right: 8px;">容差（分）:</span>
+                    <el-input-number v-model="tolerance" :min="0" :max="10" :step="0.5" size="small"></el-input-number>
+                </el-col>
+                <el-col :span="8">
+                    <el-button type="primary" @click="runVerification" :loading="verifyRunning" :disabled="testCaseList.length === 0">
+                        <el-icon><VideoPlay /></el-icon>运行验证
+                    </el-button>
+                </el-col>
+            </el-row>
+
+            <el-progress v-if="verifyRunning" :percentage="verifyProgress" :format="(p) => p >= 100 ? '完成' : `验证中 ${p}%`" style="margin-bottom: 12px;"></el-progress>
+
+            <!-- 验证结果 -->
+            <div v-if="verifyResults">
+                <div style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                    <el-tag :type="verifyResults.accuracy >= 80 ? 'success' : verifyResults.accuracy >= 50 ? 'warning' : 'danger'" size="large">
+                        准确率: {{ verifyResults.accuracy }}%
+                    </el-tag>
+                    <el-tag type="info" size="large">平均误差: {{ verifyResults.mean_absolute_error }} 分</el-tag>
+                    <el-tag type="info" size="large">最大误差: {{ verifyResults.max_absolute_error }} 分</el-tag>
+                    <el-tag size="large">{{ verifyResults.passed_cases }} / {{ verifyResults.total_cases }} 通过</el-tag>
+                </div>
+                <el-table :data="verifyResults.results" stripe size="small" max-height="300">
+                    <el-table-column prop="description" label="用例" width="100"></el-table-column>
+                    <el-table-column label="类型" width="60">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.case_type === 'real' ? 'success' : 'info'" size="small">
+                                {{ scope.row.case_type === 'real' ? '真实' : '模拟' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="期望分" width="70">
+                        <template #default="scope">{{ scope.row.expected_score }}</template>
+                    </el-table-column>
+                    <el-table-column label="实际分" width="70">
+                        <template #default="scope">
+                            <span :style="{ fontWeight: 'bold', color: scope.row.passed ? '#67c23a' : '#f56c6c' }">
+                                {{ scope.row.actual_score !== null ? scope.row.actual_score : '失败' }}
+                            </span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="误差" width="60">
+                        <template #default="scope">{{ scope.row.error !== null ? scope.row.error : '-' }}</template>
+                    </el-table-column>
+                    <el-table-column label="结果" width="70">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.passed ? 'success' : 'danger'" size="small">
+                                {{ scope.row.passed ? '通过' : '未通过' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="comment" label="评语" show-overflow-tooltip></el-table-column>
+                </el-table>
+            </div>
+        </el-dialog>
+
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
+
+const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
+
+// 默认科目
+const DEFAULT_SUBJECTS = [
+    { label: '思想政治', value: 'politics' },
+    { label: '语文', value: 'chinese' },
+    { label: '英语', value: 'english' },
+    { label: '数学', value: 'math' },
+    { label: '历史', value: 'history' },
+    { label: '地理', value: 'geography' },
+    { label: '物理', value: 'physics' },
+    { label: '化学', value: 'chemistry' },
+    { label: '生物', value: 'biology' }
+];
+
+const app = createApp({
+    setup() {
+        const currentPage = ref('question-manage');
+        const questions = ref([]);
+        const stats = ref({});
+        const newSubjectName = ref('');
+        const autoImportText = ref('');
+        const parseResult = ref(null);
+        const viewMode = ref('create'); // 'create' | 'view' | 'edit'
+        const editingQuestionId = ref(null);
+
+        const subjectList = ref([]);
+
+        const questionForm = reactive({
+            subject: 'politics',
+            score: 10,
+            difficulty: 'medium',
+            originalText: '',
+            content: '',
+            standardAnswer: '',
+            knowledge: '',
+            contentType: '简答题',
+            rubricRules: '',
+            rubricPoints: '',
+            rubricScript: '',
+            aiRubric: '请严格按照评分要点给分，每个要点单独判断，部分答对给对应部分分数，总分不超过满分。'
+        });
+
+        // 考试大纲 / 教材 表单
+        const syllabusForm = reactive({ subject: 'politics', title: '', content: '', updatedAt: '' });
+        const textbookForm = reactive({ subject: 'politics', title: '', content: '', updatedAt: '' });
+        const syllabusSaving = ref(false);
+        const textbookSaving = ref(false);
+
+        // 加载大纲/教材内容
+        const loadSyllabusContent = async (type) => {
+            const form = type === 'syllabus' ? syllabusForm : textbookForm;
+            try {
+                const res = await axios.get(`/api/syllabus/${form.subject}/${type}`);
+                if (res.data.success && res.data.data) {
+                    form.title = res.data.data.title || '';
+                    form.content = res.data.data.content || '';
+                    form.updatedAt = res.data.data.updated_at || '';
+                }
+            } catch (e) {
+                console.error('加载内容失败', e);
+            }
+        };
+
+        // 保存大纲/教材内容
+        const saveSyllabusContent = async (type) => {
+            const form = type === 'syllabus' ? syllabusForm : textbookForm;
+            const saving = type === 'syllabus' ? syllabusSaving : textbookSaving;
+            if (!form.content.trim()) {
+                ElMessage.warning('请输入内容');
+                return;
+            }
+            saving.value = true;
+            try {
+                const res = await axios.post('/api/syllabus', {
+                    subject: form.subject,
+                    content_type: type,
+                    title: form.title,
+                    content: form.content
+                });
+                if (res.data.success) {
+                    ElMessage.success(type === 'syllabus' ? '考试大纲已保存' : '教材内容已保存');
+                    form.updatedAt = new Date().toLocaleString('zh-CN');
+                }
+            } catch (e) {
+                ElMessage.error('保存失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                saving.value = false;
+            }
+        };
+
+        // 加载科目列表
+        const loadSubjects = () => {
+            try {
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                if (saved) {
+                    subjectList.value = JSON.parse(saved);
+                } else {
+                    subjectList.value = [...DEFAULT_SUBJECTS];
+                    saveSubjects();
+                }
+                // 设置默认选中第一个
+                if (subjectList.value.length > 0 && !questionForm.subject) {
+                    questionForm.subject = subjectList.value[0].value;
+                }
+            } catch (e) {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
+        };
+
+        // 保存科目列表到本地存储
+        const saveSubjects = () => {
+            localStorage.setItem(SUBJECT_STORAGE_KEY, JSON.stringify(subjectList.value));
+        };
+
+        // 添加科目
+        const addSubject = () => {
+            const name = newSubjectName.value.trim();
+            if (!name) return;
+
+            // 生成 value：转小写拼音，这里简单处理用 slug
+            const value = name.toLowerCase()
+                .replace(/\s+/g, '_')
+                .replace(/[^\w\u4e00-\u9fa5]/g, '');
+
+            // 检查是否已存在
+            const exists = subjectList.value.find(s => s.value === value || s.label === name);
+            if (exists) {
+                ElMessage.warning('该科目已存在');
+                return;
+            }
+
+            subjectList.value.push({ label: name, value });
+            saveSubjects();
+            newSubjectName.value = '';
+            ElMessage.success('科目添加成功');
+        };
+
+        // 删除科目
+        const deleteSubject = async (value) => {
+            if (subjectList.value.length <= 1) {
+                ElMessage.warning('至少保留一个科目');
+                return;
+            }
+            try {
+                await ElMessageBox.confirm('确定要删除这个科目吗？已有的题目不会受影响，但新建题目时将不再显示该选项。', '确认删除', {
+                    type: 'warning'
+                });
+                subjectList.value = subjectList.value.filter(s => s.value !== value);
+                saveSubjects();
+                ElMessage.success('科目已删除');
+            } catch (e) {
+                // cancelled
+            }
+        };
+
+        // 获取科目显示名称
+        const getSubjectLabel = (value) => {
+            const sub = subjectList.value.find(s => s.value === value);
+            return sub ? sub.label : value;
+        };
+
+        // 加载数据
+        const loadStats = async () => {
+            try {
+                const res = await axios.get('/api/stats');
+                if (res.data.success) {
+                    stats.value = res.data.data;
+                }
+            } catch (e) {
+                console.error('加载统计失败', e);
+            }
+        };
+
+        const loadQuestions = async () => {
+            try {
+                const res = await axios.get('/api/questions');
+                if (res.data.success) {
+                    questions.value = res.data.data;
+                }
+            } catch (e) {
+                console.error('加载题目列表失败', e);
+            }
+        };
+
+        const handleMenuSelect = (index) => {
+            if (index === 'question-list') {
+                loadQuestions();
+                listPage.value = 1;
+            }
+            currentPage.value = index;
+        };
+
+        // 筛选条件变化时回到第一页
+        Vue.watch([filterSubject, searchKeyword, filterQuality], () => { listPage.value = 1; });
+
+        const generatingScript = ref(false);
+        const evaluatingQuality = ref(false);
+        const qualityScore = ref(null);
+
+        // AI 批量生成
+        const autoGenSubject = ref('politics');
+        const autoGenCount = ref(5);
+        const autoGenTestCases = ref(7);
+        const autoGenRunning = ref(false);
+        const autoGenProgress = ref(0);
+        const autoGenStatus = ref('');
+        const autoGenResult = ref(null);
+
+        const runAutoGenerate = async () => {
+            autoGenRunning.value = true;
+            autoGenProgress.value = 0;
+            autoGenResult.value = null;
+            autoGenStatus.value = '正在生成，请耐心等待...';
+
+            try {
+                const res = await axios.post('/api/auto-generate', {
+                    subject: autoGenSubject.value,
+                    count: autoGenCount.value,
+                    testcase_count: autoGenTestCases.value
+                });
+                if (res.data.success) {
+                    autoGenResult.value = res.data.data;
+                    autoGenProgress.value = 100;
+                    autoGenStatus.value = `完成！生成了 ${res.data.data.generated} 道题目`;
+                    ElMessage.success(`成功生成 ${res.data.data.generated} 道题目`);
+                    loadStats();
+                    loadQuestions();
+                } else {
+                    ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
+                    autoGenStatus.value = '生成失败';
+                }
+            } catch (e) {
+                ElMessage.error('生成失败：' + (e.response?.data?.error || e.message));
+                autoGenStatus.value = '生成失败：' + e.message;
+            } finally {
+                autoGenRunning.value = false;
+            }
+        };
+
+        // 题目列表筛选/搜索/分页
+        const filterSubject = ref('');
+        const searchKeyword = ref('');
+        const filterQuality = ref('');
+        const listPage = ref(1);
+
+        const filteredQuestions = Vue.computed(() => {
+            let list = questions.value;
+            if (filterSubject.value) {
+                list = list.filter(q => q.subject === filterSubject.value);
+            }
+            if (searchKeyword.value) {
+                const kw = searchKeyword.value.toLowerCase();
+                list = list.filter(q =>
+                    (q.title && q.title.toLowerCase().includes(kw)) ||
+                    (q.content && q.content.toLowerCase().includes(kw))
+                );
+            }
+            if (filterQuality.value) {
+                if (filterQuality.value === 'pass') list = list.filter(q => q.quality_score !== null && q.quality_score >= 80);
+                else if (filterQuality.value === 'warning') list = list.filter(q => q.quality_score !== null && q.quality_score >= 60 && q.quality_score < 80);
+                else if (filterQuality.value === 'fail') list = list.filter(q => q.quality_score !== null && q.quality_score < 60);
+                else if (filterQuality.value === 'unrated') list = list.filter(q => q.quality_score === null || q.quality_score === undefined);
+            }
+            return list;
+        });
+
+        const paginatedQuestions = Vue.computed(() => {
+            const start = (listPage.value - 1) * 20;
+            return filteredQuestions.value.slice(start, start + 20);
+        });
+
+        // 测试用例验证
+        const showTestCaseDialog = ref(false);
+        const showTestCaseForm = ref(false);
+        const testCaseList = ref([]);
+        const testCaseLoading = ref(false);
+        const testCaseCount = ref(0);
+        const verifyRunning = ref(false);
+        const verifyProgress = ref(0);
+        const verifyResults = ref(null);
+        const testCaseForm = reactive({ answer_text: '', expected_score: null, description: '', case_type: 'simulated' });
+        const editingTestCaseId = ref(null);
+        const tolerance = ref(1.0);
+
+        const loadTestCases = async () => {
+            if (!editingQuestionId.value) return;
+            testCaseLoading.value = true;
+            try {
+                const res = await axios.get(`/api/questions/${editingQuestionId.value}/test-cases`);
+                if (res.data.success) {
+                    testCaseList.value = res.data.data;
+                    testCaseCount.value = res.data.data.length;
+                }
+            } catch (e) {
+                console.error('加载测试用例失败', e);
+            } finally {
+                testCaseLoading.value = false;
+            }
+        };
+
+        const openTestCaseDialog = async () => {
+            if (!editingQuestionId.value) {
+                ElMessage.warning('请先保存题目');
+                return;
+            }
+            verifyResults.value = null;
+            await loadTestCases();
+            showTestCaseDialog.value = true;
+        };
+
+        const saveTestCase = async () => {
+            if (!testCaseForm.answer_text.trim()) return;
+            try {
+                if (editingTestCaseId.value) {
+                    await axios.put(`/api/questions/${editingQuestionId.value}/test-cases/${editingTestCaseId.value}`, {
+                        answer_text: testCaseForm.answer_text,
+                        expected_score: testCaseForm.expected_score,
+                        description: testCaseForm.description,
+                        case_type: testCaseForm.case_type
+                    });
+                    ElMessage.success('用例已更新');
+                } else {
+                    await axios.post(`/api/questions/${editingQuestionId.value}/test-cases`, {
+                        answer_text: testCaseForm.answer_text,
+                        expected_score: testCaseForm.expected_score,
+                        description: testCaseForm.description,
+                        case_type: testCaseForm.case_type
+                    });
+                    ElMessage.success('用例已添加');
+                }
+                resetTestCaseForm();
+                await loadTestCases();
+            } catch (e) {
+                ElMessage.error('保存失败: ' + (e.response?.data?.error || e.message));
+            }
+        };
+
+        const editTestCase = (row) => {
+            editingTestCaseId.value = row.id;
+            testCaseForm.answer_text = row.answer_text;
+            testCaseForm.expected_score = row.expected_score;
+            testCaseForm.description = row.description;
+            testCaseForm.case_type = row.case_type;
+            showTestCaseForm.value = true;
+        };
+
+        const deleteTestCase = async (id) => {
+            try {
+                await ElMessageBox.confirm('确定要删除这个测试用例吗？', '确认删除', { type: 'warning' });
+                await axios.delete(`/api/questions/${editingQuestionId.value}/test-cases/${id}`);
+                ElMessage.success('已删除');
+                await loadTestCases();
+            } catch (e) { /* cancelled */ }
+        };
+
+        const resetTestCaseForm = () => {
+            editingTestCaseId.value = null;
+            testCaseForm.answer_text = '';
+            testCaseForm.expected_score = null;
+            testCaseForm.description = '';
+            testCaseForm.case_type = 'simulated';
+            showTestCaseForm.value = false;
+        };
+
+        const runVerification = async () => {
+            if (testCaseList.value.length === 0) {
+                ElMessage.warning('请先添加测试用例');
+                return;
+            }
+            verifyRunning.value = true;
+            verifyProgress.value = 0;
+            verifyResults.value = null;
+
+            // 使用表单中可能修改过的 rubric_script（支持未保存的迭代）
+            const rubricScript = questionForm.rubricScript;
+
+            try {
+                const res = await axios.post('/api/verify-rubric', {
+                    question_id: editingQuestionId.value,
+                    rubric_script: rubricScript,
+                    tolerance: tolerance.value
+                });
+                if (res.data.success) {
+                    verifyResults.value = res.data.data;
+                    verifyProgress.value = 100;
+                    // 刷新用例列表（更新了 last_actual_score 等）
+                    await loadTestCases();
+                    const d = res.data.data;
+                    ElMessage.success(`验证完成: ${d.passed_cases}/${d.total_cases} 通过, 准确率 ${d.accuracy}%`);
+                }
+            } catch (e) {
+                ElMessage.error('验证失败: ' + (e.response?.data?.error || e.message));
+            } finally {
+                verifyRunning.value = false;
+            }
+        };
+
+        const generateRubric = async () => {
+            if (!questionForm.content.trim()) {
+                ElMessage.warning('请先填写题干内容');
+                return;
+            }
+            if (!questionForm.standardAnswer.trim()) {
+                ElMessage.warning('请先填写标准答案');
+                return;
+            }
+            generatingScript.value = true;
+            try {
+                const res = await axios.post('/api/generate-rubric-script', {
+                    content: questionForm.content,
+                    score: questionForm.score,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricRules: questionForm.rubricRules,
+                    rubricPoints: questionForm.rubricPoints,
+                    aiRubric: questionForm.aiRubric
+                });
+                if (res.data.success) {
+                    questionForm.rubricScript = res.data.data.rubricScript;
+                    ElMessage.success('AI 已生成评分脚本');
+                } else {
+                    ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('生成评分脚本失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                generatingScript.value = false;
+            }
+        };
+
+        const evaluateQuality = async () => {
+            if (!questionForm.content.trim()) {
+                ElMessage.warning('请先填写题干内容');
+                return;
+            }
+            if (!questionForm.standardAnswer.trim()) {
+                ElMessage.warning('请先填写标准答案');
+                return;
+            }
+            evaluatingQuality.value = true;
+            try {
+                const res = await axios.post('/api/evaluate-question', {
+                    content: questionForm.content,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricPoints: questionForm.rubricPoints,
+                    rubricRules: questionForm.rubricRules,
+                    maxScore: questionForm.score,
+                    difficulty: questionForm.difficulty,
+                    contentType: questionForm.contentType
+                });
+                if (res.data.success) {
+                    const d = res.data.data;
+                    qualityScore.value = d.overall_score;
+
+                    const verdictColors = { pass: '#10b981', warning: '#f59e0b', fail: '#ef4444' };
+                    const verdictLabels = { pass: '合格', warning: '需注意', fail: '不合格' };
+                    const severityColors = { info: '#60a5fa', warning: '#f59e0b', error: '#ef4444' };
+                    const severityLabels = { info: '提示', warning: '警告', error: '错误' };
+                    const color = verdictColors[d.verdict] || '#a0a0a0';
+
+                    let html = '<div style="font-family:inherit;">';
+                    html += '<div style="text-align:center;margin-bottom:16px;">';
+                    html += '<div style="font-size:48px;font-weight:700;color:' + color + ';">' + d.overall_score + '</div>';
+                    html += '<div style="font-size:16px;color:' + color + ';margin-top:4px;">' + (verdictLabels[d.verdict] || d.verdict) + '</div>';
+                    html += '</div>';
+
+                    if (d.issues && d.issues.length > 0) {
+                        html += '<div style="margin-bottom:12px;">';
+                        html += '<div style="font-weight:600;margin-bottom:8px;color:#d1d5db;">发现 ' + d.issues.length + ' 个问题：</div>';
+                        d.issues.forEach(function(issue) {
+                            var ic = severityColors[issue.severity] || '#a0a0a0';
+                            var il = severityLabels[issue.severity] || issue.severity;
+                            html += '<div style="padding:8px 12px;margin-bottom:6px;background:#1e1e1e;border-radius:6px;border-left:3px solid ' + ic + ';">';
+                            html += '<span style="color:' + ic + ';font-weight:600;font-size:12px;">[' + il + ']</span> ';
+                            html += '<span style="color:#9ca3af;font-size:12px;">' + issue.category + '</span>';
+                            html += '<div style="color:#d1d5db;margin-top:4px;font-size:13px;">' + issue.description + '</div>';
+                            html += '</div>';
+                        });
+                        html += '</div>';
+                    }
+
+                    if (d.suggestions && d.suggestions.length > 0) {
+                        html += '<div>';
+                        html += '<div style="font-weight:600;margin-bottom:8px;color:#d1d5db;">改进建议：</div>';
+                        html += '<ul style="margin:0;padding-left:20px;color:#9ca3af;font-size:13px;">';
+                        d.suggestions.forEach(function(s) {
+                            html += '<li style="margin-bottom:4px;">' + s + '</li>';
+                        });
+                        html += '</ul></div>';
+                    }
+
+                    html += '</div>';
+
+                    ElMessageBox.alert(html, '命题质量评估报告', {
+                        dangerouslyUseHTMLString: true,
+                        confirmButtonText: d.verdict === 'fail' ? '我知道了，去修改' : '确定',
+                        customStyle: { maxWidth: '560px' }
+                    });
+                } else {
+                    ElMessage.error('评估失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('质量评估失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                evaluatingQuality.value = false;
+            }
+        };
+
+        const saveQuestion = async () => {
+            if (!questionForm.content.trim()) {
+                ElMessage.warning('请输入题目内容');
+                return;
+            }
+            if (qualityScore.value !== null && qualityScore.value < 60) {
+                ElMessage.error('命题质量评估未通过（' + qualityScore.value + '分），请根据评估结果修改后再保存');
+                return;
+            }
+            try {
+                const rubricJson = JSON.stringify({
+                    rubricRules: questionForm.rubricRules,
+                    points: questionForm.rubricPoints.split('\n').filter(line => line.trim()).map(line => ({ description: line.trim() })),
+                    rubricScript: questionForm.rubricScript,
+                    knowledge: questionForm.knowledge,
+                    contentType: questionForm.contentType,
+                    aiPrompt: questionForm.aiRubric,
+                    standardAnswer: questionForm.standardAnswer
+                });
+                const payload = {
+                    subject: questionForm.subject,
+                    title: questionForm.content.substring(0, 30),
+                    content: questionForm.content,
+                    original_text: questionForm.originalText,
+                    standard_answer: questionForm.standardAnswer,
+                    rubric_rules: questionForm.rubricRules,
+                    rubric_points: questionForm.rubricPoints,
+                    rubric_script: questionForm.rubricScript,
+                    rubric: rubricJson,
+                    max_score: questionForm.score,
+                    quality_score: qualityScore.value
+                };
+                let res;
+                if (viewMode.value === 'edit' && editingQuestionId.value) {
+                    res = await axios.put('/api/questions/' + editingQuestionId.value, payload);
+                } else {
+                    res = await axios.post('/api/questions', payload);
+                }
+                if (res.data.success) {
+                    ElMessage.success(viewMode.value === 'edit' ? '题目已更新' : '题目已保存');
+                    resetForm();
+                    loadStats();
+                    loadQuestions();
+                } else {
+                    ElMessage.error('保存失败: ' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('保存失败: ' + e.message);
+            }
+        };
+
+        const resetForm = () => {
+            questionForm.subject = subjectList.value.length > 0 ? subjectList.value[0].value : '';
+            questionForm.score = 10;
+            questionForm.difficulty = 'medium';
+            questionForm.originalText = '';
+            questionForm.content = '';
+            questionForm.standardAnswer = '';
+            questionForm.knowledge = '';
+            questionForm.contentType = '简答题';
+            questionForm.rubricRules = '';
+            questionForm.rubricPoints = '';
+            questionForm.rubricScript = '';
+            questionForm.aiRubric = '';
+            qualityScore.value = null;
+            viewMode.value = 'create';
+            editingQuestionId.value = null;
+        };
+
+        const startGrading = (questionId) => {
+            window.location.href = '/grading?question_id=' + questionId;
+        };
+
+        const deleteQuestion = async (questionId) => {
+            try {
+                await ElMessageBox.confirm('确定要删除这个题目吗？', '确认删除', { type: 'warning' });
+                const res = await axios.delete('/api/questions/' + questionId);
+                if (res.data.success) {
+                    ElMessage.success('删除成功');
+                    loadQuestions();
+                    loadStats();
+                } else {
+                    ElMessage.error('删除失败: ' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                // user cancelled
+            }
+        };
+
+        // 从列表加载题目到表单（查看/编辑共用）
+        const loadQuestionToForm = async (questionId) => {
+            try {
+                const res = await axios.get('/api/questions/' + questionId);
+                if (!res.data.success) {
+                    ElMessage.error('加载题目失败');
+                    return null;
+                }
+                const q = res.data.data;
+                questionForm.subject = q.subject || '';
+                questionForm.score = (q.max_score !== null && q.max_score !== undefined) ? q.max_score : 10;
+                questionForm.content = q.content || '';
+                questionForm.originalText = q.original_text || '';
+                questionForm.standardAnswer = q.standard_answer || '';
+                questionForm.rubricRules = q.rubric_rules || '';
+                questionForm.rubricPoints = q.rubric_points || '';
+                questionForm.rubricScript = q.rubric_script || '';
+                questionForm.title = q.title || '';
+                questionForm.knowledge = '';
+                questionForm.contentType = '简答题';
+                questionForm.aiRubric = '';
+                qualityScore.value = q.quality_score;
+                // 从 rubric JSON 补充字段
+                if (q.rubric) {
+                    try {
+                        const rubric = typeof q.rubric === 'string' ? JSON.parse(q.rubric) : q.rubric;
+                        questionForm.knowledge = rubric.knowledge || '';
+                        questionForm.contentType = rubric.contentType || '简答题';
+                        questionForm.aiRubric = rubric.aiPrompt || '';
+                        if (!questionForm.standardAnswer && rubric.standardAnswer) {
+                            questionForm.standardAnswer = rubric.standardAnswer;
+                        }
+                    } catch (e) {
+                        console.warn('解析 rubric JSON 失败', e);
+                    }
+                }
+                console.log('题目已加载到表单', questionForm);
+                return q;
+            } catch (e) {
+                console.error('加载题目失败', e);
+                ElMessage.error('加载题目失败: ' + e.message);
+                return null;
+            }
+        };
+
+        // 查看题目（只读）
+        const viewQuestion = async (questionId) => {
+            // 先切换页面，再加载数据，确保 Vue 响应式生效
+            currentPage.value = 'question-manage';
+            viewMode.value = 'view';
+            editingQuestionId.value = questionId;
+            const q = await loadQuestionToForm(questionId);
+            if (!q) {
+                resetForm();
+            }
+        };
+
+        // 编辑题目
+        const editQuestion = async (questionId) => {
+            currentPage.value = 'question-manage';
+            viewMode.value = 'edit';
+            editingQuestionId.value = questionId;
+            const q = await loadQuestionToForm(questionId);
+            if (!q) {
+                resetForm();
+            }
+        };
+
+        // 一键清除标准答案中的分数标注
+        const cleanAnswerScores = () => {
+            if (!questionForm.standardAnswer.trim()) {
+                ElMessage.warning('标准答案为空');
+                return;
+            }
+            let cleaned = questionForm.standardAnswer;
+            cleaned = cleaned.replace(/（[^）]*分[^）]*）/g, '');
+            cleaned = cleaned.replace(/\([^)]*分[^)]*\)/g, '');
+            cleaned = cleaned.replace(/\n\s*\n/g, '\n');
+            cleaned = cleaned.split('\n').map(line => line.trim()).filter(line => line).join('\n');
+            questionForm.standardAnswer = cleaned;
+            ElMessage.success('已清除所有分数标注，现在是纯标准答案');
+        };
+
+        // 自动解析文本，分离题干、参考答案、评分规则
+        const autoParseText = () => {
+            const fullText = autoImportText.value.trim();
+            if (!fullText) return;
+
+            // 完整原始文本保存到原题
+            questionForm.originalText = fullText;
+
+            let questionContent = '';
+            let answerContent = '';
+            let rubricContent = '';
+            let aiPromptContent = '';
+            let extractedMaxScore = null;
+
+            // 正则 - 匹配各种section关键词（长词放前面，优先匹配）
+            // 关键词必须后面紧跟中文冒号或英文冒号，且冒号后有内容，才作为 section 分隔符
+            // 这样正文中的"标准答案""评分规则"等普通用法不会被误匹配
+            const questionRegex = /(题目内容|命题示例)[：:]\s*/i;
+            const answerRegex = /(标准答案|参考答案|参考解答|标准解答)[：:]\s*/i;
+            const rubricRegex = /(评分标准|评分总则|评分规则|得分要点|给分标准|人工评分|人工规则|给分规则)[：:]\s*/i;
+            const aiRegex = /(AI评分提示|AI提示|AI评分|AI规则)[：:]\s*/i;
+            // 匹配总分
+            const scoreRegex = /(满分|总分|分值)[：:\s]*(\d+\.?\d*)/i;
+            const parenScoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
+
+            // 从头到尾扫描，随时检查是否遇到section关键词
+            let currentSection = 'question';
+            let buffer = '';
+
+            // 将整个文本按关键词分割
+            let text = fullText;
+
+            // 循环查找所有section关键词
+            while (text.length > 0) {
+                // 查找下一个section关键词的位置
+                let found = false;
+                let earliestPos = Infinity;
+                let foundRegex = null;
+                let foundMatch = null;
+
+                // 检查每种关键词
+                const checkMatch = (regex) => {
+                    const match = regex.exec(text);
+                    if (match && match.index < earliestPos) {
+                        earliestPos = match.index;
+                        foundRegex = regex;
+                        foundMatch = match;
+                        found = true;
+                    }
+                };
+
+                checkMatch(answerRegex);
+                checkMatch(rubricRegex);
+                checkMatch(aiRegex);
+                checkMatch(questionRegex);
+
+                if (found) {
+                    // 关键词之前的内容属于当前section
+                    const before = text.slice(0, earliestPos).trim();
+                    if (before) {
+                        if (currentSection === 'question') questionContent += before + '\n';
+                        else if (currentSection === 'answer') answerContent += before + '\n';
+                        else if (currentSection === 'rubric') rubricContent += before + '\n';
+                        else if (currentSection === 'ai') aiPromptContent += before + '\n';
+                    }
+
+                    // 切换到新section
+                    if (foundRegex === answerRegex) currentSection = 'answer';
+                    else if (foundRegex === rubricRegex) currentSection = 'rubric';
+                    else if (foundRegex === aiRegex) currentSection = 'ai';
+                    else if (foundRegex === questionRegex) currentSection = 'question';
+
+                    // 去掉关键词，继续处理后面的内容
+                    text = text.slice(foundMatch.index + foundMatch[0].length);
+                } else {
+                    // 没有更多关键词，剩余全部属于当前section
+                    if (text.trim()) {
+                        if (currentSection === 'question') questionContent += text.trim() + '\n';
+                        else if (currentSection === 'answer') answerContent += text.trim() + '\n';
+                        else if (currentSection === 'rubric') rubricContent += text.trim() + '\n';
+                        else if (currentSection === 'ai') aiPromptContent += text.trim() + '\n';
+                    }
+                    break;
+                }
+            }
+
+            // 提取总分 - 扫描所有内容
+            const scoreMatch = fullText.match(scoreRegex);
+            if (scoreMatch) {
+                extractedMaxScore = parseFloat(scoreMatch[2]);
+            }
+            if (!extractedMaxScore) {
+                const parenMatch = fullText.match(parenScoreRegex);
+                if (parenMatch) {
+                    extractedMaxScore = parseFloat(parenMatch[1]);
+                }
+            }
+
+            // 赋值
+            if (questionContent.trim()) {
+                questionForm.content = questionContent.trim();
+            }
+            if (extractedMaxScore && !isNaN(extractedMaxScore)) {
+                questionForm.score = extractedMaxScore;
+            }
+
+            // 标准答案
+            if (answerContent.trim()) {
+                questionForm.standardAnswer = answerContent.trim();
+            }
+
+            // 从标准答案中提取评分要点（不管有没有独立评分规则区域，都要提取）
+            if (questionForm.standardAnswer.trim()) {
+                // 先按编号模式拆分（处理分号分隔和换行分隔两种情况）
+                // 例如 "1、xxx（2分）；2、xxx（2分）" 或换行的 "1、xxx\n2、xxx"
+                let answerText = questionForm.standardAnswer.trim();
+                // 将分号+编号 或 换行+编号 的模式统一拆分为独立段落
+                const segments = answerText.split(/(?:；\s*(?=\d+[、\.])|\n\s*(?=\d+[、\.]))/);
+                // 如果拆分后只有一段，再尝试按分号拆分
+                const parts = segments.length > 1 ? segments : answerText.split(/[；;]\s*/);
+
+                let extractedPoints = '';
+                let extractedCount = 0;
+
+                for (const part of parts) {
+                    const trimmedPart = part.trim();
+                    if (!trimmedPart) continue;
+
+                    // 分离要点内容和括号中的评分说明
+                    // 例如："1、公有制为主体（2分，其中...不得分）" → "公有制为主体 (2分)" + "(2分，其中...不得分)"
+                    const ruleMatch = trimmedPart.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                    if (ruleMatch) {
+                        let content = ruleMatch[1].trim();
+                        const rule = ruleMatch[2].trim();
+                        // 去掉序号前缀
+                        content = content.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
+                        if (content) {
+                            const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
+                            if (scoreMatch) {
+                                content += ` (${scoreMatch[1]}分)`;
+                            }
+                            extractedPoints += content + '\n';
+                            extractedCount++;
+                        }
+                    } else if (trimmedPart.match(/^\d+[、\.]/) && (trimmedPart.includes('分）') || trimmedPart.includes('分)'))) {
+                        // 带编号且包含分值的整行
+                        let processed = trimmedPart.replace(/^\d+[、\.]\s*/, '');
+                        processed = processed.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, '($1分)');
+                        processed = processed.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, '($1分)');
+                        if (processed.trim()) {
+                            extractedPoints += processed + '\n';
+                            extractedCount++;
+                        }
+                    } else {
+                        const cleaned = trimmedPart.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
+                        if (cleaned.trim()) {
+                            extractedPoints += cleaned + '\n';
+                            extractedCount++;
+                        }
+                    }
+                }
+
+                if (extractedCount >= 1) {
+                    questionForm.rubricPoints = extractedPoints.trim();
+                }
+            }
+
+            // 如果有独立评分标准区域，逐行处理，分离要点和规则
+            if (rubricContent.trim()) {
+                let rubricLines = rubricContent.trim().split('\n').map(line => line.trim()).filter(line => line);
+
+                // 预处理：如果一行只有括号(...)，合并到上一行（处理换行的分数标注）
+                let mergedLines = [];
+                for (let i = 0; i < rubricLines.length; i++) {
+                    let line = rubricLines[i];
+                    if (mergedLines.length > 0 && line.match(/^[（(]\d+\.?\d*分[)）]$/)) {
+                        // 当前行只有括号，合并到上一行
+                        mergedLines[mergedLines.length - 1] += line;
+                    } else {
+                        mergedLines.push(line);
+                    }
+                }
+                rubricLines = mergedLines;
+
+                let extractedPoints = '';
+                let extractedRules = '';
+                let extractedCount = 0;
+                let currentMode = 'rules'; // 'rules' 表示当前在评分规则区域，'points' 表示在评分要点区域
+
+                for (const line of rubricLines) {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) continue;
+
+                    // 检查是否切换区域的标题
+                    const isRulesTitle = trimmedLine.match(/^(评分规则|评分总则|得分规则|扣分规则|记分规则|总则|规则)[：:\s]*/i);
+                    const isPointsTitle = trimmedLine.match(/^(得分要点|评分要点|分数分布|要点)[：:\s]*/i);
+
+                    if (isRulesTitle) {
+                        // 切换到评分规则模式
+                        currentMode = 'rules';
+                        extractedRules += trimmedLine + '\n';
+                        continue;
+                    } else if (isPointsTitle) {
+                        // 切换到评分要点模式
+                        currentMode = 'points';
+                        extractedRules += trimmedLine + '\n';
+                        continue;
+                    }
+
+                    // 根据当前模式决定放哪里
+                    if (currentMode === 'rules') {
+                        // 在评分规则区域，所有内容都放评分规则
+                        extractedRules += trimmedLine + '\n';
+                    } else {
+                        // 在评分要点区域，进行分离处理
+                        const ruleMatch = trimmedLine.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                        if (ruleMatch) {
+                            const content = ruleMatch[1].trim();
+                            const rule = ruleMatch[2].trim();
+                            if (content) {
+                                let processed = content.replace(/^\d+[、\.]\s*/, '');
+                                processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
+                                const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
+                                if (scoreMatch) {
+                                    processed += ` (${scoreMatch[1]}分)`;
+                                }
+                                extractedPoints += processed + '\n';
+                                const ruleText = rule.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim();
+                                if (ruleText) {
+                                    extractedRules += rule + '\n';
+                                }
+                                extractedCount++;
+                            }
+                        } else if (trimmedLine.match(/^\d+[、\.]/) || trimmedLine.match(/^[一二三四五六七八九十]+、\s*/)) {
+                            // 编号行，在评分要点区域
+                            let processed = trimmedLine.replace(/^\d+[、\.]\s*/, '');
+                            processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
+                            const ruleMatch2 = processed.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                            if (ruleMatch2) {
+                                const content = ruleMatch2[1].trim();
+                                const rule = ruleMatch2[2].trim();
+                                if (content) {
+                                    const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
+                                    if (scoreMatch) {
+                                        content += ` (${scoreMatch[1]}分)`;
+                                    }
+                                    extractedPoints += content + '\n';
+                                    const ruleText = rule.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim();
+                                    if (ruleText) {
+                                        extractedRules += rule + '\n';
+                                    }
+                                    extractedCount++;
+                                }
+                            } else if (processed.includes('分）') || processed.includes('分)')) {
+                                processed = processed.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, (match, p1) => {
+                                    const ruleText = match.replace(/[（()）\d\s分]/g, '').trim();
+                                    if (ruleText) {
+                                        extractedRules += match + '\n';
+                                    }
+                                    return `(${p1}分)`;
+                                });
+                                processed = processed.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, (match, p1) => {
+                                    const ruleText = match.replace(/[()\d\s分]/g, '').trim();
+                                    if (ruleText) {
+                                        extractedRules += match + '\n';
+                                    }
+                                    return `(${p1}分)`;
+                                });
+                                extractedPoints += processed + '\n';
+                                extractedCount++;
+                            } else if (processed.length < 20) {
+                                extractedRules += trimmedLine + '\n';
+                            } else {
+                                extractedPoints += processed + '\n';
+                                extractedCount++;
+                            }
+                        } else if (
+                            (trimmedLine.length < 25 && (trimmedLine.includes('分') || trimmedLine.includes('分）') || trimmedLine.includes('分)')))
+                        ) {
+                            extractedRules += trimmedLine + '\n';
+                        } else if (!trimmedLine.includes('分') && trimmedLine.length < 15) {
+                            extractedRules += trimmedLine + '\n';
+                        } else {
+                            let processed = trimmedLine.replace(/^\d+[、\.]\s*/, '');
+                            processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
+                            if (processed.trim()) {
+                                extractedPoints += processed + '\n';
+                            }
+                        }
+                    }
+                }
+
+                if (extractedPoints.trim()) {
+                    questionForm.rubricPoints = extractedPoints.trim();
+                }
+                if (extractedRules.trim()) {
+                    if (questionForm.rubricRules) {
+                        questionForm.rubricRules += '\n' + extractedRules.trim();
+                    } else {
+                        questionForm.rubricRules = extractedRules.trim();
+                    }
+                }
+            }
+
+            if (aiPromptContent.trim()) {
+                questionForm.aiRubric = aiPromptContent.trim();
+            }
+
+            // 统计结果
+            const points = questionForm.rubricPoints ? questionForm.rubricPoints.split('\n').filter(l => l.trim()).length : 0;
+            const hasAnswer = answerContent.trim() ? true : false;
+            parseResult.value = {
+                maxScore: extractedMaxScore || questionForm.score,
+                points: points,
+                hasAnswer: hasAnswer
+            };
+
+            let msg = '自动识别完成';
+            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
+            if (hasAnswer) msg += `，提取参考答案`;
+            if (points > 0) msg += `，结构化 ${points} 个得分点`;
+            if (aiPromptContent) msg += `，提取评分提示词`;
+            ElMessage.success(msg);
+        };
+
+        const clearAutoImport = () => {
+            autoImportText.value = '';
+            parseResult.value = null;
+        };
+
+        onMounted(() => {
+            loadSubjects();
+            loadStats();
+        });
+
+        return {
+            currentPage, questions, stats, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
+            evaluatingQuality, qualityScore, viewMode, editingQuestionId,
+            filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
+            syllabusForm, textbookForm, syllabusSaving, textbookSaving,
+            showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
+            verifyRunning, verifyProgress, verifyResults, testCaseForm, editingTestCaseId, tolerance,
+            autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
+            loadSubjects, saveSubjects, addSubject, deleteSubject, getSubjectLabel,
+            handleMenuSelect, generateRubric, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
+            autoParseText, clearAutoImport, cleanAnswerScores,
+            loadSyllabusContent, saveSyllabusContent, viewQuestion, editQuestion,
+            openTestCaseDialog, loadTestCases, saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm, runVerification,
+            runAutoGenerate
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -52,6 +52,22 @@ SPARK_CONFIG = {
     "enabled": os.getenv("SPARK_ENABLED", "false").lower() == "true",
 }
 
+# 小米豆包 (火山引擎)
+DOUBAO_CONFIG = {
+    "api_key": os.getenv("DOUBAO_API_KEY", ""),
+    "base_url": os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+    "model": os.getenv("DOUBAO_MODEL", "doubao-lite-128k"),
+    "enabled": os.getenv("DOUBAO_ENABLED", "false").lower() == "true",
+}
+
+# 小米 Mimimo Claude 兼容端点
+XIAOMI_MIMIMO_CONFIG = {
+    "api_key": os.getenv("XIAOMI_MIMIMO_API_KEY", ""),
+    "base_url": os.getenv("XIAOMI_MIMIMO_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"),
+    "model": os.getenv("XIAOMI_MIMIMO_MODEL", "claude-3-5-sonnet"),
+    "enabled": os.getenv("XIAOMI_MIMIMO_ENABLED", "false").lower() == "true",
+}
+
 # =============================================================================
 # 评分系统配置
 # =============================================================================
