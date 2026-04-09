@@ -11,7 +11,7 @@ from config.settings import (
     XIAOMI_MIMIMO_CONFIG, MINIMAX_CONFIG, SPARK_CONFIG,
 )
 from app.models.db_models import (
-    get_model_configs, get_model_config,
+    get_model_configs, get_model_config, get_effective_config,
     upsert_model_config, delete_model_config,
 )
 
@@ -84,46 +84,28 @@ PROVIDER_META = {
 }
 
 
-def _get_effective_config(provider: str) -> dict:
-    """获取 provider 的有效配置（.env 默认 + DB 覆盖）"""
+def _get_config_with_meta(provider: str) -> dict:
+    """获取 provider 配置 + 元信息（available_models、extra_fields）"""
     meta = PROVIDER_META.get(provider, {})
-    defaults = meta.get('defaults', {})
+    cfg = get_effective_config(provider)
 
-    # 基础字段
-    effective = {
-        'provider': provider,
-        'name': meta.get('name', provider),
-        'api_key': defaults.get('api_key', ''),
-        'base_url': defaults.get('base_url', ''),
-        'model': defaults.get('model', ''),
-        'enabled': defaults.get('enabled', False),
-        'available_models': meta.get('available_models', []),
-        'extra_fields': meta.get('extra_fields', []),
-        'extra_config': {},
-    }
-
-    # 从 .env 中读取额外字段
+    # 提取 extra_config 中的额外字段
+    extra_config = {}
     for field in meta.get('extra_fields', []):
         key = field['key']
-        effective['extra_config'][key] = defaults.get(key, '')
+        extra_config[key] = cfg.get(key, '')
 
-    # DB 覆盖
-    override = get_model_config(provider)
-    if override:
-        if override.get('api_key'):
-            effective['api_key'] = override['api_key']
-        if override.get('base_url'):
-            effective['base_url'] = override['base_url']
-        if override.get('model'):
-            effective['model'] = override['model']
-        effective['enabled'] = bool(override['enabled'])
-        try:
-            db_extra = json.loads(override.get('extra_config', '{}'))
-            effective['extra_config'].update(db_extra)
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    return effective
+    return {
+        'provider': provider,
+        'name': meta.get('name', provider),
+        'api_key': cfg.get('api_key', ''),
+        'base_url': cfg.get('base_url', ''),
+        'model': cfg.get('model', ''),
+        'enabled': cfg.get('enabled', False),
+        'available_models': meta.get('available_models', []),
+        'extra_fields': meta.get('extra_fields', []),
+        'extra_config': extra_config,
+    }
 
 
 @config_bp.route('/models', methods=['GET'])
@@ -131,7 +113,7 @@ def list_models():
     """列出所有 provider 的有效配置"""
     configs = []
     for provider in PROVIDER_META:
-        configs.append(_get_effective_config(provider))
+        configs.append(_get_config_with_meta(provider))
     return jsonify(configs)
 
 
@@ -146,7 +128,7 @@ def update_model(provider):
         return jsonify({'error': '请求体为空'}), 400
 
     # 获取当前有效配置作为基础
-    current = _get_effective_config(provider)
+    current = _get_config_with_meta(provider)
 
     api_key = data.get('api_key', current['api_key'])
     base_url = data.get('base_url', current['base_url'])
@@ -171,7 +153,7 @@ def toggle_model(provider):
     data = request.get_json()
     enabled = data.get('enabled', True)
 
-    current = _get_effective_config(provider)
+    current = _get_config_with_meta(provider)
     upsert_model_config(
         provider, current['api_key'], current['base_url'],
         current['model'], enabled, json.dumps(current['extra_config'])
@@ -185,7 +167,7 @@ def test_model(provider):
     if provider not in PROVIDER_META:
         return jsonify({'error': f'未知的 provider: {provider}'}), 400
 
-    config = _get_effective_config(provider)
+    config = _get_config_with_meta(provider)
     if not config['api_key']:
         return jsonify({'provider': provider, 'name': config['name'], 'success': False, 'error': '未配置 API Key', 'latency_ms': 0})
 
@@ -222,7 +204,7 @@ def test_all_models():
     """测试所有已启用的 provider"""
     results = []
     for provider in PROVIDER_META:
-        config = _get_effective_config(provider)
+        config = _get_config_with_meta(provider)
         if not config['enabled']:
             results.append({
                 'provider': provider,

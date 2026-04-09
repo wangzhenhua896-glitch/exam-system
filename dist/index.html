@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能评分系统 v2.0</title>
+    <link href="/static/vendor/tailwind.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1e1e1e;
+            --bg-card: #1a1a1a;
+            --accent-primary: #6366f1;
+            --accent-secondary: #818cf8;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --border-color: #2a2a2a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            transition: margin-left 0.25s ease, opacity 0.25s ease;
+        }
+        .sidebar.collapsed {
+            margin-left: -260px;
+        }
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+            padding: 24px;
+            transition: margin-left 0.25s ease;
+        }
+        .main-content.expanded {
+            margin-left: 0;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 100;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 10px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            transition: left 0.25s ease;
+        }
+        .sidebar-toggle:hover { color: var(--text-primary); }
+        .sidebar:not(.collapsed) ~ .sidebar-toggle { left: 268px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; color: var(--text-secondary);
+            cursor: pointer; border-radius: 8px; margin: 4px 8px; transition: all 0.2s;
+        }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-primary); color: white; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 24px; margin-bottom: 24px;
+        }
+        .card-header { font-size: 18px; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); }
+        .form-label { display: block; font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
+        .form-textarea, .form-input, .form-select {
+            width: 100%; padding: 12px 16px; background: var(--bg-tertiary);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            color: var(--text-primary); font-size: 14px; transition: all 0.2s;
+        }
+        .form-textarea:focus, .form-input:focus, .form-select:focus {
+            outline: none; border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+        .btn {
+            padding: 12px 24px; border-radius: 8px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; border: none;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-primary { background: var(--accent-primary); color: white; }
+        .btn-primary:hover { background: var(--accent-secondary); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid var(--accent-primary);
+            border-radius: 16px; padding: 32px; text-align: center;
+        }
+        .result-score {
+            font-size: 72px; font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .result-confidence { font-size: 24px; color: var(--accent-success); margin-top: 16px; }
+        .model-score-item {
+            display: flex; justify-content: space-between;
+            padding: 12px 16px; background: var(--bg-tertiary);
+            border-radius: 8px; margin-top: 8px;
+        }
+        .stat-card { background: var(--bg-tertiary); border-radius: 12px; padding: 20px; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: 700; color: var(--accent-primary); }
+        .stat-value.success { color: var(--accent-success); }
+        .stat-value.error { color: var(--accent-danger); }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+        .empty-icon { font-size: 64px; display: block; margin-bottom: 16px; }
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            padding: 16px 24px; background: var(--bg-card);
+            border: 1px solid var(--accent-success); border-radius: 8px;
+            color: white; animation: slideIn 0.3s ease; z-index: 1000;
+        }
+        .toast.error { border-color: var(--accent-danger); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .warning-box { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-warning); border-radius: 8px; padding: 16px; margin-top: 16px; }
+        .progress-container { background: var(--bg-tertiary); border-radius: 8px; height: 8px; overflow: hidden; margin: 16px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); width: 0%; transition: width 0.3s ease; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-secondary); font-weight: 600; }
+        .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+        .badge-success { background: var(--accent-success); }
+        .badge-error { background: var(--accent-danger); }
+        .page { display: none; }
+        .page.active { display: block; }
+        .model-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; }
+        .history-item { background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .history-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .history-score { font-weight: 700; color: var(--accent-primary); }
+        .form-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .validation-status { font-weight: 600; }
+        .validation-status.success { color: var(--accent-success); }
+        .validation-status.error { color: var(--accent-danger); }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header p-6 border-b border-gray-800">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">📝</span>
+                <div>
+                    <div class="font-bold text-lg bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">AI 评分系统</div>
+                    <p class="text-xs text-gray-500 mt-1">国产大模型 · 高精度评分</p>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 py-4">
+            <a href="/management" style="text-decoration: none; color: inherit;">
+                <div class="nav-item"><span>📚</span><span>题库管理</span></div>
+            </a>
+            <div class="nav-item active" data-page="single"><span>✏️</span><span>单题评分</span></div>
+            <div class="nav-item" data-page="history"><span>📜</span><span>历史记录</span></div>
+            <div class="nav-item" data-page="batch" style="opacity:0.4;"><span>📊</span><span>批量测试（暂未开放）</span></div>
+            <div class="nav-item" data-page="validation" style="opacity:0.4;"><span>✅</span><span>规则验证（暂未开放）</span></div>
+            <div class="nav-item" data-page="tuning" style="opacity:0.4;"><span>🎯</span><span>自动调优（暂未开放）</span></div>
+            <div class="nav-item" data-page="config"><span>⚙️</span><span>评分配置</span></div>
+        </nav>
+        <div class="p-4 border-t border-gray-800">
+            <div class="flex items-center gap-2 text-sm text-gray-500"><span class="w-2 h-2 rounded-full bg-green-500"></span><span>系统就绪</span></div>
+            <p class="text-xs text-gray-600 mt-2">v2.0.0</p>
+        </div>
+    </aside>
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="收起/展开侧边栏">☰</button>
+
+    <main class="main-content" id="main-content">
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold" id="page-title">单题评分</h1>
+            <div class="text-sm text-gray-500"><span id="model-count">加载中...</span></div>
+        </header>
+
+        <!-- 单题评分 -->
+        <div class="page active" id="page-single">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card">
+                    <div class="card-header">题目与答案</div>
+
+                    <!-- 题库选择器 -->
+                    <div class="mb-4">
+                        <label class="form-label">从题库选择题目</label>
+                        <div class="flex gap-2">
+                            <select class="form-select" id="question-select" onchange="onQuestionSelect(this.value)">
+                                <option value="">-- 手动输入 --</option>
+                            </select>
+                            <button class="btn" style="background:var(--bg-tertiary);padding:8px 12px;flex-shrink:0;" onclick="loadQuestionList()" title="刷新列表">🔄</button>
+                        </div>
+                        <p class="form-hint">选择题目后自动加载题目信息，仅需输入学生答案</p>
+                    </div>
+
+                    <!-- 只读信息卡片（题库模式显示） -->
+                    <div id="question-info-cards" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label">题目标题</label>
+                            <div id="info-title" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;font-weight:600;border:1px solid var(--border-color);"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">题目内容</label>
+                            <div id="info-content" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:120px;overflow-y:auto;"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">标准答案</label>
+                            <div id="info-standard-answer" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:100px;overflow-y:auto;color:var(--accent-success);"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">评分脚本</label>
+                            <div style="position:relative;">
+                                <div id="info-rubric-script" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:80px;overflow-y:auto;font-size:12px;color:var(--text-secondary);cursor:pointer;" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'80px':'none'" title="点击展开/收起"></div>
+                                <button onclick="copyRubricScript(this)" style="position:absolute;top:8px;right:8px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;color:var(--text-secondary);font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.borderColor='var(--accent-primary)';this.style.color='var(--accent-primary)'" onmouseleave="this.style.borderColor='var(--border-color)';this.style.color='var(--text-secondary)'" title="复制评分脚本">📋 复制</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">满分</label>
+                            <span id="info-max-score" class="badge" style="background:var(--accent-primary);font-size:14px;padding:6px 16px;"></span>
+                        </div>
+                    </div>
+
+                    <!-- 学生答案（始终可见） -->
+                    <div class="mb-4">
+                        <label class="form-label">学生答案</label>
+                        <textarea class="form-textarea" id="answer" rows="8" placeholder="请输入学生的答案..."></textarea>
+                    </div>
+
+                    <!-- 手动输入区域（手动模式显示） -->
+                    <div id="manual-input-section" style="display:none;">
+                        <div class="mb-4">
+                            <label class="form-label">题目</label>
+                            <textarea class="form-textarea" id="question" rows="4" placeholder="请输入简答题题目..."></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">评分规则 (JSON格式)</label>
+                            <textarea class="form-textarea" id="rubric" rows="4" placeholder='{"points": [{"description": "要点1", "score": 5}]}'></textarea>
+                            <p class="form-hint">支持JSON格式，包含得分要点和关键词</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">满分</label>
+                            <input type="number" class="form-input" id="max-score" value="10" min="1" max="100">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary w-full" id="grade-btn" onclick="gradeAnswer()"><span>🚀</span><span>开始评分</span></button>
+                </div>
+                <div class="card">
+                    <div class="card-header">评分结果</div>
+                    <div id="result-container">
+                        <div class="empty-state"><span class="empty-icon">📝</span><p>提交评分后将在此显示结果</p></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量测试 -->
+        <div class="page" id="page-batch">
+            <div class="card">
+                <div class="card-header">批量性能测试</div>
+                <div class="empty-state"><span class="empty-icon">🚧</span><p>批量测试功能暂未开放，敬请期待</p></div>
+            </div>
+        </div>
+
+        <!-- 规则验证 -->
+        <div class="page" id="page-validation">
+            <div class="card">
+                <div class="card-header">评分规则验证</div>
+                <div class="empty-state"><span class="empty-icon">🚧</span><p>规则验证功能暂未开放，敬请期待</p></div>
+            </div>
+        </div>
+
+        <!-- 自动调优 -->
+        <div class="page" id="page-tuning">
+            <div class="card">
+                <div class="card-header">自动调优</div>
+                <div class="empty-state"><span class="empty-icon">🚧</span><p>自动调优功能暂未开放，敬请期待</p></div>
+            </div>
+        </div>
+
+        <!-- 配置页面 -->
+        <div class="page" id="page-config">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card">
+                    <div class="card-header">模型配置</div>
+                    <div id="models-list">
+                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">🤖</span><div><div class="font-semibold">通义千问 (Qwen)</div><div class="text-sm text-gray-500">qwen-max</div></div></div><span class="badge badge-success">已启用</span></div>
+                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">🧠</span><div><div class="font-semibold">智谱 GLM</div><div class="text-sm text-gray-500">glm-4</div></div></div><span class="badge badge-success">已启用</span></div>
+                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">✨</span><div><div class="font-semibold">MiniMax</div><div class="text-sm text-gray-500">abab6.5-chat</div></div></div><span class="badge badge-success">已启用</span></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">评分设置</div>
+                    <div class="mb-4"><label class="form-label">默认采样次数</label><select class="form-select" id="config-sample-count"><option value="1">1 次</option><option value="3" selected>3 次</option><option value="5">5 次</option><option value="7">7 次</option></select></div>
+                    <div class="mb-4"><label class="form-label">默认聚合策略</label><select class="form-select" id="config-strategy"><option value="confidence_weighted" selected>置信度加权</option><option value="weighted_average">加权平均</option><option value="majority_vote">多数投票</option></select></div>
+                    <div class="mb-4"><label class="form-label">低置信度阈值</label><input type="number" class="form-input" id="config-low-threshold" value="0.6" step="0.1" min="0" max="1"></div>
+                    <div class="mb-4"><label class="form-label">中置信度阈值</label><input type="number" class="form-input" id="config-medium-threshold" value="0.7" step="0.1" min="0" max="1"></div>
+                    <div class="mb-4"><label class="form-label">高置信度阈值</label><input type="number" class="form-input" id="config-high-threshold" value="0.8" step="0.1" min="0" max="1"></div>
+                    <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div class="page" id="page-history">
+            <div class="card">
+                <div class="card-header flex justify-between items-center"><span>评分历史</span><button class="btn" style="background: var(--bg-tertiary);" onclick="clearHistory()">清空历史</button></div>
+                <div id="history-list"><div class="empty-state"><span class="empty-icon">📜</span><p>暂无评分记录</p></div></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast-container"></div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let history = JSON.parse(localStorage.getItem('grading-history') || '[]');
+
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const page = item.dataset.page;
+                switchPage(page);
+            });
+        });
+
+        function switchPage(page) {
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === page));
+            document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
+            const titles = {single: '单题评分', batch: '批量测试', validation: '规则验证', tuning: '自动调优', config: '评分配置', history: '历史记录'};
+            document.getElementById('page-title').textContent = titles[page] || page;
+            renderHistory();
+        }
+
+        // ========== 单题评分：题库选题 ==========
+
+        async function loadQuestionList() {
+            try {
+                const resp = await fetch(API_BASE + '/api/questions');
+                const data = await resp.json();
+                if (data.success && data.data) {
+                    const select = document.getElementById('question-select');
+                    const currentVal = select.value;
+                    select.innerHTML = '<option value="">-- 手动输入 --</option>';
+                    data.data.forEach(function(q) {
+                        var opt = document.createElement('option');
+                        opt.value = q.id;
+                        var label = '#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30));
+                        if (q.quality_score !== null && q.quality_score !== undefined) {
+                            var status = q.quality_score >= 80 ? '合格' : q.quality_score >= 60 ? '待改' : '毛题';
+                            label += ' [' + q.quality_score + '分-' + status + ']';
+                        }
+                        opt.textContent = label;
+                        select.appendChild(opt);
+                    });
+                    if (currentVal) select.value = currentVal;
+                }
+            } catch (e) {
+                console.error('加载题目列表失败', e);
+            }
+        }
+
+        async function onQuestionSelect(questionId) {
+            var infoCards = document.getElementById('question-info-cards');
+            var manualSection = document.getElementById('manual-input-section');
+
+            if (!questionId) {
+                infoCards.style.display = 'none';
+                manualSection.style.display = 'block';
+                window._selectedQuestionId = null;
+                return;
+            }
+
+            manualSection.style.display = 'none';
+
+            try {
+                var resp = await fetch(API_BASE + '/api/questions/' + questionId);
+                var data = await resp.json();
+                if (data.success && data.data) {
+                    var q = data.data;
+                    window._selectedQuestionId = q.id;
+
+                    document.getElementById('info-title').textContent = q.title || '(无标题)';
+                    document.getElementById('info-content').textContent = q.content || '';
+                    document.getElementById('info-standard-answer').textContent = q.standard_answer || '(无标准答案)';
+                    document.getElementById('info-rubric-script').textContent = q.rubric_script || '(未生成评分脚本，请在题库管理中生成)';
+                    document.getElementById('info-max-score').textContent = (q.max_score || 10) + ' 分';
+
+                    infoCards.style.display = 'block';
+                    showToast('题目已加载: ' + (q.title || (q.content || '').substring(0, 20)), 'success');
+                }
+            } catch (e) {
+                showToast('加载题目失败', 'error');
+            }
+        }
+
+        // ========== 单题评分：核心评分 ==========
+
+        async function gradeAnswer() {
+            var answer = document.getElementById('answer').value.trim();
+            if (!answer) { showToast('请填写学生答案', 'error'); return; }
+
+            var btn = document.getElementById('grade-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span><span>评分中...</span>';
+
+            var requestBody;
+            var qid = window._selectedQuestionId;
+
+            if (qid) {
+                requestBody = { question_id: qid, answer: answer };
+            } else {
+                var question = document.getElementById('question').value.trim();
+                var rubricInput = document.getElementById('rubric').value.trim();
+                var maxScore = parseFloat(document.getElementById('max-score').value);
+                if (!question) { showToast('请填写题目', 'error'); resetBtn(); return; }
+                var rubric = {};
+                if (rubricInput) {
+                    try { rubric = JSON.parse(rubricInput); }
+                    catch (e) { showToast('评分规则JSON格式错误', 'error'); resetBtn(); return; }
+                }
+                requestBody = { question: question, answer: answer, rubric: rubric, max_score: maxScore };
+            }
+
+            try {
+                var response = await fetch(API_BASE + '/api/grade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                var result = await response.json();
+                if (result.success) {
+                    var data = result.data;
+                    // ┌──────────────────────────────────────────────────────────┐
+                    // │ 评分异常处理（考试场景）                                  │
+                    // │ 后端已自动重试3次仍失败时返回 score=null                  │
+                    // │ 此处由用户决定：重试 或 联系监考老师人工处理               │
+                    // │ 绝不能将 null 显示为 0 分（等同于误判）                    │
+                    // └──────────────────────────────────────────────────────────┘
+                    if (data.score === null || data.score === undefined) {
+                        var msg = data.comment || '评分系统暂时无法评分';
+                        if (confirm(msg + '\n\n点击"确定"重新评分，点击"取消"联系监考老师人工处理')) {
+                            resetBtn();
+                            gradeAnswer(); // 用户选择重试，重新走完整流程（后端会再次自动重试）
+                            return;
+                        } else {
+                            showToast('请通知监考老师进行人工评分', 'warning');
+                        }
+                    } else {
+                        showToast('评分完成', 'success');
+                    }
+                    window._lastGradeResult = data;
+                    renderResult(data);
+                    addToHistory(requestBody, data);
+                } else {
+                    showToast(result.error || '评分失败', 'error');
+                }
+            } catch (error) {
+                showToast('评分失败：后端服务未启动', 'error');
+            } finally {
+                resetBtn();
+            }
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🚀</span><span>开始评分</span>';
+            }
+        }
+
+        function copyRubricScript(btn) {
+            var text = document.getElementById('info-rubric-script').textContent;
+            if (!text || text === '(未生成评分脚本，请在题库管理中生成)') { showToast('没有可复制的评分脚本', 'error'); return; }
+            navigator.clipboard.writeText(text).then(function() {
+                btn.textContent = '✓ 已复制';
+                btn.style.color = 'var(--accent-success)';
+                btn.style.borderColor = 'var(--accent-success)';
+                setTimeout(function() { btn.textContent = '📋 复制'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+            }).catch(function() {
+                showToast('复制失败，请手动选择复制', 'error');
+            });
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderResult(data) {
+            var container = document.getElementById('result-container');
+
+            // 置信度颜色
+            var confColor = 'var(--accent-success)';
+            if (data.confidence < 0.6) confColor = 'var(--accent-danger)';
+            else if (data.confidence < 0.8) confColor = 'var(--accent-warning)';
+
+            // 满分
+            var maxScore = 10;
+            if (window._selectedQuestionId) {
+                var txt = document.getElementById('info-max-score').textContent;
+                maxScore = parseFloat(txt) || 10;
+            } else {
+                maxScore = parseFloat(document.getElementById('max-score').value) || 10;
+            }
+
+            var html = '<div class="result-card">';
+            // score=null 表示评分系统异常（非0分），必须明确提示人工处理，不能显示为"0/满分 分"
+            if (data.score === null || data.score === undefined) {
+                html += '<div class="result-score" style="color: var(--accent-danger);">评分异常 <span style="font-size:24px;">需人工处理</span></div>';
+            } else {
+                html += '<div class="result-score">' + data.score + ' <span style="font-size:24px;">/ ' + maxScore + ' 分</span></div>';
+            }
+
+            // 置信度
+            html += '<div style="margin-top:16px;font-size:20px;color:' + confColor + ';">🎯 置信度：' + (data.confidence * 100).toFixed(1) + '%</div>';
+
+            // 预警
+            if (data.warning) {
+                html += '<div class="warning-box mt-4 text-left">' + escapeHtml(data.warning) + '</div>';
+            }
+            if (data.needs_review && !data.warning) {
+                html += '<div class="warning-box mt-4 text-left">⚠️ 建议人工复核</div>';
+            }
+
+            // 评语
+            if (data.comment) {
+                html += '<div class="text-left mt-4" style="background:var(--bg-tertiary);border-radius:8px;padding:16px;">';
+                html += '<strong style="color:var(--accent-secondary);">📝 评语</strong>';
+                html += '<p class="mt-2" style="color:#d1d5db;line-height:1.6;white-space:pre-wrap;">' + escapeHtml(data.comment) + '</p></div>';
+            }
+
+            // 原始详情（可展开）
+            if (data.details) {
+                html += '<details class="mt-4 text-left"><summary style="cursor:pointer;color:var(--text-secondary);font-size:13px;">查看原始评分详情</summary>';
+                html += '<pre style="background:var(--bg-tertiary);padding:12px;border-radius:8px;font-size:12px;color:var(--text-secondary);max-height:200px;overflow-y:auto;margin-top:8px;white-space:pre-wrap;">';
+                html += escapeHtml(JSON.stringify(data.details, null, 2));
+                html += '</pre></details>';
+            }
+
+            // 底部信息
+            html += '<div class="flex justify-between text-sm text-gray-500 mt-4">';
+            html += '<span>引擎：' + (data.model_used || 'qwen-agent') + '</span>';
+            if (data.record_id) html += '<span>记录ID：' + data.record_id + '</span>';
+            html += '</div>';
+
+            // 保存为测试用例按钮
+            if (window._selectedQuestionId) {
+                html += '<div style="margin-top:16px;text-align:center;">';
+                html += '<button class="btn" style="background:var(--accent-success);color:white;padding:8px 20px;font-size:13px;" onclick="saveAsTestCase()">💾 保存为测试用例</button>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // ========== 历史记录 ==========
+
+        function addToHistory(requestBody, data) {
+            var questionText = requestBody.question || document.getElementById('info-content').textContent || '(题库题目 #' + requestBody.question_id + ')';
+            history.unshift({
+                question: questionText.substring(0, 80),
+                answer: (requestBody.answer || '').substring(0, 50) + '...',
+                score: data.score,
+                confidence: data.confidence,
+                time: new Date().toLocaleString()
+            });
+            if (history.length > 50) history.pop();
+            localStorage.setItem('grading-history', JSON.stringify(history));
+        }
+
+        async function loadHistoryFromApi() {
+            try {
+                var resp = await fetch(API_BASE + '/api/history?limit=50');
+                var data = await resp.json();
+                if (data.success && data.data) {
+                    history = data.data.map(function(r) {
+                        return {
+                            question: (r.student_answer || '').substring(0, 80),
+                            answer: (r.student_answer || '').substring(0, 50) + '...',
+                            score: r.score,
+                            confidence: r.confidence || 0,
+                            time: r.graded_at || ''
+                        };
+                    });
+                }
+            } catch (e) {
+                console.error('加载历史记录失败，使用本地缓存', e);
+            }
+            renderHistory();
+        }
+
+        function renderHistory() {
+            var container = document.getElementById('history-list');
+            if (history.length === 0) { container.innerHTML = '<div class="empty-state"><span class="empty-icon">📜</span><p>暂无评分记录</p></div>'; return; }
+            container.innerHTML = history.map(function(item) {
+                return '<div class="history-item"><div class="history-header"><span class="history-score">' + item.score + ' 分</span><span class="text-sm text-gray-500">' + item.time + '</span></div><div class="text-sm text-gray-400 mt-2">' + escapeHtml(item.question) + '</div><div class="text-xs text-gray-600 mt-1">置信度：' + (item.confidence * 100).toFixed(1) + '%</div></div>';
+            }).join('');
+        }
+
+        function clearHistory() { history = []; localStorage.removeItem('grading-history'); renderHistory(); showToast('历史已清空', 'success'); }
+
+        // ========== 保存为测试用例 ==========
+
+        async function saveAsTestCase() {
+            var qid = window._selectedQuestionId;
+            var lastResult = window._lastGradeResult;
+            if (!qid || !lastResult) { showToast('没有可保存的评分结果', 'error'); return; }
+            var answer = document.getElementById('answer').value.trim();
+            if (!answer) { showToast('学生答案为空', 'error'); return; }
+            try {
+                var resp = await fetch(API_BASE + '/api/questions/' + qid + '/test-cases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        answer_text: answer,
+                        expected_score: lastResult.score,
+                        description: '来自评分页面 ' + new Date().toLocaleString('zh-CN'),
+                        case_type: 'real'
+                    })
+                });
+                var data = await resp.json();
+                if (data.success) {
+                    showToast('已保存为测试用例（期望分 ' + lastResult.score + '）', 'success');
+                } else {
+                    showToast(data.error || '保存失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存失败：' + e.message, 'error');
+            }
+        }
+
+        // ========== 评分配置 ==========
+
+        function saveConfig() {
+            var config = {sampleCount: document.getElementById('config-sample-count').value, strategy: document.getElementById('config-strategy').value, lowThreshold: document.getElementById('config-low-threshold').value, mediumThreshold: document.getElementById('config-medium-threshold').value, highThreshold: document.getElementById('config-high-threshold').value};
+            localStorage.setItem('grading-config', JSON.stringify(config));
+            showToast('配置已保存', 'success');
+        }
+
+        // ========== 侧边栏收起/展开 ==========
+
+        function toggleSidebar() {
+            var sidebar = document.querySelector('.sidebar');
+            var main = document.getElementById('main-content');
+            var toggle = document.getElementById('sidebar-toggle');
+            sidebar.classList.toggle('collapsed');
+            main.classList.toggle('expanded');
+            toggle.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
+            toggle.style.left = sidebar.classList.contains('collapsed') ? '12px' : '268px';
+        }
+
+        // ========== 通用 ==========
+
+        function showToast(message, type) {
+            var container = document.getElementById('toast-container');
+            var toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.innerHTML = '<span>' + (type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ') + '</span><span>' + message + '</span>';
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        // ========== 初始化 ==========
+
+        async function loadQuestionFromUrl() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var questionId = urlParams.get('question_id');
+            if (!questionId) return;
+
+            // 等题库列表加载完后再选中
+            await loadQuestionList();
+            var select = document.getElementById('question-select');
+            select.value = questionId;
+            await onQuestionSelect(questionId);
+            switchPage('single');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHistoryFromApi();
+            document.getElementById('model-count').textContent = '评分引擎：Qwen-Agent';
+            loadQuestionList();
+            loadQuestionFromUrl();
+        });
+    </script>
+</body>
+</html>
