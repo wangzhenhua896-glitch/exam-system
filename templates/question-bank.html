@@ -520,7 +520,7 @@
                                 <template #default="scope">
                                     <el-button type="info" size="small" plain @click="viewQuestion(scope.row.id)">查看</el-button>
                                     <el-button type="warning" size="small" plain @click="editQuestion(scope.row.id)">编辑</el-button>
-                                    <el-button type="primary" size="small" @click="startGrading(scope.row.id)">评分</el-button>
+                                    <el-button type="primary" size="small" @click="startGrading(scope.row.id)">评分验证</el-button>
                                     <el-button type="danger" size="small" plain @click="deleteQuestion(scope.row.id)">删除</el-button>
                                 </template>
                             </el-table-column>
@@ -848,7 +848,7 @@ const DEFAULT_SUBJECTS = [
 
 const app = createApp({
     setup() {
-        const currentPage = ref('question-manage');
+        const currentPage = ref('question-list');
         const questions = ref([]);
         const stats = ref({});
         const dashboard = ref({});
@@ -2129,6 +2129,7 @@ const app = createApp({
         onMounted(() => {
             loadSubjects();
             loadStats();
+            loadQuestions();
             if (isAdmin.value) {
                 loadModelConfigs();
             }

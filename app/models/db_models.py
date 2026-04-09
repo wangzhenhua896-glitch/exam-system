@@ -231,6 +231,7 @@ def get_all_test_cases_overview(subject: Optional[str] = None) -> List[Dict]:
             q.max_score,
             q.rubric_script IS NOT NULL AND q.rubric_script != '' AS has_rubric_script,
             COUNT(tc.id) AS total_cases,
+            COALESCE(SUM(CASE WHEN tc.case_type = 'ai_generated' THEN 1 ELSE 0 END), 0) AS ai_count,
             COALESCE(SUM(CASE WHEN tc.case_type = 'simulated' THEN 1 ELSE 0 END), 0) AS simulated_count,
             COALESCE(SUM(CASE WHEN tc.case_type = 'real' THEN 1 ELSE 0 END), 0) AS real_count,
             COALESCE(SUM(CASE WHEN tc.last_run_at IS NOT NULL AND tc.last_error <= 1.0 THEN 1 ELSE 0 END), 0) AS passed_count,
@@ -586,7 +587,9 @@ def get_effective_config(provider: str) -> dict:
         'base_url': str,
         'model': str,
         'enabled': bool,
-        ...（保留 .env 中的额外字段如 available_models、secret_key 等）
+        'available_models': [...],  # 从 .env 配置中获取
+        'extra_config': {...},      # 从 DB 中获取的额外配置（如 enabled_models）
+        ...（保留 .env 中的额外字段如 secret_key 等）
     }
     """
     defaults = _get_env_defaults().get(provider, {})
@@ -605,6 +608,13 @@ def get_effective_config(provider: str) -> dict:
         if db.get('model'):
             effective['model'] = db['model']
         effective['enabled'] = bool(db['enabled'])
+        # 解析 extra_config（JSON 字符串）
+        import json
+        try:
+            extra = json.loads(db.get('extra_config', '{}')) if db.get('extra_config') else {}
+            effective['extra_config'] = extra
+        except (json.JSONDecodeError, Exception):
+            effective['extra_config'] = {}
 
     return effective
 

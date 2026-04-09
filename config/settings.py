@@ -15,6 +15,12 @@ QWEN_CONFIG = {
     "base_url": os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
     "model": os.getenv("QWEN_MODEL", "qwen-max"),
     "enabled": os.getenv("QWEN_ENABLED", "true").lower() == "true",
+    "available_models": [
+        {"id": "qwen-max", "name": "Qwen-Max"},
+        {"id": "qwen-plus", "name": "Qwen-Plus"},
+        {"id": "qwen-turbo", "name": "Qwen-Turbo"},
+        {"id": "qwen-long", "name": "Qwen-Long"},
+    ],
 }
 
 # 智谱 GLM
@@ -23,6 +29,12 @@ GLM_CONFIG = {
     "base_url": os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
     "model": os.getenv("GLM_MODEL", "glm-4"),
     "enabled": os.getenv("GLM_ENABLED", "false").lower() == "true",  # 默认禁用
+    "available_models": [
+        {"id": "glm-4", "name": "GLM-4"},
+        {"id": "glm-4-plus", "name": "GLM-4-Plus"},
+        {"id": "glm-4-flash", "name": "GLM-4-Flash"},
+        {"id": "glm-4v", "name": "GLM-4V"},
+    ],
 }
 
 # MiniMax
@@ -32,6 +44,11 @@ MINIMAX_CONFIG = {
     "base_url": os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1"),
     "model": os.getenv("MINIMAX_MODEL", "abab6.5-chat"),
     "enabled": os.getenv("MINIMAX_ENABLED", "false").lower() == "true",  # 默认禁用
+    "available_models": [
+        {"id": "abab6.5-chat", "name": "ABAB 6.5 Chat"},
+        {"id": "abab6.5", "name": "ABAB 6.5"},
+        {"id": "abab5.5-chat", "name": "ABAB 5.5 Chat"},
+    ],
 }
 
 # 百度文心一言
@@ -41,6 +58,12 @@ ERNIE_CONFIG = {
     "base_url": os.getenv("ERNIE_BASE_URL", "https://aip.baidubce.com"),
     "model": os.getenv("ERNIE_MODEL", "ernie-4.0"),
     "enabled": os.getenv("ERNIE_ENABLED", "false").lower() == "true",
+    "available_models": [
+        {"id": "ernie-4.0", "name": "ERNIE 4.0"},
+        {"id": "ernie-3.5", "name": "ERNIE 3.5"},
+        {"id": "ernie-speed", "name": "ERNIE Speed"},
+        {"id": "ernie-lite", "name": "ERNIE Lite"},
+    ],
 }
 
 # 讯飞星火

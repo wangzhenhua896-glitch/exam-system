@@ -123,12 +123,17 @@
                         <el-table-column type="selection" width="45" />
                         <el-table-column prop="title" label="题目标题" min-width="240" show-overflow-tooltip />
                         <el-table-column prop="subject" label="科目" width="100" />
-                        <el-table-column label="用例/脚本" width="140">
+                        <el-table-column label="用例/脚本" width="180">
                             <template #default="{ row }">
-                                <span>{{ row.total_cases }} 个用例</span>
-                                <el-tag :type="row.has_rubric_script ? 'success' : 'info'" size="small" style="margin-left: 6px;">
-                                    {{ row.has_rubric_script ? '脚本已生成' : '无脚本' }}
-                                </el-tag>
+                                <div style="line-height: 1.4;">
+                                    <span>{{ row.total_cases }} 个用例</span>
+                                    <span v-if="row.total_cases > 0" style="font-size: 11px; color: #909399;">
+                                        (<span v-if="row.ai_count">{{ row.ai_count }}AI</span><span v-if="row.ai_count && row.simulated_count">/</span><span v-if="row.simulated_count">{{ row.simulated_count }}人工</span><span v-if="(row.ai_count || row.simulated_count) && row.real_count">/</span><span v-if="row.real_count" style="color: #f56c6c;">{{ row.real_count }}真实</span>)
+                                    </span>
+                                    <el-tag :type="row.has_rubric_script ? 'success' : 'info'" size="small" style="margin-left: 4px;">
+                                        {{ row.has_rubric_script ? '脚本' : '无脚本' }}
+                                    </el-tag>
+                                </div>
                             </template>
                         </el-table-column>
                         <el-table-column label="通过率" width="130">
@@ -212,10 +217,10 @@
                                 @selection-change="handleCaseSelectionChange">
                                 <el-table-column type="selection" width="40" />
                                 <el-table-column prop="description" label="描述" min-width="120" show-overflow-tooltip />
-                                <el-table-column label="类型" width="70">
+                                <el-table-column label="类型" width="80">
                                     <template #default="{ row }">
-                                        <el-tag :type="row.case_type === 'real' ? 'danger' : ''" size="small">
-                                            {{ row.case_type === 'real' ? '真实' : '模拟' }}
+                                        <el-tag :type="row.case_type === 'real' ? 'danger' : row.case_type === 'simulated' ? 'warning' : ''" size="small">
+                                            {{ row.case_type === 'real' ? '真实' : row.case_type === 'simulated' ? '人工模拟' : 'AI生成' }}
                                         </el-tag>
                                     </template>
                                 </el-table-column>
@@ -292,7 +297,14 @@
                                 </div>
                             </div>
                             <el-table :data="verifyResults" stripe size="small">
-                                <el-table-column prop="description" label="用例" min-width="80" show-overflow-tooltip />
+                                <el-table-column prop="description" label="用例" min-width="70" show-overflow-tooltip />
+                                <el-table-column label="类型" width="65">
+                                    <template #default="{ row }">
+                                        <el-tag :type="row.case_type === 'real' ? 'danger' : row.case_type === 'simulated' ? 'warning' : ''" size="small">
+                                            {{ row.case_type === 'real' ? '真实' : row.case_type === 'simulated' ? '人工' : 'AI' }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
                                 <el-table-column prop="expected_score" label="期望" width="55" />
                                 <el-table-column prop="actual_score" label="实际" width="55" />
                                 <el-table-column label="误差" width="60">
@@ -335,7 +347,8 @@
                 <el-col :span="6">
                     <el-form-item label="类型">
                         <el-select v-model="testCaseForm.case_type" style="width: 100%;">
-                            <el-option label="模拟作答" value="simulated" />
+                            <el-option label="AI生成" value="ai_generated" />
+                            <el-option label="人工模拟" value="simulated" />
                             <el-option label="真实答卷" value="real" />
                         </el-select>
                     </el-form-item>
@@ -510,7 +523,7 @@ const app = createApp({
         const dialogVisible = ref(false);
         const editingTestCaseId = ref(null);
         const testCaseForm = reactive({
-            answer_text: '', expected_score: null, description: '', case_type: 'simulated'
+            answer_text: '', expected_score: null, description: '', case_type: 'ai_generated'
         });
         const tolerance = ref(1.0);
         const verifying = ref(false);
@@ -638,7 +651,7 @@ const app = createApp({
             testCaseForm.answer_text = '';
             testCaseForm.expected_score = null;
             testCaseForm.description = '';
-            testCaseForm.case_type = 'simulated';
+            testCaseForm.case_type = 'ai_generated';
             editingTestCaseId.value = null;
             dialogVisible.value = false;
         }

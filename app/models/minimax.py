@@ -19,6 +19,7 @@ class MiniMaxClient(BaseModelClient):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.model_name = config.get("model", "abab6.5-chat")
+        self.display_name = config.get("display_name", self.model_name)
         self.api_key = config.get("api_key", "")
         self.group_id = config.get("group_id", "")
         self.base_url = config.get("base_url", "https://api.minimax.chat/v1")
@@ -58,3 +59,12 @@ class MiniMaxClient(BaseModelClient):
                 model_name=self.model_name,
                 error=str(e)
             )
+
+    def get_info(self) -> Dict[str, Any]:
+        """获取模型信息"""
+        return {
+            "provider": self.provider.value,
+            "model_name": self.model_name,
+            "display_name": self.display_name,
+            "enabled": self.enabled,
+        }

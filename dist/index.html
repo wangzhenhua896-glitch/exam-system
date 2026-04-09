@@ -63,14 +63,17 @@
                     <el-menu :default-active="currentPage" @select="handleMenuSelect">
                         <el-menu-item index="single"><el-icon><EditPen /></el-icon><span>单题评分</span></el-menu-item>
                         <el-menu-item index="testset"><el-icon><List /></el-icon><span>测试集</span></el-menu-item>
+                        <el-menu-item index="anticheat"><el-icon><WarningFilled /></el-icon><span>反作弊测试</span></el-menu-item>
                         <el-menu-item index="history"><el-icon><Clock /></el-icon><span>历史记录</span></el-menu-item>
                     </el-menu>
                 </div>
                 <div class="sidebar-footer">
                     <div style="margin-bottom: 8px;">
                         <div style="font-size: 12px; color: #909399; margin-bottom: 6px;">当前模型</div>
-                        <el-select v-model="currentProvider" size="small" style="width: 100%;" @change="onProviderChange">
-                            <el-option v-for="p in providers" :key="p.id" :label="p.name + ' · ' + p.model" :value="p.id"></el-option>
+                        <el-select v-model="currentModelId" size="small" style="width: 100%;" @change="onModelChange">
+                            <el-option-group v-for="g in modelGroups" :key="g.name" :label="g.name">
+                                <el-option v-for="m in g.models" :key="m.id" :label="m.display_name" :value="m.id"></el-option>
+                            </el-option-group>
                         </el-select>
                     </div>
                     <a href="/management" style="text-decoration: none;">
@@ -213,6 +216,29 @@
                                     <!-- 预警 -->
                                     <el-alert v-if="gradeResult.warning" :title="gradeResult.warning" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
                                     <el-alert v-if="gradeResult.needs_review && !gradeResult.warning" title="建议人工复核" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
+
+                                    <!-- 分项得分 -->
+                                    <div v-if="gradeResult.details && gradeResult.details.scoring_items && gradeResult.details.scoring_items.length > 0" style="margin-bottom: 16px;">
+                                        <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📋 评分明细</div>
+                                        <div v-for="(item, idx) in gradeResult.details.scoring_items" :key="idx"
+                                             style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 6px; margin-bottom: 6px;"
+                                             :style="{ background: item.hit ? '#f0f9eb' : '#fef0f0', border: '1px solid ' + (item.hit ? '#e1f3d8' : '#fde2e2') }">
+                                            <el-icon v-if="item.hit" color="#67c23a" :size="18" style="flex-shrink: 0; margin-top: 2px;">
+                                                <CircleCheckFilled />
+                                            </el-icon>
+                                            <el-icon v-else color="#f56c6c" :size="18" style="flex-shrink: 0; margin-top: 2px;">
+                                                <CircleCloseFilled />
+                                            </el-icon>
+                                            <div style="flex: 1; min-width: 0;">
+                                                <div style="font-size: 13px; color: #303133; font-weight: 500;">{{ item.name }}</div>
+                                                <div v-if="item.reason" style="font-size: 12px; color: #909399; margin-top: 2px;">{{ item.reason }}</div>
+                                            </div>
+                                            <div style="flex-shrink: 0; text-align: right;">
+                                                <span style="font-weight: 600;" :style="{ color: item.hit ? '#67c23a' : '#f56c6c' }">{{ item.score }}</span>
+                                                <span style="font-size: 12px; color: #909399;"> / {{ item.max_score }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- 评语 -->
                                     <div v-if="gradeResult.comment" style="margin-bottom: 16px;">
@@ -361,6 +387,77 @@
                     </el-dialog>
                 </template>
 
+                <!-- ========== 反作弊测试 ========== -->
+                <template v-if="currentPage === 'anticheat'">
+                    <div class="page-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <span style="font-size: 16px; font-weight: 600; color: #303133;">反作弊测试</span>
+                                <el-tag v-if="selectedQuestion" size="small" style="margin-left: 8px;">{{ selectedQuestion.title || '#' + selectedQuestion.id }}</el-tag>
+                            </div>
+                            <el-button v-if="selectedQuestionId" type="danger" size="small" :loading="anicheatRunning" @click="runAncheatTests">
+                                <el-icon><VideoPlay /></el-icon> 开始反作弊测试
+                            </el-button>
+                        </div>
+
+                        <!-- 未选题提示 -->
+                        <el-empty v-if="!selectedQuestionId" description="请先在「单题评分」中选择题目"></el-empty>
+
+                        <template v-if="selectedQuestionId">
+                            <div style="background: #fdf6ec; border: 1px solid #faecd8; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #e6a23c;">
+                                将自动对当前题目运行 5 种作弊场景，验证是否都能正确判为 0 分。通过 = 得 0 分，失败 = 未判 0 分。
+                            </div>
+
+                            <!-- 测试结果表格 -->
+                            <el-table :data="anicheatResults" style="width: 100%;" :row-class-name="anicheatRowClass">
+                                <el-table-column label="场景" prop="scenario" width="160"></el-table-column>
+                                <el-table-column label="作弊答案预览" min-width="200">
+                                    <template #default="scope">
+                                        <div style="font-size: 12px; color: #909399; max-height: 40px; overflow: hidden; text-overflow: ellipsis;">{{ scope.row.answerPreview }}</div>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="得分" width="80">
+                                    <template #default="scope">
+                                        <span v-if="scope.row.score !== null" :style="{ fontWeight: 600, color: scope.row.passed ? '#67c23a' : '#f56c6c' }">{{ scope.row.score }}</span>
+                                        <span v-else style="color: #909399;">-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="结果" width="80">
+                                    <template #default="scope">
+                                        <template v-if="scope.row.score !== null">
+                                            <el-tag v-if="scope.row.passed" type="success" size="small">通过</el-tag>
+                                            <el-tag v-else type="danger" size="small">失败</el-tag>
+                                        </template>
+                                        <el-tag v-else-if="scope.row.error" type="info" size="small">{{ scope.row.error }}</el-tag>
+                                        <span v-else style="color: #909399;">-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="评语" min-width="200" show-overflow-tooltip>
+                                    <template #default="scope">
+                                        <div style="font-size: 12px; color: #909399;">{{ scope.row.comment || '-' }}</div>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+
+                            <!-- 汇总 -->
+                            <div v-if="anicheatResults.length > 0 && !anicheatRunning" style="margin-top: 16px; text-align: center;">
+                                <template v-if="anicheatResults.every(r => r.passed)">
+                                    <el-tag type="success" size="large">全部通过（{{ anicheatResults.length }}/{{ anicheatResults.length }}）</el-tag>
+                                </template>
+                                <template v-else>
+                                    <el-tag type="danger" size="large">有失败项（{{ anicheatResults.filter(r => r.passed).length }}/{{ anicheatResults.length }} 通过）</el-tag>
+                                </template>
+                            </div>
+
+                            <!-- 进度 -->
+                            <div v-if="anicheatRunning" style="margin-top: 16px;">
+                                <el-progress :percentage="anicheatProgress" :stroke-width="8"></el-progress>
+                                <div style="text-align: center; margin-top: 8px; font-size: 13px; color: #909399;">{{ anicheatText }}</div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
                 <!-- ========== 历史记录 ========== -->
                 <template v-if="currentPage === 'history'">
                     <div class="page-card">
@@ -408,11 +505,29 @@ const app = createApp({
 
         // ========== 模型选择 ==========
         const providers = ref([]);
-        const currentProvider = ref('');
+        const currentModelId = ref('');
         const currentModelLabel = computed(() => {
-            const p = providers.value.find(x => x.id === currentProvider.value);
-            return p ? p.name + ' · ' + p.model : '';
+            const p = providers.value.find(x => x.id === currentModelId.value);
+            return p ? p.name + ' · ' + p.display_name : '';
         });
+
+        // 按服务商分组
+        const modelGroups = computed(() => {
+            const groups = {};
+            for (const p of providers.value) {
+                if (!groups[p.name]) groups[p.name] = { name: p.name, models: [] };
+                groups[p.name].models.push({ id: p.id, display_name: p.display_name });
+            }
+            return Object.values(groups);
+        });
+
+        // 拆分 provider + model
+        function splitModelId() {
+            const id = currentModelId.value || '';
+            const idx = id.indexOf('/');
+            if (idx > 0) return { provider: id.substring(0, idx), model: id.substring(idx + 1) };
+            return { provider: id, model: '' };
+        }
 
         async function loadProviders() {
             try {
@@ -420,14 +535,14 @@ const app = createApp({
                 if (data.success && data.data) {
                     providers.value = data.data;
                     const active = data.data.find(p => p.active) || data.data[0];
-                    if (active) currentProvider.value = active.id;
+                    if (active) currentModelId.value = active.id;
                 }
             } catch (e) {
                 console.error('加载模型列表失败', e);
             }
         }
 
-        function onProviderChange(val) {
+        function onModelChange(val) {
             ElMessage.success('已切换到：' + currentModelLabel.value);
         }
 
@@ -494,7 +609,8 @@ const app = createApp({
             let requestBody;
 
             if (selectedQuestionId.value) {
-                requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), provider: currentProvider.value };
+                const { provider, model } = splitModelId();
+                requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), provider, model };
             } else {
                 if (!manualQuestion.value.trim()) {
                     ElMessage.warning('请填写题目');
@@ -506,7 +622,8 @@ const app = createApp({
                     try { rubric = JSON.parse(manualRubric.value); }
                     catch (e) { ElMessage.error('评分规则JSON格式错误'); grading.value = false; return; }
                 }
-                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), rubric, max_score: manualMaxScore.value, provider: currentProvider.value };
+                const { provider: prov2, model: mdl2 } = splitModelId();
+                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), rubric, max_score: manualMaxScore.value, provider: prov2, model: mdl2 };
             }
 
             try {
@@ -638,11 +755,13 @@ const app = createApp({
             const tc = testCases.value.find(c => c.id === caseId);
             if (!tc) return;
             testSetRunning.value = true;
-            try {
-                const { data: result } = await axios.post(API_BASE + '/api/grade', {
-                    question_id: selectedQuestionId.value,
-                    answer: tc.answer_text,
-                    provider: currentProvider.value
+                const { provider: prov3, model: mdl3 } = splitModelId();
+                try {
+                    const { data: result } = await axios.post(API_BASE + '/api/grade', {
+                        question_id: selectedQuestionId.value,
+                        answer: tc.answer_text,
+                        provider: prov3,
+                        model: mdl3
                 });
                 if (result.success && result.data && result.data.score !== null) {
                     const actualScore = result.data.score;
@@ -775,6 +894,74 @@ const app = createApp({
             ElMessage.success('历史已清空');
         }
 
+        // ========== 反作弊测试 ==========
+        const anicheatRunning = ref(false);
+        const anicheatResults = ref([]);
+        const anicheatProgress = ref(0);
+        const anicheatText = ref('');
+
+        const anicheatScenarios = [
+            { name: '复制原文', generate: (q) => q.standard_answer || q.content },
+            { name: '复制题干', generate: (q) => q.content },
+            { name: '复制题干+无作答', generate: (q) => '答：\n' + (q.content || '') },
+            { name: '空白作答', generate: () => '' },
+            { name: '答非所问', generate: () => '今天天气真好，阳光明媚，适合出门散步。我觉得这个问题和我没有太大关系。' },
+        ];
+
+        function anicheatRowClass({ row }) {
+            if (row.score === null && !row.error) return '';
+            return row.passed ? 'anicheat-pass' : 'anicheat-fail';
+        }
+
+        async function runAncheatTests() {
+            if (!selectedQuestionId.value || !selectedQuestion.value) {
+                ElMessage.warning('请先选择题目');
+                return;
+            }
+            anicheatRunning.value = true;
+            anicheatResults.value = [];
+            const q = selectedQuestion.value;
+
+            for (let i = 0; i < anicheatScenarios.length; i++) {
+                const scenario = anicheatScenarios[i];
+                anicheatText.value = '测试中... (' + (i + 1) + '/' + anicheatScenarios.length + ') ' + scenario.name;
+                anicheatProgress.value = Math.round((i + 1) / anicheatScenarios.length * 100);
+
+                const answer = scenario.generate(q);
+                const result = { scenario: scenario.name, answerPreview: (answer || '(空白)').substring(0, 80), score: null, passed: false, comment: '', error: '' };
+
+                const { provider: prov4, model: mdl4 } = splitModelId();
+                try {
+                    const { data } = await axios.post(API_BASE + '/api/grade', {
+                        question_id: selectedQuestionId.value,
+                        answer: answer,
+                        provider: prov4,
+                        model: mdl4
+                    });
+                    if (data.success && data.data) {
+                        result.score = data.data.score;
+                        result.passed = data.data.score === 0;
+                        result.comment = (data.data.comment || '').substring(0, 100);
+                        if (data.data.score === null) {
+                            result.error = '异常';
+                            result.comment = data.data.comment || '';
+                        }
+                    } else {
+                        result.error = '失败';
+                        result.comment = data.error || '未知错误';
+                    }
+                } catch (e) {
+                    result.error = '异常';
+                    result.comment = e.message;
+                }
+
+                anicheatResults.value.push(result);
+            }
+
+            anicheatText.value = '测试完成';
+            setTimeout(() => { anicheatRunning.value = false; }, 1500);
+        }
+
         // ========== 页面切换 ==========
         function handleMenuSelect(page) {
             currentPage.value = page;
@@ -799,7 +986,7 @@ const app = createApp({
 
         return {
             currentPage, inputCollapsed, sidebarCollapsed,
-            providers, currentProvider, currentModelLabel, onProviderChange,
+            providers, currentModelId, currentModelLabel, modelGroups, onModelChange,
             questionList, selectedQuestionId, selectedQuestion, loadingQuestions,
             loadQuestionList, onQuestionSelect,
             manualQuestion, manualRubric, manualMaxScore,
@@ -810,6 +997,7 @@ const app = createApp({
             testCases, selectedCaseIds, testSetRunning, testSetProgress, testSetText,
             loadTestCases, onCaseSelectionChange, gradeTestCase, runSingleCase, runSelectedCases, runAllCases, deleteTestCase,
             showGenDialog, genCount, genDist, genStyles, genExtra, genRunning, autoGenerateTestCases,
+            anicheatRunning, anicheatResults, anicheatProgress, anicheatText, anicheatScenarios, anicheatRowClass, runAncheatTests,
             history, loadHistoryFromApi, clearHistory,
             handleMenuSelect
         };

@@ -19,13 +19,14 @@ class QwenClient(BaseModelClient):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.model_name = config.get("model", "qwen-max")
-        
+        self.display_name = config.get("display_name", self.model_name)
+
         # 初始化 OpenAI 兼容客户端
         self.client = AsyncOpenAI(
             api_key=config.get("api_key", ""),
             base_url=config.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         )
-    
+
     async def generate(self, prompt: str, **kwargs) -> ModelResponse:
         """生成响应"""
         try:
@@ -52,3 +53,12 @@ class QwenClient(BaseModelClient):
                 model_name=self.model_name,
                 error=str(e)
             )
+
+    def get_info(self) -> Dict[str, Any]:
+        """获取模型信息"""
+        return {
+            "provider": self.provider.value,
+            "model_name": self.model_name,
+            "display_name": self.display_name,
+            "enabled": self.enabled,
+        }

@@ -24,6 +24,7 @@ class QwenGradingResult(BaseModel):
     error: Optional[str] = None
     needs_review: bool = False
     warning: Optional[str] = None
+    scoring_items: Optional[List[Dict[str, Any]]] = None
 
 
 class QwenGradingEngine:
@@ -48,21 +49,25 @@ class QwenGradingEngine:
         self._selected_provider = None
         self.client, self.model, self._selected_provider = self._init_client()
 
-    def set_provider(self, provider: str):
-        """切换当前使用的 provider"""
-        client, model, prov = self._init_client(provider)
+    def set_provider(self, provider: str, model: str = None):
+        """切换当前使用的 provider 和子模型"""
+        client, mdl, prov = self._init_client(provider, model)
         if prov:
             self.client = client
-            self.model = model
+            self.model = mdl
             self._selected_provider = prov
             return True
         return False
 
-    def _init_client(self, preferred_provider: str = None):
+    def _init_client(self, preferred_provider: str = None, preferred_model: str = None):
         """初始化 OpenAI 兼容客户端
 
         优先从数据库读取配置（管理员通过 Web UI 修改后的值），
         数据库无记录时降级到 .env 默认值。
+
+        Args:
+            preferred_provider: 指定服务商
+            preferred_model: 指定子模型（如 "qwen-plus"），优先于默认 model
 
         Returns:
             (client, model, provider) 或 (None, None, None)
@@ -77,7 +82,8 @@ class QwenGradingEngine:
                     api_key=cfg["api_key"],
                     base_url=cfg["base_url"],
                 )
-                return client, cfg["model"], preferred_provider
+                model = preferred_model or cfg["model"]
+                return client, model, preferred_provider
             return None, None, None
 
         # 默认优先级：qwen > glm > ernie > doubao > xiaomi_mimimo
@@ -190,6 +196,24 @@ class QwenGradingEngine:
             final_score = float(parsed.get("总分", parsed.get("score", 0)))
             comment = parsed.get("评语", parsed.get("comment", content))
 
+            # 提取分项得分明细
+            scoring_items = parsed.get("scoring_items")
+            if scoring_items and isinstance(scoring_items, list):
+                # 校验每个 item 的基本结构
+                validated_items = []
+                for item in scoring_items:
+                    if isinstance(item, dict):
+                        validated_items.append({
+                            "name": str(item.get("name", "")),
+                            "score": float(item.get("score", 0)),
+                            "max_score": float(item.get("max_score", 0)),
+                            "hit": bool(item.get("hit", False)),
+                            "reason": str(item.get("reason", "")),
+                        })
+                scoring_items = validated_items if validated_items else None
+            else:
+                scoring_items = None
+
             # 计算置信度
             confidence = self._calculate_confidence(final_score, max_score, content)
 
@@ -200,7 +224,8 @@ class QwenGradingEngine:
                 strategy="qwen_engine",
                 total_score=max_score,
                 comment=comment,
-                needs_review=False
+                needs_review=False,
+                scoring_items=scoring_items,
             )
 
             return self.boundary_check(result)
@@ -226,11 +251,22 @@ class QwenGradingEngine:
 3. 不要漏判也不要错判，部分答对给部分分数。
 4. 总分不能超过满分，也不能低于 0 分。
 5. 最后给出总分和评语，评语需要指出学生答案的优点和不足（评语不超过100字）。
-6. 你必须使用 JSON 格式输出。如果评分标准要求逐问输出格式，请严格按评分标准的格式输出；否则输出：
+6. 你必须使用 JSON 格式输出。输出格式：
 {
   "总分": 分数,
-  "评语": "你的评语"
+  "评语": "你的评语",
+  "scoring_items": [
+    {"name": "要点名称", "score": 得分, "max_score": 该要点满分, "hit": true/false, "reason": "命中/未命中的简要原因"}
+  ]
 }
+
+scoring_items 规则：
+- 逐条列出评分标准中的每个得分要点
+- hit=true 表示学生答案命中该要点，hit=false 表示未命中或命中不完整
+- score 为该要点实际得分，max_score 为该要点满分
+- reason 用一句话说明为什么给这个分（不超过30字）
+- 如果评分标准没有明确的分要点，则按你自己的判断拆分出要点
+- 反作弊命中时，scoring_items 中所有要点 hit=false、score=0
 
 重要：反作弊检查优先于所有评分规则。如果考生只是照抄原文/题干，即使原文中包含关键词，也必须判0分。
 不要因为整体印象调整分数。对同一内容，无论学生用什么表述方式，只要语义等价，给相同分数。"""

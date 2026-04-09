@@ -19,7 +19,8 @@ class GLMClient(BaseModelClient):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.model_name = config.get("model", "glm-4")
-        
+        self.display_name = config.get("display_name", self.model_name)
+
         # 初始化智谱客户端
         self.client = ZhipuAI(
             api_key=config.get("api_key", ""),
@@ -56,3 +57,12 @@ class GLMClient(BaseModelClient):
                 model_name=self.model_name,
                 error=str(e)
             )
+
+    def get_info(self) -> Dict[str, Any]:
+        """获取模型信息"""
+        return {
+            "provider": self.provider.value,
+            "model_name": self.model_name,
+            "display_name": self.display_name,
+            "enabled": self.enabled,
+        }
