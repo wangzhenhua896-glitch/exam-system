@@ -1,4 +1,49 @@
-"""
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>qwen_engine.py - 源码查看</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #1e1e1e; color: #d4d4d4; }
+        .header { background: #252526; padding: 12px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #3c3c3c; position: sticky; top: 0; z-index: 10; }
+        .header h1 { font-size: 16px; color: #e0e0e0; font-weight: 500; }
+        .header .path { font-size: 13px; color: #888; }
+        .header .badge { background: #0e639c; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        pre { background: #1e1e1e; padding: 0; overflow-x: auto; line-height: 1.6; font-size: 14px; font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
+        code { display: block; }
+        .line { display: flex; }
+        .line:hover { background: #2a2d2e; }
+        .line-no { color: #858585; text-align: right; padding-right: 16px; min-width: 50px; user-select: none; border-right: 1px solid #3c3c3c; margin-right: 16px; }
+        .line-content { flex: 1; white-space: pre; }
+        /* syntax colors */
+        .kw { color: #569cd6; }         /* keyword: def, class, if, return, etc */
+        .fn { color: #dcdcaa; }         /* function name */
+        .str { color: #ce9178; }        /* string */
+        .num { color: #b5cea8; }        /* number */
+        .cmt { color: #6a9955; }        /* comment */
+        .cls { color: #4ec9b0; }        /* class name */
+        .op { color: #d4d4d4; }         /* operator */
+        .imp { color: #c586c0; }        /* import */
+        .self { color: #569cd6; }       /* self */
+        .dec { color: #dcdcaa; }        /* decorator */
+        .bool { color: #569cd6; }       /* True/False/None */
+        .section { background: #264f78; color: #fff; display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>qwen_engine.py</h1>
+        <span class="path">app/qwen_engine.py</span>
+        <span class="badge">Python</span>
+    </div>
+    <div class="container">
+        <pre><code id="code"></code></pre>
+    </div>
+<script>
+const RAW_CODE = `"""
 基于 Qwen-Agent 评分思路的评分引擎
 借鉴 Qwen 官方的 Prompt 设计和评分流程
 支持所有配置的大模型使用 OpenAI 兼容接口调用
@@ -130,61 +175,28 @@ class QwenGradingEngine:
                 {"role": "user", "content": user_prompt}
             ]
 
-            # 调用 OpenAI 兼容接口（带智能重试）
-            # ┌─────────────────────────────────────────────────────────────┐
-            # │ 评分失败处理策略（考试场景核心原则）                          │
-            # │                                                             │
-            # │ 1. 绝不能静默返回0分 — 等同于误判考生成绩                     │
-            # │ 2. 自动重试：最多3次，指数退避(1s/2s/4s)，避免高频加重负担    │
-            # │ 3. 覆盖两类失败：API异常(网络/超时) + 解析失败(模型输出异常)  │
-            # │ 4. 重试耗尽：返回 score=null，前端提示用户选择"重试"或        │
-            # │    "联系监考老师人工处理"                                     │
-            # │ 5. 用户手动重试：前端再次调用本接口，重新走完整重试流程        │
-            # └─────────────────────────────────────────────────────────────┘
-            import time
-            max_retries = 3
-            content = None
-            parsed = None
+            # 调用 OpenAI 兼容接口
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.0,  # 评分需要确定性
+                stream=False,
+            )
 
-            for attempt in range(max_retries):
-                try:
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=0.0,  # 评分需要确定性
-                        max_tokens=4096,  # 足够空间容纳逐问 JSON 输出
-                        stream=False,
-                    )
-                    content = response.choices[0].message.content.strip()
-                    parsed = self._parse_output(content)
+            # 获取输出内容
+            content = response.choices[0].message.content.strip()
 
-                    if not parsed.get("error"):
-                        break  # 解析成功，退出重试
+            # 解析输出
+            parsed = self._parse_output(content)
 
-                    # 解析失败：模型返回了内容但无法提取分数
-                    from loguru import logger
-                    logger.warning(f"评分解析失败(第{attempt + 1}次): {parsed.get('error')}, 原始输出: {content[:200]}")
-                    if attempt < max_retries - 1:
-                        wait = 2 ** attempt  # 指数退避：1s → 2s → 4s
-                        time.sleep(wait)
-
-                except Exception as e:
-                    # 网络异常 / API 超时
-                    from loguru import logger
-                    logger.error(f"评分API调用异常(第{attempt + 1}次): {e}")
-                    if attempt < max_retries - 1:
-                        wait = 2 ** attempt  # 指数退避：1s → 2s → 4s
-                        time.sleep(wait)
-
-            # 重试耗尽仍失败 → 返回 score=null，由前端提示用户选择重试或人工处理
-            if not parsed or parsed.get("error"):
+            if parsed.get("error"):
                 return QwenGradingResult(
-                    final_score=None,
+                    final_score=0,
                     confidence=0,
                     strategy="qwen_engine",
                     total_score=max_score,
-                    error=parsed.get("error") if parsed else "API调用失败",
-                    comment='⚠️ 评分系统暂时无法评分，请点击"重新评分"重试，如多次失败请联系监考老师人工处理',
+                    error=parsed["error"],
+                    comment=content,
                     needs_review=True
                 )
 
@@ -228,8 +240,8 @@ class QwenGradingEngine:
 3. 先理解整体评分规则，再按照评分要点逐项判断给分
 4. 不要漏判也不要错判，部分答对给部分分数
 5. 总分不能超过满分，也不能低于 0 分
-6. 最后给出总分和评语，评语需要指出学生答案的优点和不足（评语不超过100字）
-7. 你必须使用 JSON 格式输出。如果评分标准要求逐问输出格式，请严格按评分标准的格式输出；否则输出：
+6. 最后给出总分和评语，评语需要指出学生答案的优点和不足
+7. 你必须使用 JSON 格式输出，格式如下：
 {
   "总分": 分数,
   "评语": "你的评语"
@@ -272,7 +284,7 @@ class QwenGradingEngine:
         # 先输出整体评分规则
         rubricRules = rubric.get("rubricRules", "")
         if rubricRules and rubricRules.strip():
-            parts.append(f"【评分规则】\n{rubricRules.strip()}")
+            parts.append(f"【评分规则】\\n{rubricRules.strip()}")
 
         # 然后输出评分要点
         points = rubric.get("points", [])
@@ -286,7 +298,7 @@ class QwenGradingEngine:
                 if desc:
                     pointLines.append(f"{i}. {desc}")
             if pointLines:
-                parts.append(f"\n【评分要点】\n{chr(10).join(pointLines)}")
+                parts.append(f"\\n【评分要点】\\n{chr(10).join(pointLines)}")
 
         # 其他字段
         knowledge = rubric.get("knowledge", "")
@@ -295,72 +307,37 @@ class QwenGradingEngine:
         standardAnswer = rubric.get("standardAnswer", "")
 
         if knowledge:
-            parts.append(f"\n知识点：{knowledge}")
+            parts.append(f"\\n知识点：{knowledge}")
         if contentType:
             parts.append(f"题型：{contentType}")
         if standardAnswer:
-            parts.append(f"\n标准答案参考：\n{standardAnswer}")
+            parts.append(f"\\n标准答案参考：\\n{standardAnswer}")
         if aiPrompt:
-            parts.append(f"\n评分提示：{aiPrompt}")
+            parts.append(f"\\n评分提示：{aiPrompt}")
 
         if parts:
-            return "\n".join(parts)
+            return "\\n".join(parts)
 
         return str(rubric)
 
     def _parse_output(self, content: str) -> Dict[str, Any]:
-        """解析 LLM 输出
-
-        支持两种输出格式：
-        1. 简单格式：{"总分": X, "评语": "..."}
-        2. 逐问格式：{"第一问": {"得分": X}, "第二问": {"得分": X}, ..., "总分": X, "评语": "..."}
-
-        注意：模型有时在逐问格式中总分计算错误（分项和≠总分），
-        因此当存在逐问得分时，优先自行累加，不信任模型的总分。
-        """
+        """解析 LLM 输出"""
         # 尝试直接解析 JSON
         try:
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            # 查找 JSON 块
+            json_match = re.search(r'\\{.*\\}', content, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
-                parsed = json.loads(json_str)
-            else:
-                parsed = json.loads(content)
-
-            # 逐问格式：检测是否包含"得分"字段的子对象，自行累加总分
-            question_scores = []
-            for key, value in parsed.items():
-                if isinstance(value, dict) and "得分" in value:
-                    try:
-                        question_scores.append(float(value["得分"]))
-                    except (ValueError, TypeError):
-                        pass
-
-            if question_scores:
-                # 有逐问得分 → 自行累加，忽略模型可能写错的总分
-                computed_total = sum(question_scores)
-                parsed["总分"] = computed_total
-                return parsed
-
-            return parsed
+                return json.loads(json_str)
+            # 尝试整段解析
+            return json.loads(content)
         except json.JSONDecodeError:
             pass
 
-        # 尝试正则提取分数（中英文）
-        # 支持 JSON 格式键值对（如 "总分": 8）和自然语言格式（如 总分：8分）
-        score_match = re.search(r'["\']?(总分|score|total)["\']?\s*[：:=\s]+\s*(\d+\.?\d*)', content)
+        # 尝试正则提取分数
+        score_match = re.search(r'(总分|得分|分数|总分是)[：:\\s]*(\\d+\\.?\\d*)', content)
         if score_match:
             score = float(score_match.group(2))
-            return {
-                "总分": score,
-                "评语": content
-            }
-
-        # 英文输出兜底：匹配 "score": X 或 "total": X
-        # (已合并到上方的统一正则中，此处保留兼容旧逻辑)
-        score_match_en = re.search(r'"(final_score)"\s*:\s*(\d+\.?\d*)', content)
-        if score_match_en:
-            score = float(score_match_en.group(2))
             return {
                 "总分": score,
                 "评语": content
@@ -393,14 +370,14 @@ class QwenGradingEngine:
         max_score = result.total_score
 
         if result.final_score >= max_score * 0.95:
-            result.warning = "⚠️ 接近满分，建议人工复核"
+            result.warning = "\\u26a0\\ufe0f 接近满分，建议人工复核"
             result.needs_review = True
         elif result.final_score <= max_score * 0.05:
-            result.warning = "⚠️ 接近零分，建议人工复核"
+            result.warning = "\\u26a0\\ufe0f 接近零分，建议人工复核"
             result.needs_review = True
 
         if result.confidence < self.confidence_thresholds["low"]:
-            result.warning = "⚠️ 置信度过低，必须人工复核"
+            result.warning = "\\u26a0\\ufe0f 置信度过低，必须人工复核"
             result.needs_review = True
 
         # 截断分数到合法范围
@@ -409,4 +386,67 @@ class QwenGradingEngine:
         elif result.final_score > max_score:
             result.final_score = max_score
 
-        return result
+        return result`;
+
+// Syntax highlighting
+function highlight(code) {
+    const lines = code.split('\n');
+    let result = [];
+    let inDocstring = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let html = '';
+
+        // Escape HTML
+        line = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        // Highlight comments
+        if (line.trimStart().startsWith('#')) {
+            html = `<span class="cmt">${line}</span>`;
+        }
+        // Highlight docstrings / multiline strings
+        else if (line.trim().startsWith('"""') || line.trim().startsWith("'''")) {
+            if (!inDocstring) {
+                inDocstring = true;
+                html = `<span class="str">${line}</span>`;
+            } else {
+                inDocstring = false;
+                html = `<span class="str">${line}</span>`;
+            }
+        }
+        else if (inDocstring) {
+            html = `<span class="str">${line}</span>`;
+        }
+        else {
+            // Keywords
+            line = line.replace(/\b(import|from|def|class|return|if|elif|else|try|except|raise|for|in|not|and|or|is|with|as|pass|async|await|yield)\b/g, '<span class="kw">$1</span>');
+            // Self
+            line = line.replace(/\b(self)\b/g, '<span class="self">$1</span>');
+            // Booleans
+            line = line.replace(/\b(True|False|None)\b/g, '<span class="bool">$1</span>');
+            // Numbers
+            line = line.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+            // Class names after class keyword
+            line = line.replace(/<span class="kw">class<\/span>\s+(\w+)/g, '<span class="kw">class</span> <span class="cls">$1</span>');
+            // Function names after def keyword
+            line = line.replace(/<span class="kw">def<\/span>\s+(\w+)/g, '<span class="kw">def</span> <span class="fn">$1</span>');
+            // Method calls
+            line = line.replace(/\.(\w+)\(/g, '.<span class="fn">$1</span>(');
+            // Strings (single line)
+            line = line.replace(/(&quot;[^&]*?&quot;|&#x27;[^&]*?&#x27;|"[^"]*?"|'[^']*?')/g, '<span class="str">$1</span>');
+            // Inline comments
+            line = line.replace(/(#.*)$/, '<span class="cmt">$1</span>');
+            html = line;
+        }
+
+        const lineNo = i + 1;
+        result.push(`<div class="line"><span class="line-no">${lineNo}</span><span class="line-content">${html}</span></div>`);
+    }
+    return result.join('\n');
+}
+
+document.getElementById('code').innerHTML = highlight(RAW_CODE);
+</script>
+</body>
+</html>

@@ -52,7 +52,7 @@ SPARK_CONFIG = {
     "enabled": os.getenv("SPARK_ENABLED", "false").lower() == "true",
 }
 
-# 小米豆包 (火山引擎)
+# 字节跳动豆包 (火山引擎)
 DOUBAO_CONFIG = {
     "api_key": os.getenv("DOUBAO_API_KEY", ""),
     "base_url": os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),

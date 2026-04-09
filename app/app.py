@@ -42,6 +42,13 @@ def register_routes(app: Flask):
     from flask import send_from_directory, render_template
     import os
 
+    # 登录页面
+    @app.route("/login")
+    def login():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'login.html')
+        return send_file(template_path, mimetype='text/html')
+
     # 题库管理 - Vue 完整界面（直接发送文件，避免 Jinja2 解析 Vue {{ }} 语法冲突）
     @app.route("/management")
     def management():
@@ -49,17 +56,29 @@ def register_routes(app: Flask):
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-bank.html')
         return send_file(template_path, mimetype='text/html')
 
-    # 根路径跳转到题库管理
+    # 根路径跳转到登录页
     @app.route("/")
     def index():
         from flask import redirect
-        return redirect("/management")
+        return redirect("/login")
 
     # 聚焦单题评分 - 深色主题纯净界面
     @app.route("/grading")
     def grading():
         dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'dist')
         return send_from_directory(dist_dir, 'index.html')
+
+    # 测试集管理 - 独立页面
+    @app.route("/test-cases")
+    def test_cases_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'test-cases.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 评分引擎源码查看
+    @app.route("/code-viewer")
+    def code_viewer():
+        return send_from_directory(static_dir, 'code-viewer.html')
 
     # 注册蓝图
     app.register_blueprint(grading_bp, url_prefix="/api/grading")

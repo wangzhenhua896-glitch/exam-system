@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能评分系统 - 测试集管理</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
+        .subtitle { font-size: 12px; color: #909399; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .page-header { margin-bottom: 20px; }
+        .page-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+        .page-desc { font-size: 14px; color: #909399; }
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .stat-value { font-size: 28px; font-weight: bold; }
+        .stat-label { font-size: 13px; color: #909399; margin-top: 8px; }
+        .section-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; }
+        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
+        .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
+        .answer-preview { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #606266; font-size: 12px; }
+        .back-btn { cursor: pointer; color: #409EFF; font-size: 14px; display: flex; align-items: center; gap: 4px; margin-bottom: 15px; }
+        .back-btn:hover { color: #66b1ff; }
+        .question-info { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+        .question-info-item { font-size: 14px; color: #606266; }
+        .question-info-item span { font-weight: 600; color: #303133; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="layout">
+        <!-- 顶部导航 -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">📝 AI 评分系统</div>
+                <div class="subtitle">国产大模型 · 高精度评分</div>
+            </div>
+            <div class="header-right">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>系统就绪</span>
+                </div>
+                <el-tag size="small" type="success">测试集管理</el-tag>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- ========== 总览仪表盘 ========== -->
+            <template v-if="currentView === 'overview'">
+                <!-- 统计卡片 -->
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color: #409EFF;">{{ overviewStats.totalQuestions }}</div>
+                        <div class="stat-label">题目总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color: #67c23a;">{{ overviewStats.totalCases }}</div>
+                        <div class="stat-label">测试用例总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" :style="{ color: overviewStats.passRate >= 80 ? '#67c23a' : overviewStats.passRate >= 50 ? '#e6a23c' : '#f56c6c' }">
+                            {{ overviewStats.passRate }}%
+                        </div>
+                        <div class="stat-label">整体通过率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" :style="{ color: overviewStats.avgError <= 1 ? '#67c23a' : overviewStats.avgError <= 2 ? '#e6a23c' : '#f56c6c' }">
+                            {{ overviewStats.avgError }}
+                        </div>
+                        <div class="stat-label">平均误差</div>
+                    </div>
+                </div>
+
+                <!-- 筛选 + 表格 -->
+                <div class="page-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <span class="section-title" style="margin-bottom: 0; border: none; padding: 0;">题目测试用例概览</span>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <el-select v-model="filterSubject" placeholder="全部科目" clearable size="small" style="width: 150px;" @change="filterOverview">
+                                <el-option v-for="s in subjects" :key="s" :label="s" :value="s" />
+                            </el-select>
+                            <el-button type="primary" size="small" :icon="Refresh" @click="loadOverview">刷新</el-button>
+                        </div>
+                    </div>
+                    <el-table :data="filteredOverview" stripe style="width: 100%;" v-loading="loadingOverview">
+                        <el-table-column prop="question_id" label="ID" width="60" />
+                        <el-table-column prop="title" label="题目标题" min-width="180" show-overflow-tooltip />
+                        <el-table-column prop="subject" label="科目" width="100" />
+                        <el-table-column prop="max_score" label="满分" width="60" />
+                        <el-table-column label="用例数" width="100">
+                            <template #default="{ row }">
+                                <span>{{ row.total_cases }}</span>
+                                <span v-if="row.total_cases > 0" style="color: #909399; font-size: 12px;">
+                                    ({{ row.simulated_count }}模拟/{{ row.real_count }}真实)
+                                </span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="评分脚本" width="90">
+                            <template #default="{ row }">
+                                <el-tag :type="row.has_rubric_script ? 'success' : 'info'" size="small">
+                                    {{ row.has_rubric_script ? '已生成' : '未生成' }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="通过率" width="140">
+                            <template #default="{ row }">
+                                <template v-if="row.total_cases > 0 && (row.passed_count + row.failed_count) > 0">
+                                    <el-progress
+                                        :percentage="Math.round(row.passed_count / (row.passed_count + row.failed_count) * 100)"
+                                        :color="row.passed_count / (row.passed_count + row.failed_count) >= 0.8 ? '#67c23a' : row.passed_count / (row.passed_count + row.failed_count) >= 0.5 ? '#e6a23c' : '#f56c6c'"
+                                        :stroke-width="14"
+                                        style="width: 100px;"
+                                    />
+                                </template>
+                                <span v-else style="color: #c0c4cc;">-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="平均误差" width="90">
+                            <template #default="{ row }">
+                                <span v-if="row.avg_error !== null" :style="{ color: row.avg_error <= 1 ? '#67c23a' : row.avg_error <= 2 ? '#e6a23c' : '#f56c6c' }">
+                                    {{ row.avg_error }}
+                                </span>
+                                <span v-else style="color: #c0c4cc;">-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="最近验证" width="160">
+                            <template #default="{ row }">
+                                <span v-if="row.last_run_at" style="font-size: 12px; color: #606266;">{{ formatTime(row.last_run_at) }}</span>
+                                <span v-else style="color: #c0c4cc;">未验证</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="160" fixed="right">
+                            <template #default="{ row }">
+                                <el-button type="primary" link size="small" @click="openDetail(row)">管理</el-button>
+                                <el-button type="success" link size="small" @click="verifyFromOverview(row)" :disabled="row.total_cases === 0">验证</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </div>
+            </template>
+
+            <!-- ========== 单题详情视图 ========== -->
+            <template v-if="currentView === 'detail'">
+                <div class="back-btn" @click="backToOverview">
+                    <el-icon><ArrowLeft /></el-icon>
+                    <span>返回总览</span>
+                </div>
+
+                <!-- 题目信息 -->
+                <div class="page-card">
+                    <div class="question-info">
+                        <div class="question-info-item">题目：<span>{{ detailQuestion.title }}</span></div>
+                        <div class="question-info-item">科目：<span>{{ detailQuestion.subject }}</span></div>
+                        <div class="question-info-item">满分：<span>{{ detailQuestion.max_score }} 分</span></div>
+                        <div class="question-info-item">
+                            评分脚本：
+                            <el-tag :type="detailQuestion.has_rubric_script ? 'success' : 'info'" size="small">
+                                {{ detailQuestion.has_rubric_script ? '已生成' : '未生成' }}
+                            </el-tag>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 测试用例列表 -->
+                <div class="page-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <span class="section-title" style="margin-bottom: 0; border: none; padding: 0;">测试用例 ({{ testCaseList.length }})</span>
+                        <el-button type="primary" size="small" @click="showTestCaseForm = !showTestCaseForm">
+                            {{ showTestCaseForm ? '收起表单' : '添加用例' }}
+                        </el-button>
+                    </div>
+
+                    <el-table :data="testCaseList" stripe v-loading="loadingCases" empty-text="暂无测试用例">
+                        <el-table-column prop="description" label="描述" min-width="120" show-overflow-tooltip />
+                        <el-table-column label="类型" width="80">
+                            <template #default="{ row }">
+                                <el-tag :type="row.case_type === 'real' ? 'danger' : ''" size="small">
+                                    {{ row.case_type === 'real' ? '真实' : '模拟' }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="期望分" width="80">
+                            <template #default="{ row }">{{ row.expected_score }} / {{ detailQuestion.max_score }}</template>
+                        </el-table-column>
+                        <el-table-column label="上次实际分" width="100">
+                            <template #default="{ row }">
+                                <span v-if="row.last_run_at !== null">{{ row.last_actual_score }}</span>
+                                <span v-else style="color: #c0c4cc;">-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="误差" width="80">
+                            <template #default="{ row }">
+                                <span v-if="row.last_run_at !== null" :style="{ color: row.last_error <= 1 ? '#67c23a' : row.last_error <= 2 ? '#e6a23c' : '#f56c6c' }">
+                                    {{ row.last_error }}
+                                </span>
+                                <span v-else style="color: #c0c4cc;">-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="状态" width="80">
+                            <template #default="{ row }">
+                                <el-tag v-if="row.last_run_at !== null" :type="row.last_error <= 1 ? 'success' : 'danger'" size="small">
+                                    {{ row.last_error <= 1 ? '通过' : '未通过' }}
+                                </el-tag>
+                                <el-tag v-else type="info" size="small">待验证</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="答案预览" width="150">
+                            <template #default="{ row }">
+                                <el-tooltip :content="row.answer_text" placement="top" :show-after="500">
+                                    <div class="answer-preview">{{ row.answer_text }}</div>
+                                </el-tooltip>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="120" fixed="right">
+                            <template #default="{ row }">
+                                <el-button type="primary" link size="small" @click="editTestCase(row)">编辑</el-button>
+                                <el-button type="danger" link size="small" @click="deleteTestCase(row.id)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <!-- 添加/编辑表单 -->
+                    <div v-if="showTestCaseForm" style="margin-top: 15px; padding: 15px; background: #f5f7fa; border-radius: 8px;">
+                        <div class="section-title">{{ editingTestCaseId ? '编辑用例' : '添加用例' }}</div>
+                        <el-form label-position="top" size="small">
+                            <el-row :gutter="15">
+                                <el-col :span="12">
+                                    <el-form-item label="描述">
+                                        <el-input v-model="testCaseForm.description" placeholder="如：满分答案、半对半错、完全错误" />
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="6">
+                                    <el-form-item label="类型">
+                                        <el-select v-model="testCaseForm.case_type" style="width: 100%;">
+                                            <el-option label="模拟作答" value="simulated" />
+                                            <el-option label="真实答卷" value="real" />
+                                        </el-select>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="6">
+                                    <el-form-item label="期望分数">
+                                        <el-input-number v-model="testCaseForm.expected_score" :min="0" :max="detailQuestion.max_score" :step="0.5" style="width: 100%;" />
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="考生答案">
+                                <el-input v-model="testCaseForm.answer_text" type="textarea" :rows="4" placeholder="粘贴一份考生的答案..." />
+                            </el-form-item>
+                            <div style="display: flex; gap: 10px;">
+                                <el-button type="primary" @click="saveTestCase">{{ editingTestCaseId ? '更新' : '添加' }}</el-button>
+                                <el-button @click="resetTestCaseForm">取消</el-button>
+                            </div>
+                        </el-form>
+                    </div>
+                </div>
+
+                <!-- 验证控制 -->
+                <div class="page-card">
+                    <div class="section-title">验证控制</div>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <span style="font-size: 14px; color: #606266;">容差 (分)：</span>
+                        <el-input-number v-model="tolerance" :min="0" :max="10" :step="0.5" size="small" style="width: 120px;" />
+                        <el-button type="success" :icon="VideoPlay" @click="runVerification" :loading="verifying" :disabled="testCaseList.length === 0">
+                            {{ verifying ? '验证中...' : '运行验证' }}
+                        </el-button>
+                    </div>
+                    <div v-if="verifying">
+                        <el-progress :percentage="verifyProgress" :format="() => `验证中 ${verifyProgress}%`" />
+                    </div>
+                </div>
+
+                <!-- 验证结果 -->
+                <div v-if="verifyResults.length > 0" class="page-card">
+                    <div class="section-title">验证结果</div>
+                    <div class="stat-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 15px;">
+                        <div class="stat-card" style="padding: 15px;">
+                            <div class="stat-value" style="font-size: 22px; color: #409EFF;">{{ verifySummary.accuracy }}%</div>
+                            <div class="stat-label">准确率</div>
+                        </div>
+                        <div class="stat-card" style="padding: 15px;">
+                            <div class="stat-value" style="font-size: 22px; color: #e6a23c;">{{ verifySummary.meanError }}</div>
+                            <div class="stat-label">平均误差</div>
+                        </div>
+                        <div class="stat-card" style="padding: 15px;">
+                            <div class="stat-value" style="font-size: 22px; color: #f56c6c;">{{ verifySummary.maxError }}</div>
+                            <div class="stat-label">最大误差</div>
+                        </div>
+                        <div class="stat-card" style="padding: 15px;">
+                            <div class="stat-value" style="font-size: 22px; color: #67c23a;">{{ verifySummary.passed }}/{{ verifySummary.total }}</div>
+                            <div class="stat-label">通过数</div>
+                        </div>
+                    </div>
+                    <el-table :data="verifyResults" stripe size="small">
+                        <el-table-column prop="description" label="用例" min-width="100" show-overflow-tooltip />
+                        <el-table-column label="类型" width="70">
+                            <template #default="{ row }">
+                                <el-tag :type="row.case_type === 'real' ? 'danger' : ''" size="small">{{ row.case_type === 'real' ? '真实' : '模拟' }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="expected_score" label="期望分" width="70" />
+                        <el-table-column prop="actual_score" label="实际分" width="70" />
+                        <el-table-column label="误差" width="70">
+                            <template #default="{ row }">
+                                <span v-if="row.error !== null" :style="{ color: row.passed ? '#67c23a' : '#f56c6c' }">{{ row.error }}</span>
+                                <span v-else style="color: #c0c4cc;">-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="结果" width="70">
+                            <template #default="{ row }">
+                                <el-tag :type="row.passed ? 'success' : 'danger'" size="small">{{ row.passed ? '通过' : '未通过' }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="comment" label="评语" min-width="150" show-overflow-tooltip />
+                    </el-table>
+                </div>
+            </template>
+        </div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <span>AI 智能评分系统 v2.0</span>
+            <a href="/management">题库管理</a>
+            <a href="/grading" target="_blank">评分工具</a>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
+
+const app = createApp({
+    setup() {
+        // ---- 视图控制 ----
+        const currentView = ref('overview');
+
+        // ---- 总览数据 ----
+        const overviewData = ref([]);
+        const loadingOverview = ref(false);
+        const filterSubject = ref('');
+
+        const subjects = computed(() => {
+            const set = new Set(overviewData.value.map(r => r.subject).filter(Boolean));
+            return [...set];
+        });
+
+        const filteredOverview = computed(() => {
+            if (!filterSubject.value) return overviewData.value;
+            return overviewData.value.filter(r => r.subject === filterSubject.value);
+        });
+
+        const overviewStats = computed(() => {
+            const data = filteredOverview.value;
+            const totalQuestions = data.length;
+            const totalCases = data.reduce((s, r) => s + (r.total_cases || 0), 0);
+            const passedCount = data.reduce((s, r) => s + (r.passed_count || 0), 0);
+            const failedCount = data.reduce((s, r) => s + (r.failed_count || 0), 0);
+            const runCount = passedCount + failedCount;
+            const passRate = runCount > 0 ? Math.round(passedCount / runCount * 100) : 0;
+            const errors = data.filter(r => r.avg_error !== null).map(r => r.avg_error);
+            const avgError = errors.length > 0 ? (errors.reduce((a, b) => a + b, 0) / errors.length).toFixed(2) : '0';
+            return { totalQuestions, totalCases, passRate, avgError };
+        });
+
+        async function loadOverview() {
+            loadingOverview.value = true;
+            try {
+                const res = await axios.get('/api/test-cases/overview');
+                if (res.data.success) {
+                    overviewData.value = res.data.data;
+                }
+            } catch (e) {
+                ElMessage.error('加载概览失败');
+            }
+            loadingOverview.value = false;
+        }
+
+        function filterOverview() {
+            // computed 自动处理
+        }
+
+        function formatTime(t) {
+            if (!t) return '';
+            return t.replace('T', ' ').substring(0, 19);
+        }
+
+        // ---- 详情视图 ----
+        const detailQuestion = reactive({
+            id: null, title: '', subject: '', max_score: 10, has_rubric_script: false
+        });
+        const testCaseList = ref([]);
+        const loadingCases = ref(false);
+        const showTestCaseForm = ref(false);
+        const testCaseForm = reactive({
+            answer_text: '', expected_score: null, description: '', case_type: 'simulated'
+        });
+        const editingTestCaseId = ref(null);
+        const tolerance = ref(1.0);
+        const verifying = ref(false);
+        const verifyProgress = ref(0);
+        const verifyResults = ref([]);
+        const verifySummary = reactive({ accuracy: 0, meanError: 0, maxError: 0, passed: 0, total: 0 });
+
+        function openDetail(row) {
+            detailQuestion.id = row.question_id;
+            detailQuestion.title = row.title;
+            detailQuestion.subject = row.subject;
+            detailQuestion.max_score = row.max_score;
+            detailQuestion.has_rubric_script = row.has_rubric_script;
+            currentView.value = 'detail';
+            loadTestCases();
+            verifyResults.value = [];
+        }
+
+        function backToOverview() {
+            currentView.value = 'overview';
+            loadOverview();
+        }
+
+        async function loadTestCases() {
+            loadingCases.value = true;
+            try {
+                const res = await axios.get(`/api/questions/${detailQuestion.id}/test-cases`);
+                if (res.data.success) {
+                    testCaseList.value = res.data.data;
+                }
+            } catch (e) {
+                ElMessage.error('加载测试用例失败');
+            }
+            loadingCases.value = false;
+        }
+
+        async function saveTestCase() {
+            if (!testCaseForm.answer_text.trim()) {
+                ElMessage.warning('请输入考生答案');
+                return;
+            }
+            if (testCaseForm.expected_score === null) {
+                ElMessage.warning('请设置期望分数');
+                return;
+            }
+            try {
+                if (editingTestCaseId.value) {
+                    await axios.put(`/api/questions/${detailQuestion.id}/test-cases/${editingTestCaseId.value}`, testCaseForm);
+                    ElMessage.success('更新成功');
+                } else {
+                    await axios.post(`/api/questions/${detailQuestion.id}/test-cases`, testCaseForm);
+                    ElMessage.success('添加成功');
+                }
+                resetTestCaseForm();
+                loadTestCases();
+            } catch (e) {
+                ElMessage.error('保存失败');
+            }
+        }
+
+        function editTestCase(row) {
+            editingTestCaseId.value = row.id;
+            testCaseForm.answer_text = row.answer_text;
+            testCaseForm.expected_score = row.expected_score;
+            testCaseForm.description = row.description;
+            testCaseForm.case_type = row.case_type;
+            showTestCaseForm.value = true;
+        }
+
+        async function deleteTestCase(id) {
+            try {
+                await ElMessageBox.confirm('确定删除该测试用例？', '确认', { type: 'warning' });
+                await axios.delete(`/api/questions/${detailQuestion.id}/test-cases/${id}`);
+                ElMessage.success('删除成功');
+                loadTestCases();
+            } catch (e) {
+                if (e !== 'cancel' && e?.message !== 'cancel') {
+                    ElMessage.error('删除失败');
+                }
+            }
+        }
+
+        function resetTestCaseForm() {
+            testCaseForm.answer_text = '';
+            testCaseForm.expected_score = null;
+            testCaseForm.description = '';
+            testCaseForm.case_type = 'simulated';
+            editingTestCaseId.value = null;
+            showTestCaseForm.value = false;
+        }
+
+        async function runVerification() {
+            if (testCaseList.value.length === 0) {
+                ElMessage.warning('请先添加测试用例');
+                return;
+            }
+            verifying.value = true;
+            verifyProgress.value = 10;
+            try {
+                const interval = setInterval(() => {
+                    if (verifyProgress.value < 90) verifyProgress.value += 5;
+                }, 500);
+                const res = await axios.post('/api/verify-rubric', {
+                    question_id: detailQuestion.id,
+                    tolerance: tolerance.value
+                });
+                clearInterval(interval);
+                verifyProgress.value = 100;
+                if (res.data.success) {
+                    const d = res.data.data;
+                    verifyResults.value = d.results;
+                    verifySummary.accuracy = d.accuracy;
+                    verifySummary.meanError = d.mean_absolute_error;
+                    verifySummary.maxError = d.max_absolute_error;
+                    verifySummary.passed = d.passed_cases;
+                    verifySummary.total = d.total_cases;
+                    ElMessage.success(`验证完成：${d.passed_cases}/${d.total_cases} 通过`);
+                    loadTestCases();
+                } else {
+                    ElMessage.error(res.data.error || '验证失败');
+                }
+            } catch (e) {
+                ElMessage.error('验证请求失败');
+            }
+            verifying.value = false;
+        }
+
+        // 从总览直接验证
+        async function verifyFromOverview(row) {
+            openDetail(row);
+            setTimeout(() => runVerification(), 300);
+        }
+
+        onMounted(() => {
+            loadOverview();
+        });
+
+        return {
+            currentView,
+            // overview
+            overviewData, loadingOverview, filterSubject, subjects, filteredOverview,
+            overviewStats, loadOverview, filterOverview, formatTime,
+            // detail
+            detailQuestion, testCaseList, loadingCases,
+            showTestCaseForm, testCaseForm, editingTestCaseId,
+            tolerance, verifying, verifyProgress, verifyResults, verifySummary,
+            openDetail, backToOverview, loadTestCases,
+            saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm,
+            runVerification, verifyFromOverview,
+            // icons
+            Refresh: ElementPlusIconsVue.Refresh,
+            VideoPlay: ElementPlusIconsVue.VideoPlay,
+            ArrowLeft: ElementPlusIconsVue.ArrowLeft,
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -11,7 +11,8 @@ from app.models.db_models import (
     create_batch_task, update_batch_task, get_batch_task,
     get_syllabus, get_all_syllabus, upsert_syllabus, delete_syllabus,
     add_test_case, get_test_cases, get_test_case,
-    update_test_case, delete_test_case, update_test_case_result
+    update_test_case, delete_test_case, update_test_case_result,
+    get_all_test_cases_overview, get_all_test_cases_with_question
 )
 # 使用 Qwen-Agent 官方评分引擎替换原聚合引擎
 from app.qwen_engine import QwenGradingEngine
@@ -671,6 +672,25 @@ def remove_syllabus(subject, content_type):
     if not success:
         return jsonify({'success': False, 'error': '内容不存在'}), 404
     return jsonify({'success': True})
+
+
+# =============================================================================
+# 测试集管理（独立页面）
+# =============================================================================
+
+@api_bp.route('/test-cases/overview', methods=['GET'])
+def test_cases_overview():
+    """获取所有题目的测试用例统计概览"""
+    data = get_all_test_cases_overview()
+    return jsonify({'success': True, 'data': data})
+
+
+@api_bp.route('/test-cases/all', methods=['GET'])
+def test_cases_all():
+    """获取所有测试用例（含题目信息），支持 ?subject= 筛选"""
+    subject = request.args.get('subject')
+    data = get_all_test_cases_with_question(subject)
+    return jsonify({'success': True, 'data': data})
 
 
 # =============================================================================

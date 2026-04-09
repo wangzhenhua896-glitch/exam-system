@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 智能评分系统 - 题库管理</title>
-    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/element-plus"></script>
-    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
@@ -51,6 +51,9 @@
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
+                <el-tag size="small" type="success" style="cursor: pointer;" @click="switchSubject">
+                    {{ currentSubjectLabel }}
+                </el-tag>
                 <div class="status-badge">
                     <div class="status-dot"></div>
                     <span>系统就绪</span>
@@ -72,6 +75,7 @@
                     <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>新建题目</span></el-menu-item>
                     <el-menu-item index="question-list"><el-icon><Document /></el-icon><span>题目列表</span></el-menu-item>
                     <el-menu-item index="ai-generate"><el-icon><MagicStick /></el-icon><span>AI 批量出题</span></el-menu-item>
+                    <el-menu-item index="test-case-manage"><el-icon><List /></el-icon><span>测试集管理</span></el-menu-item>
                 </el-menu>
 
                 <div class="menu-group-title">考试资料</div>
@@ -170,17 +174,10 @@
                             <div style="margin-bottom: 24px;">
                                 <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">基本信息</div>
                                 <el-row :gutter="16">
-                                    <el-col :span="6">
-                                        <el-form-item label="学科">
-                                            <el-select v-model="questionForm.subject" style="width: 100%;" placeholder="选择科目">
-                                                <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
-                                            </el-select>
-                                        </el-form-item>
-                                    </el-col>
-                                    <el-col :span="4"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;"></el-input-number></el-form-item></el-col>
-                                    <el-col :span="4"><el-form-item label="难度"><el-select v-model="questionForm.difficulty" style="width: 100%;"><el-option label="简单" value="easy"></el-option><el-option label="中等" value="medium"></el-option><el-option label="困难" value="hard"></el-select></el-form-item></el-col>
-                                    <el-col :span="5"><el-form-item label="知识点"><el-input v-model="questionForm.knowledge" type="text" placeholder="本题考查的知识点"></el-input></el-form-item></el-col>
-                                    <el-col :span="5"><el-form-item label="考核内容"><el-input v-model="questionForm.contentType" type="text" placeholder="简答题/选择题/计算题"></el-input></el-form-item></el-col>
+                                    <el-col :span="5"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;"></el-input-number></el-form-item></el-col>
+                                    <el-col :span="5"><el-form-item label="难度"><el-select v-model="questionForm.difficulty" style="width: 100%;"><el-option label="简单" value="easy"></el-option><el-option label="中等" value="medium"></el-option><el-option label="困难" value="hard"></el-select></el-form-item></el-col>
+                                    <el-col :span="7"><el-form-item label="知识点"><el-input v-model="questionForm.knowledge" type="text" placeholder="本题考查的知识点"></el-input></el-form-item></el-col>
+                                    <el-col :span="7"><el-form-item label="考核内容"><el-input v-model="questionForm.contentType" type="text" placeholder="简答题/选择题/计算题"></el-input></el-form-item></el-col>
                                 </el-row>
                             </div>
 
@@ -641,8 +638,38 @@ const app = createApp({
 
         const subjectList = ref([]);
 
+        // 全局科目状态 — 从登录页存入的 localStorage 读取
+        const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
+        const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
+
+        // 首次访问保护：没有科目信息则跳转登录页
+        if (!currentSubject.value) {
+            window.location.href = '/login';
+        }
+
+        // 当前科目显示名称
+        const currentSubjectLabel = Vue.computed(() => {
+            const subjects = JSON.parse(localStorage.getItem(SUBJECT_STORAGE_KEY) || '[]');
+            const found = subjects.find(s => s.value === currentSubject.value);
+            return found ? found.label : currentSubject.value;
+        });
+
+        // 切换科目（header 点击触发）
+        const switchSubject = async () => {
+            try {
+                await ElMessageBox.confirm(
+                    '切换科目后，将跳转到登录页重新选择。确定要切换吗？',
+                    '切换科目',
+                    { confirmButtonText: '确认切换', cancelButtonText: '取消', type: 'warning' }
+                );
+            } catch { return; }
+
+            localStorage.removeItem(CURRENT_SUBJECT_KEY);
+            window.location.href = '/login';
+        };
+
         const questionForm = reactive({
-            subject: 'politics',
+            subject: currentSubject.value || 'politics',
             score: 10,
             difficulty: 'medium',
             originalText: '',
@@ -657,8 +684,8 @@ const app = createApp({
         });
 
         // 考试大纲 / 教材 表单
-        const syllabusForm = reactive({ subject: 'politics', title: '', content: '', updatedAt: '' });
-        const textbookForm = reactive({ subject: 'politics', title: '', content: '', updatedAt: '' });
+        const syllabusForm = reactive({ subject: currentSubject.value, title: '', content: '', updatedAt: '' });
+        const textbookForm = reactive({ subject: currentSubject.value, title: '', content: '', updatedAt: '' });
         const syllabusSaving = ref(false);
         const textbookSaving = ref(false);
 
@@ -714,9 +741,9 @@ const app = createApp({
                     subjectList.value = [...DEFAULT_SUBJECTS];
                     saveSubjects();
                 }
-                // 设置默认选中第一个
+                // 设置默认科目
                 if (subjectList.value.length > 0 && !questionForm.subject) {
-                    questionForm.subject = subjectList.value[0].value;
+                    questionForm.subject = currentSubject.value || subjectList.value[0].value;
                 }
             } catch (e) {
                 subjectList.value = [...DEFAULT_SUBJECTS];
@@ -799,6 +826,10 @@ const app = createApp({
         };
 
         const handleMenuSelect = (index) => {
+            if (index === 'test-case-manage') {
+                window.open('/test-cases', '_blank');
+                return;
+            }
             if (index === 'question-list') {
                 loadQuestions();
                 listPage.value = 1;
@@ -806,15 +837,12 @@ const app = createApp({
             currentPage.value = index;
         };
 
-        // 筛选条件变化时回到第一页
-        Vue.watch([filterSubject, searchKeyword, filterQuality], () => { listPage.value = 1; });
-
         const generatingScript = ref(false);
         const evaluatingQuality = ref(false);
         const qualityScore = ref(null);
 
         // AI 批量生成
-        const autoGenSubject = ref('politics');
+        const autoGenSubject = ref(currentSubject.value);
         const autoGenCount = ref(5);
         const autoGenTestCases = ref(7);
         const autoGenRunning = ref(false);
@@ -854,7 +882,7 @@ const app = createApp({
         };
 
         // 题目列表筛选/搜索/分页
-        const filterSubject = ref('');
+        const filterSubject = ref(currentSubject.value);
         const searchKeyword = ref('');
         const filterQuality = ref('');
         const listPage = ref(1);
@@ -884,6 +912,9 @@ const app = createApp({
             const start = (listPage.value - 1) * 20;
             return filteredQuestions.value.slice(start, start + 20);
         });
+
+        // 筛选条件变化时回到第一页
+        Vue.watch([filterSubject, searchKeyword, filterQuality], () => { listPage.value = 1; });
 
         // 测试用例验证
         const showTestCaseDialog = ref(false);
@@ -1173,7 +1204,7 @@ const app = createApp({
         };
 
         const resetForm = () => {
-            questionForm.subject = subjectList.value.length > 0 ? subjectList.value[0].value : '';
+            questionForm.subject = currentSubject.value;
             questionForm.score = 10;
             questionForm.difficulty = 'medium';
             questionForm.originalText = '';
@@ -1301,6 +1332,78 @@ const app = createApp({
             // 完整原始文本保存到原题
             questionForm.originalText = fullText;
 
+            // 根据当前选择的科目走不同解析分支
+            if (questionForm.subject === 'english') {
+                autoParseEnglish(fullText);
+            } else {
+                autoParseChinese(fullText); // 思政和语文都走中文解析
+            }
+        };
+
+        // 英语题解析：英文材料 + 中文评分规则混合格式
+        const autoParseEnglish = (fullText) => {
+            let questionContent = '';
+            let answerContent = '';
+            let rubricContent = '';
+            let extractedMaxScore = null;
+
+            // 匹配总分
+            const scoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
+            const scoreMatch2 = fullText.match(scoreRegex);
+            if (scoreMatch2) extractedMaxScore = parseFloat(scoreMatch2[1]);
+
+            // 关键分隔符："请严格按照以下规则对学生答案进行评分"
+            const rubricDividerRegex = /请严格按照以下规则对学生答案进行评分[：:]?\s*/;
+            const rubricMatch = rubricDividerRegex.exec(fullText);
+
+            if (rubricMatch) {
+                // 分隔符之前 = 题目内容
+                questionContent = fullText.slice(0, rubricMatch.index).trim();
+                // 分隔符之后 = 评分规则
+                rubricContent = fullText.slice(rubricMatch.index + rubricMatch[0].length).trim();
+            } else {
+                // 没有分隔符，全部当题目
+                questionContent = fullText;
+            }
+
+            // 从题干中移除总分标注（如"（6分）"），分值由表单字段管理
+            questionContent = questionContent.replace(/[（\(]\d+\.?\d*分[）\)]/g, '').trim();
+
+            // 从评分规则中提取标准答案（每题的"参考答案："行）
+            if (rubricContent) {
+                const answerLines = [];
+                const answerExtractRegex = /参考答案[：:]\s*(.+)/g;
+                let m;
+                while ((m = answerExtractRegex.exec(rubricContent)) !== null) {
+                    const line = m[1].trim();
+                    if (line) answerLines.push(line);
+                }
+                if (answerLines.length > 0) {
+                    answerContent = answerLines.map((a, i) => `${i + 1}. ${a}`).join('\n');
+                }
+            }
+
+            // 赋值
+            if (questionContent) questionForm.content = questionContent;
+            if (extractedMaxScore && !isNaN(extractedMaxScore)) questionForm.score = extractedMaxScore;
+            if (answerContent) questionForm.standardAnswer = answerContent;
+            if (rubricContent) questionForm.rubricRules = rubricContent;
+
+            // 统计结果
+            parseResult.value = {
+                maxScore: extractedMaxScore || questionForm.score,
+                points: 0,
+                hasAnswer: !!answerContent
+            };
+
+            let msg = '英语题自动识别完成';
+            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
+            if (answerContent) msg += `，提取 ${answerContent.split('\n').length} 道参考答案`;
+            ElMessage.success(msg);
+        };
+
+        // 思政/语文题解析：中文 section 关键词分隔
+        const autoParseChinese = (fullText) => {
             let questionContent = '';
             let answerContent = '';
             let rubricContent = '';
@@ -1320,20 +1423,15 @@ const app = createApp({
 
             // 从头到尾扫描，随时检查是否遇到section关键词
             let currentSection = 'question';
-            let buffer = '';
-
-            // 将整个文本按关键词分割
             let text = fullText;
 
             // 循环查找所有section关键词
             while (text.length > 0) {
-                // 查找下一个section关键词的位置
                 let found = false;
                 let earliestPos = Infinity;
                 let foundRegex = null;
                 let foundMatch = null;
 
-                // 检查每种关键词
                 const checkMatch = (regex) => {
                     const match = regex.exec(text);
                     if (match && match.index < earliestPos) {
@@ -1350,7 +1448,6 @@ const app = createApp({
                 checkMatch(questionRegex);
 
                 if (found) {
-                    // 关键词之前的内容属于当前section
                     const before = text.slice(0, earliestPos).trim();
                     if (before) {
                         if (currentSection === 'question') questionContent += before + '\n';
@@ -1359,16 +1456,13 @@ const app = createApp({
                         else if (currentSection === 'ai') aiPromptContent += before + '\n';
                     }
 
-                    // 切换到新section
                     if (foundRegex === answerRegex) currentSection = 'answer';
                     else if (foundRegex === rubricRegex) currentSection = 'rubric';
                     else if (foundRegex === aiRegex) currentSection = 'ai';
                     else if (foundRegex === questionRegex) currentSection = 'question';
 
-                    // 去掉关键词，继续处理后面的内容
                     text = text.slice(foundMatch.index + foundMatch[0].length);
                 } else {
-                    // 没有更多关键词，剩余全部属于当前section
                     if (text.trim()) {
                         if (currentSection === 'question') questionContent += text.trim() + '\n';
                         else if (currentSection === 'answer') answerContent += text.trim() + '\n';
@@ -1630,7 +1724,7 @@ const app = createApp({
 
         return {
             currentPage, questions, stats, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
-            evaluatingQuality, qualityScore, viewMode, editingQuestionId,
+            evaluatingQuality, qualityScore, viewMode, editingQuestionId, currentSubject, currentSubjectLabel, switchSubject,
             filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
             showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
