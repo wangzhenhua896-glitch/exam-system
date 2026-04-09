@@ -51,7 +51,10 @@
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
-                <el-tag size="small" type="success" style="cursor: pointer;" @click="switchSubject">
+                <el-tag v-if="isAdmin" size="small" type="danger" style="cursor: pointer;" @click="switchSubject">
+                    管理员
+                </el-tag>
+                <el-tag v-else size="small" type="success" style="cursor: pointer;" @click="switchSubject">
                     {{ currentSubjectLabel }}
                 </el-tag>
                 <div class="status-badge">
@@ -65,10 +68,13 @@
         <div class="main-container">
             <!-- 左侧导航 -->
             <div class="sidebar">
-                <div class="menu-group-title">系统管理</div>
-                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
-                    <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
-                </el-menu>
+                <template v-if="isAdmin">
+                    <div class="menu-group-title">系统管理</div>
+                    <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                        <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
+                        <el-menu-item index="model-config"><el-icon><Monitor /></el-icon><span>模型配置</span></el-menu-item>
+                    </el-menu>
+                </template>
 
                 <div class="menu-group-title">题库管理</div>
                 <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
@@ -118,6 +124,96 @@
                         </el-table>
                         <el-empty v-if="subjectList.length === 0" description="暂无科目，请添加至少一个科目"></el-empty>
                     </div>
+                </div>
+
+                <!-- 模型配置（管理员专用） -->
+                <div v-if="currentPage === 'model-config'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">模型配置</div>
+                            <div class="page-desc">管理大模型 API 连接，支持启用/禁用、编辑参数、测试连通性</div>
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <el-button type="primary" @click="testAllModels" :loading="modelTestAllLoading">
+                                测试所有已启用模型
+                            </el-button>
+                        </div>
+                        <el-table :data="modelConfigs" stripe style="width: 100%;">
+                            <el-table-column prop="name" label="模型提供商" width="200"></el-table-column>
+                            <el-table-column label="启用" width="80">
+                                <template #default="scope">
+                                    <el-switch v-model="scope.row.enabled" @change="toggleModelProvider(scope.row)"></el-switch>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="当前模型" min-width="180">
+                                <template #default="scope">
+                                    <span>{{ scope.row.model || '未配置' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="连接状态" width="120">
+                                <template #default="scope">
+                                    <template v-if="scope.row.testResult === undefined">
+                                        <el-tag size="small" type="info">未测试</el-tag>
+                                    </template>
+                                    <template v-else-if="scope.row.testResult.success === true">
+                                        <el-tag size="small" type="success">{{ scope.row.testResult.latency_ms }}ms</el-tag>
+                                    </template>
+                                    <template v-else-if="scope.row.testResult.success === false">
+                                        <el-tag size="small" type="danger">异常</el-tag>
+                                    </template>
+                                    <template v-else>
+                                        <el-tag size="small" type="info">跳过</el-tag>
+                                    </template>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="180" fixed="right">
+                                <template #default="scope">
+                                    <el-button size="small" @click="editModelProvider(scope.row)">编辑</el-button>
+                                    <el-button size="small" @click="testSingleModel(scope.row)" :loading="scope.row.testing">测试</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+
+                        <!-- 测试结果详情 -->
+                        <div v-if="modelTestResults.length" style="margin-top: 16px;">
+                            <div v-for="r in modelTestResults" :key="r.provider" style="margin-bottom: 4px; font-size: 13px;">
+                                <template v-if="r.success === true">
+                                    <span style="color: #67c23a;">✓</span> {{ r.name }}: 正常 ({{ r.latency_ms }}ms)
+                                    <span v-if="r.reply" style="color: #909399;"> — "{{ r.reply }}"</span>
+                                </template>
+                                <template v-else-if="r.success === false">
+                                    <span style="color: #f56c6c;">✗</span> {{ r.name }}: {{ r.error }}
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 编辑弹窗 -->
+                    <el-dialog v-model="showModelDialog" :title="'编辑 — ' + (editingModelConfig?.name || '')" width="520px" @close="resetModelForm">
+                        <el-form label-position="top" v-if="editingModelConfig">
+                            <el-form-item label="API Key">
+                                <el-input v-model="modelForm.api_key" type="password" show-password placeholder="输入 API Key"></el-input>
+                            </el-form-item>
+                            <el-form-item label="Base URL">
+                                <el-input v-model="modelForm.base_url" placeholder="https://..."></el-input>
+                            </el-form-item>
+                            <el-form-item label="模型">
+                                <el-select v-if="editingModelConfig.available_models && editingModelConfig.available_models.length" v-model="modelForm.model" style="width: 100%;" filterable allow-create>
+                                    <el-option v-for="m in editingModelConfig.available_models" :key="m.id" :label="m.name" :value="m.id"></el-option>
+                                </el-select>
+                                <el-input v-else v-model="modelForm.model" placeholder="模型名称"></el-input>
+                            </el-form-item>
+                            <template v-if="editingModelConfig.extra_fields && editingModelConfig.extra_fields.length">
+                                <el-form-item v-for="f in editingModelConfig.extra_fields" :key="f.key" :label="f.label">
+                                    <el-input v-model="modelForm.extra_config[f.key]" :placeholder="f.label"></el-input>
+                                </el-form-item>
+                            </template>
+                        </el-form>
+                        <template #footer>
+                            <el-button @click="showModelDialog = false">取消</el-button>
+                            <el-button type="primary" @click="saveModelConfig">保存</el-button>
+                        </template>
+                    </el-dialog>
                 </div>
 
                 <!-- 命题管理 -->
@@ -640,10 +736,13 @@ const app = createApp({
 
         // 全局科目状态 — 从登录页存入的 localStorage 读取
         const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
+        const ROLE_KEY = 'ai_grading_role';
+        const userRole = ref(localStorage.getItem(ROLE_KEY) || 'teacher');
+        const isAdmin = Vue.computed(() => userRole.value === 'admin');
         const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
 
-        // 首次访问保护：没有科目信息则跳转登录页
-        if (!currentSubject.value) {
+        // 首次访问保护：管理员不需要选科目，科目老师必须选科目
+        if (!isAdmin.value && !currentSubject.value) {
             window.location.href = '/login';
         }
 
@@ -654,17 +753,18 @@ const app = createApp({
             return found ? found.label : currentSubject.value;
         });
 
-        // 切换科目（header 点击触发）
+        // 切换身份/科目（header 点击触发）
         const switchSubject = async () => {
             try {
                 await ElMessageBox.confirm(
-                    '切换科目后，将跳转到登录页重新选择。确定要切换吗？',
-                    '切换科目',
-                    { confirmButtonText: '确认切换', cancelButtonText: '取消', type: 'warning' }
+                    isAdmin.value ? '确定要退出管理后台吗？' : '切换科目后，将跳转到登录页重新选择。确定要切换吗？',
+                    isAdmin.value ? '退出管理' : '切换科目',
+                    { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
                 );
             } catch { return; }
 
             localStorage.removeItem(CURRENT_SUBJECT_KEY);
+            localStorage.removeItem(ROLE_KEY);
             window.location.href = '/login';
         };
 
@@ -1717,9 +1817,127 @@ const app = createApp({
             parseResult.value = null;
         };
 
+        // ============ 模型配置（管理员专用）============
+        const modelConfigs = ref([]);
+        const modelTestResults = ref([]);
+        const modelTestAllLoading = ref(false);
+        const showModelDialog = ref(false);
+        const editingModelConfig = ref(null);
+        const modelForm = reactive({
+            api_key: '',
+            base_url: '',
+            model: '',
+            enabled: false,
+            extra_config: {},
+        });
+
+        const loadModelConfigs = async () => {
+            try {
+                const resp = await fetch('/api/config/models');
+                const data = await resp.json();
+                modelConfigs.value = data.map(d => ({ ...d, testResult: undefined, testing: false }));
+            } catch (e) {
+                console.error('加载模型配置失败', e);
+            }
+        };
+
+        const toggleModelProvider = async (row) => {
+            try {
+                await fetch(`/api/config/models/${row.provider}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: row.enabled }),
+                });
+            } catch (e) {
+                console.error('切换失败', e);
+                row.enabled = !row.enabled; // 回滚
+            }
+        };
+
+        const editModelProvider = (row) => {
+            editingModelConfig.value = row;
+            modelForm.api_key = row.api_key;
+            modelForm.base_url = row.base_url;
+            modelForm.model = row.model;
+            modelForm.enabled = row.enabled;
+            modelForm.extra_config = { ...(row.extra_config || {}) };
+            showModelDialog.value = true;
+        };
+
+        const resetModelForm = () => {
+            editingModelConfig.value = null;
+        };
+
+        const saveModelConfig = async () => {
+            const provider = editingModelConfig.value.provider;
+            try {
+                const resp = await fetch(`/api/config/models/${provider}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(modelForm),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    ElMessage.success(data.message);
+                    showModelDialog.value = false;
+                    loadModelConfigs();
+                }
+            } catch (e) {
+                ElMessage.error('保存失败');
+            }
+        };
+
+        const testSingleModel = async (row) => {
+            row.testing = true;
+            try {
+                const resp = await fetch(`/api/config/models/${row.provider}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await resp.json();
+                row.testResult = data;
+                if (data.success) {
+                    ElMessage.success(`${data.name}: 正常 (${data.latency_ms}ms)`);
+                } else {
+                    ElMessage.error(`${data.name}: ${data.error}`);
+                }
+            } catch (e) {
+                row.testResult = { success: false, error: '请求失败' };
+            } finally {
+                row.testing = false;
+            }
+        };
+
+        const testAllModels = async () => {
+            modelTestAllLoading.value = true;
+            modelTestResults.value = [];
+            try {
+                const resp = await fetch('/api/config/models/test-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await resp.json();
+                modelTestResults.value = data;
+                // 同步更新表格中的状态
+                for (const r of data) {
+                    const row = modelConfigs.value.find(m => m.provider === r.provider);
+                    if (row) row.testResult = r;
+                }
+            } catch (e) {
+                ElMessage.error('批量测试请求失败');
+            } finally {
+                modelTestAllLoading.value = false;
+            }
+        };
+
         onMounted(() => {
             loadSubjects();
             loadStats();
+            if (isAdmin.value) {
+                loadModelConfigs();
+            }
         });
 
         return {
@@ -1730,6 +1948,9 @@ const app = createApp({
             showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
             verifyRunning, verifyProgress, verifyResults, testCaseForm, editingTestCaseId, tolerance,
             autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
+            isAdmin, userRole,
+            modelConfigs, modelTestResults, modelTestAllLoading, showModelDialog, editingModelConfig, modelForm,
+            loadModelConfigs, toggleModelProvider, editModelProvider, resetModelForm, saveModelConfig, testSingleModel, testAllModels,
             loadSubjects, saveSubjects, addSubject, deleteSubject, getSubjectLabel,
             handleMenuSelect, generateRubric, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
             autoParseText, clearAutoImport, cleanAnswerScores,

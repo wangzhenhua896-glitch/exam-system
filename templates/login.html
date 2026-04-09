@@ -22,7 +22,7 @@
             background: #fff;
             border-radius: 12px;
             padding: 48px 40px;
-            width: 400px;
+            width: 420px;
             box-shadow: 0 20px 60px rgba(0,0,0,.15);
         }
         .login-title {
@@ -36,7 +36,43 @@
             font-size: 14px;
             color: #909399;
             text-align: center;
-            margin-bottom: 36px;
+            margin-bottom: 32px;
+        }
+        .role-cards {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .role-card {
+            flex: 1;
+            padding: 20px 16px;
+            border: 2px solid #e4e7ed;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .role-card:hover {
+            border-color: #667eea;
+            background: #f5f3ff;
+        }
+        .role-card.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        }
+        .role-card .role-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .role-card .role-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #303133;
+        }
+        .role-card .role-desc {
+            font-size: 12px;
+            color: #909399;
+            margin-top: 4px;
         }
         .login-form .el-form-item__label {
             font-size: 15px;
@@ -60,15 +96,31 @@
 <div id="app">
     <div class="login-card">
         <div class="login-title">AI 评分系统</div>
-        <div class="login-desc">选择您的科目，进入题库管理</div>
+        <div class="login-desc">{{ role === 'admin' ? '管理员模式' : '选择您的科目，进入题库管理' }}</div>
+
+        <div class="role-cards">
+            <div class="role-card" :class="{ active: role === 'teacher' }" @click="role = 'teacher'">
+                <div class="role-icon">&#128218;</div>
+                <div class="role-label">科目老师</div>
+                <div class="role-desc">题库管理 · 评分</div>
+            </div>
+            <div class="role-card" :class="{ active: role === 'admin' }" @click="role = 'admin'">
+                <div class="role-icon">&#9881;</div>
+                <div class="role-label">管理员</div>
+                <div class="role-desc">科目 · 模型配置</div>
+            </div>
+        </div>
+
         <el-form class="login-form" label-position="top">
-            <el-form-item label="选择科目">
+            <el-form-item label="选择科目" v-if="role === 'teacher'">
                 <el-select v-model="selectedSubject" style="width: 100%;" placeholder="请选择您负责的科目" size="large">
                     <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
                 </el-select>
             </el-form-item>
-            <el-button type="primary" class="login-btn" @click="enterSystem" :disabled="!selectedSubject">
-                进入系统
+
+            <el-button type="primary" class="login-btn" @click="enterSystem"
+                :disabled="role === 'teacher' && !selectedSubject">
+                {{ role === 'admin' ? '进入管理后台' : '进入系统' }}
             </el-button>
         </el-form>
         <div class="login-footer">湖南省中职普测考试 · AI 智能评分</div>
@@ -92,9 +144,11 @@ const DEFAULT_SUBJECTS = [
 
 const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
 const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
+const ROLE_KEY = 'ai_grading_role';
 
 createApp({
     setup() {
+        const role = ref('teacher');
         const selectedSubject = ref('');
         const subjectList = ref([]);
 
@@ -102,6 +156,12 @@ createApp({
             // 加载科目列表
             const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
             subjectList.value = saved ? JSON.parse(saved) : [...DEFAULT_SUBJECTS];
+
+            // 恢复上次的角色
+            const lastRole = localStorage.getItem(ROLE_KEY);
+            if (lastRole === 'admin' || lastRole === 'teacher') {
+                role.value = lastRole;
+            }
 
             // 如果已有上次选择的科目，预选
             const last = localStorage.getItem(CURRENT_SUBJECT_KEY);
@@ -111,12 +171,17 @@ createApp({
         });
 
         const enterSystem = () => {
-            if (!selectedSubject.value) return;
-            localStorage.setItem(CURRENT_SUBJECT_KEY, selectedSubject.value);
+            localStorage.setItem(ROLE_KEY, role.value);
+            if (role.value === 'admin') {
+                localStorage.removeItem(CURRENT_SUBJECT_KEY);
+            } else {
+                if (!selectedSubject.value) return;
+                localStorage.setItem(CURRENT_SUBJECT_KEY, selectedSubject.value);
+            }
             window.location.href = '/management';
         };
 
-        return { selectedSubject, subjectList, enterSystem };
+        return { role, selectedSubject, subjectList, enterSystem };
     }
 }).use(ElementPlus).mount('#app');
 </script>

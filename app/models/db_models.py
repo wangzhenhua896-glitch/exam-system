@@ -142,6 +142,19 @@ def init_database():
         )
     ''')
 
+    # 模型配置表（管理员通过 Web UI 配置，覆盖 .env 默认值）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS model_configs (
+            provider TEXT PRIMARY KEY,
+            api_key TEXT DEFAULT '',
+            base_url TEXT DEFAULT '',
+            model TEXT DEFAULT '',
+            enabled INTEGER DEFAULT 0,
+            extra_config TEXT DEFAULT '{}',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
     conn.close()
     print(f"数据库初始化完成: {DB_PATH}")
@@ -481,6 +494,59 @@ def get_batch_task(task_id: int) -> Optional[Dict]:
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# 模型配置操作
+def get_model_configs() -> List[Dict]:
+    """获取所有模型配置"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM model_configs ORDER BY provider')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_model_config(provider: str) -> Optional[Dict]:
+    """获取单个 provider 的模型配置"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM model_configs WHERE provider = ?', (provider,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def upsert_model_config(provider: str, api_key: str, base_url: str, model: str, enabled: bool, extra_config: str = '{}') -> int:
+    """新增或更新模型配置"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT provider FROM model_configs WHERE provider = ?', (provider,))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute(
+            'UPDATE model_configs SET api_key = ?, base_url = ?, model = ?, enabled = ?, extra_config = ?, updated_at = CURRENT_TIMESTAMP WHERE provider = ?',
+            (api_key, base_url, model, 1 if enabled else 0, extra_config, provider)
+        )
+    else:
+        cursor.execute(
+            'INSERT INTO model_configs (provider, api_key, base_url, model, enabled, extra_config) VALUES (?, ?, ?, ?, ?, ?)',
+            (provider, api_key, base_url, model, 1 if enabled else 0, extra_config)
+        )
+    conn.commit()
+    conn.close()
+    return 1
+
+
+def delete_model_config(provider: str) -> bool:
+    """删除模型配置（回退到 .env 默认值）"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM model_configs WHERE provider = ?', (provider,))
+    conn.commit()
+    changes = cursor.rowcount
+    conn.close()
+    return changes > 0
 
 
 # 初始化数据库

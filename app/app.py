@@ -39,6 +39,7 @@ def register_routes(app: Flask):
     from .validation_routes import validation_bp
     from .tuning_routes import tuning_bp
     from .api_routes import api_bp
+    from .config_routes import config_bp
     from flask import send_from_directory, render_template
     import os
 
@@ -86,6 +87,7 @@ def register_routes(app: Flask):
     app.register_blueprint(validation_bp, url_prefix="/api/validation")
     app.register_blueprint(tuning_bp, url_prefix="/api/tuning")
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(config_bp, url_prefix="/api/config")
 
 
 def register_error_handlers(app: Flask):
