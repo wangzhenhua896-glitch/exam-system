@@ -219,11 +219,11 @@ def delete_syllabus(subject: str, content_type: str) -> bool:
 
 
 # 测试用例统计概览
-def get_all_test_cases_overview() -> List[Dict]:
-    """获取所有题目的测试用例统计概览"""
+def get_all_test_cases_overview(subject: Optional[str] = None) -> List[Dict]:
+    """获取所有题目的测试用例统计概览，支持科目筛选"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
+    sql = '''
         SELECT
             q.id AS question_id,
             q.title,
@@ -240,9 +240,12 @@ def get_all_test_cases_overview() -> List[Dict]:
             MAX(tc.last_run_at) AS last_run_at
         FROM questions q
         LEFT JOIN test_cases tc ON q.id = tc.question_id
-        GROUP BY q.id
-        ORDER BY q.id
-    ''')
+    '''
+    if subject:
+        sql += ' WHERE q.subject = ? '
+        cursor.execute(sql + 'GROUP BY q.id ORDER BY q.id', (subject,))
+    else:
+        cursor.execute(sql + 'GROUP BY q.id ORDER BY q.id')
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -547,6 +550,72 @@ def delete_model_config(provider: str) -> bool:
     changes = cursor.rowcount
     conn.close()
     return changes > 0
+
+
+# provider → .env 默认配置 映射
+_PROVIDER_DEFAULTS = {}
+
+
+def _get_env_defaults():
+    """延迟导入，避免循环引用"""
+    global _PROVIDER_DEFAULTS
+    if not _PROVIDER_DEFAULTS:
+        from config.settings import (
+            QWEN_CONFIG, GLM_CONFIG, ERNIE_CONFIG, DOUBAO_CONFIG,
+            XIAOMI_MIMIMO_CONFIG, MINIMAX_CONFIG, SPARK_CONFIG,
+        )
+        _PROVIDER_DEFAULTS = {
+            'qwen': QWEN_CONFIG,
+            'glm': GLM_CONFIG,
+            'ernie': ERNIE_CONFIG,
+            'doubao': DOUBAO_CONFIG,
+            'xiaomi_mimimo': XIAOMI_MIMIMO_CONFIG,
+            'minimax': MINIMAX_CONFIG,
+            'spark': SPARK_CONFIG,
+        }
+    return _PROVIDER_DEFAULTS
+
+
+def get_effective_config(provider: str) -> dict:
+    """获取 provider 的有效配置：DB 覆盖 > .env 默认值
+
+    返回统一格式:
+    {
+        'provider': str,
+        'api_key': str,
+        'base_url': str,
+        'model': str,
+        'enabled': bool,
+        ...（保留 .env 中的额外字段如 available_models、secret_key 等）
+    }
+    """
+    defaults = _get_env_defaults().get(provider, {})
+
+    # 以 .env 默认值为基础，保留所有额外字段（available_models、secret_key 等）
+    effective = dict(defaults)
+    effective['provider'] = provider
+
+    # DB 覆盖
+    db = get_model_config(provider)
+    if db:
+        if db.get('api_key'):
+            effective['api_key'] = db['api_key']
+        if db.get('base_url'):
+            effective['base_url'] = db['base_url']
+        if db.get('model'):
+            effective['model'] = db['model']
+        effective['enabled'] = bool(db['enabled'])
+
+    return effective
+
+
+def get_all_effective_configs() -> dict:
+    """获取所有 provider 的有效配置，返回 {provider: config} 字典"""
+    defaults = _get_env_defaults()
+    result = {}
+    for provider in defaults:
+        result[provider] = get_effective_config(provider)
+    return result
 
 
 # 初始化数据库

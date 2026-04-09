@@ -8,17 +8,13 @@ import time
 
 from app.engine import AggregationEngine
 from app.models.registry import model_registry, init_models
-from config.settings import GRADING_CONFIG, QWEN_CONFIG, GLM_CONFIG, MINIMAX_CONFIG, ERNIE_CONFIG
+from app.models.db_models import get_all_effective_configs
+from config.settings import GRADING_CONFIG
 
 grading_bp = Blueprint("grading", __name__)
 
-# 初始化模型
-_model_config = {
-    "qwen": QWEN_CONFIG,
-    "glm": GLM_CONFIG,
-    "minimax": MINIMAX_CONFIG,
-    "ernie": ERNIE_CONFIG,
-}
+# 初始化模型 — 优先从 DB 读取有效配置，降级到 .env
+_model_config = get_all_effective_configs()
 init_models(_model_config)
 
 # 创建聚合引擎

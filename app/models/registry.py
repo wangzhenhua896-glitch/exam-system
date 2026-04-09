@@ -93,7 +93,21 @@ def init_models(config: Dict[str, Any]) -> None:
             print("⚠️  百度文心需要安装 SDK: pip install qianfan")
 
     # 字节跳动豆包（火山引擎，使用 openai 兼容接口，无需额外 SDK）
-    if config.get("doubao", {}).get("enabled", False):
+    doubao_cfg = config.get("doubao", {})
+    if doubao_cfg.get("enabled", False):
         from .doubao import DoubaoClient
-        doubao = DoubaoClient(config["doubao"])
-        model_registry.register(doubao)
+        available_models = doubao_cfg.get("available_models", [])
+        if available_models:
+            # 为每个可用模型创建独立实例并注册
+            for model_info in available_models:
+                model_cfg = {
+                    **doubao_cfg,
+                    "model": model_info["id"],
+                    "display_name": model_info.get("name", model_info["id"]),
+                }
+                client = DoubaoClient(model_cfg)
+                model_registry.register(client)
+        else:
+            # 回退：只注册默认模型
+            doubao = DoubaoClient(doubao_cfg)
+            model_registry.register(doubao)

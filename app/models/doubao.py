@@ -19,8 +19,9 @@ class DoubaoClient(BaseModelClient):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         # 在火山引擎 Coding Plan 中，model 就是你的端点ID (endpoint ID)
-        # 格式类似：ep-xxxxxxxxxxxxxxxxxxxx
+        # 格式类似：ep-xxxxxxxxxxxxxxxxxxxx 或带版本号的 model-id
         self.model_name = config.get("model", "")
+        self.display_name = config.get("display_name", self.model_name)
 
         # 初始化 OpenAI 兼容客户端
         # 火山引擎 Coding Plan 专用 endpoint
@@ -59,3 +60,12 @@ class DoubaoClient(BaseModelClient):
                 model_name=self.model_name,
                 error=str(e)
             )
+
+    def get_info(self) -> Dict[str, Any]:
+        """获取模型信息"""
+        return {
+            "provider": self.provider.value,
+            "model_name": self.model_name,
+            "display_name": self.display_name,
+            "enabled": self.enabled,
+        }

@@ -78,8 +78,9 @@
 
                 <div class="menu-group-title">题库管理</div>
                 <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
-                    <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>新建题目</span></el-menu-item>
+                    <el-menu-item index="overview"><el-icon><DataAnalysis /></el-icon><span>题库总览</span></el-menu-item>
                     <el-menu-item index="question-list"><el-icon><Document /></el-icon><span>题目列表</span></el-menu-item>
+                    <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>人工出题</span></el-menu-item>
                     <el-menu-item index="ai-generate"><el-icon><MagicStick /></el-icon><span>AI 批量出题</span></el-menu-item>
                     <el-menu-item index="test-case-manage"><el-icon><List /></el-icon><span>测试集管理</span></el-menu-item>
                 </el-menu>
@@ -90,14 +91,138 @@
                     <el-menu-item index="textbook"><el-icon><Reading /></el-icon><span>教材内容</span></el-menu-item>
                 </el-menu>
 
+                <!-- 评分工具（暂未开放） -->
+                <!--
                 <div class="menu-group-title">评分工具</div>
                 <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
                     <el-menu-item url="/grading" target="_blank"><el-icon><Maximize /></el-icon><span>新窗口评分</span></el-menu-item>
                 </el-menu>
+                -->
             </div>
 
             <!-- 主内容区 -->
             <div class="content">
+                <!-- 题库总览 -->
+                <div v-if="currentPage === 'overview'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">题库总览</div>
+                            <div class="page-desc">题库建设进度与数据概览</div>
+                        </div>
+                        <!-- 统计卡片 -->
+                        <el-row :gutter="16" style="margin-bottom: 24px;">
+                            <el-col :span="6"><el-card shadow="hover"><div style="text-align:center;"><div style="font-size:28px;font-weight:700;color:#409eff;">{{ dashboard.overview?.total_questions || 0 }}</div><div style="color:#909399;margin-top:4px;">总题目数</div></div></el-card></el-col>
+                            <el-col :span="6"><el-card shadow="hover"><div style="text-align:center;"><div style="font-size:28px;font-weight:700;color:#67c23a;">{{ dashboard.overview?.total_subjects || 0 }}</div><div style="color:#909399;margin-top:4px;">科目数</div></div></el-card></el-col>
+                            <el-col :span="6"><el-card shadow="hover"><div style="text-align:center;"><div style="font-size:28px;font-weight:700;color:#e6a23c;">{{ dashboard.overview?.total_gradings || 0 }}</div><div style="color:#909399;margin-top:4px;">评分次数</div></div></el-card></el-col>
+                            <el-col :span="6"><el-card shadow="hover"><div style="text-align:center;"><div style="font-size:28px;font-weight:700;color:#f56c6c;">{{ dashboard.overview?.average_score || 0 }}</div><div style="color:#909399;margin-top:4px;">平均分</div></div></el-card></el-col>
+                        </el-row>
+
+                        <el-row :gutter="16" style="margin-bottom: 24px;">
+                            <!-- 科目分布（管理员视图） -->
+                            <el-col :span="isAdmin ? 12 : 24" v-if="isAdmin">
+                                <div style="font-weight:600;margin-bottom:8px;">各科目题目分布</div>
+                                <el-table :data="dashboard.subject_dist || []" stripe size="small" style="width:100%;">
+                                    <el-table-column prop="subject" label="科目" width="120">
+                                        <template #default="{ row }">{{ getSubjectLabel(row.subject) }}</template>
+                                    </el-table-column>
+                                    <el-table-column prop="count" label="题目数" width="100" />
+                                    <el-table-column label="占比">
+                                        <template #default="{ row }">
+                                            <el-progress :percentage="dashboard.overview?.total_questions ? Math.round(row.count / dashboard.overview.total_questions * 100) : 0" :stroke-width="14" :show-text="false" />
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
+                            </el-col>
+                            <!-- 覆盖率 -->
+                            <el-col :span="isAdmin ? 12 : 24">
+                                <el-row :gutter="16">
+                                    <el-col :span="12">
+                                        <el-card shadow="never" style="text-align:center;">
+                                            <div style="font-size:14px;color:#606266;margin-bottom:8px;">评分脚本</div>
+                                            <el-progress type="circle" :percentage="dashboard.overview?.total_questions ? Math.round(dashboard.rubric_coverage?.has_script / dashboard.overview.total_questions * 100) : 0" :width="90" />
+                                            <div style="font-size:12px;color:#909399;margin-top:4px;">{{ dashboard.rubric_coverage?.has_script || 0 }} 已覆盖 / {{ dashboard.rubric_coverage?.no_script || 0 }} 未覆盖</div>
+                                        </el-card>
+                                    </el-col>
+                                    <el-col :span="12">
+                                        <el-card shadow="never" style="text-align:center;">
+                                            <div style="font-size:14px;color:#606266;margin-bottom:8px;">测试用例</div>
+                                            <el-progress type="circle" :percentage="dashboard.overview?.total_questions ? Math.round(dashboard.test_case_coverage?.questions_with_tc / dashboard.overview.total_questions * 100) : 0" :width="90" />
+                                            <div style="font-size:12px;color:#909399;margin-top:4px;">{{ dashboard.test_case_coverage?.questions_with_tc || 0 }} 已覆盖 / {{ dashboard.test_case_coverage?.questions_without_tc || 0 }} 未覆盖</div>
+                                        </el-card>
+                                    </el-col>
+                                </el-row>
+                                <div style="margin-top:12px;font-size:13px;color:#909399;">
+                                    测试用例共 {{ dashboard.test_case_coverage?.total_cases || 0 }} 个（模拟 {{ dashboard.test_case_coverage?.simulated || 0 }} / 真实 {{ dashboard.test_case_coverage?.real || 0 }}）
+                                </div>
+                            </el-col>
+                        </el-row>
+
+                        <el-row :gutter="16" style="margin-bottom: 24px;">
+                            <!-- 质量评分分布 -->
+                            <el-col :span="8">
+                                <div style="font-weight:600;margin-bottom:8px;">质量评分分布</div>
+                                <el-table :data="qualityDistTable" stripe size="small" style="width:100%;">
+                                    <el-table-column prop="label" label="区间" width="100" />
+                                    <el-table-column prop="count" label="题目数" width="80" />
+                                    <el-table-column label="占比">
+                                        <template #default="{ row }">
+                                            <el-progress :percentage="row.percentage" :stroke-width="12" :show-text="true" :format="() => row.percentage + '%'" />
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
+                            </el-col>
+                            <!-- 评分趋势 -->
+                            <el-col :span="8">
+                                <div style="font-weight:600;margin-bottom:8px;">最近评分趋势（近7天）</div>
+                                <el-table :data="dashboard.grading_trend || []" stripe size="small" style="width:100%;">
+                                    <el-table-column prop="date" label="日期" width="120" />
+                                    <el-table-column prop="count" label="评分次数" />
+                                </el-table>
+                                <div v-if="!(dashboard.grading_trend || []).length" style="color:#909399;font-size:13px;text-align:center;padding:20px 0;">暂无数据</div>
+                            </el-col>
+                            <!-- 测试用例详情 -->
+                            <el-col :span="8">
+                                <div style="font-weight:600;margin-bottom:8px;">测试用例状态</div>
+                                <el-card shadow="never" style="text-align:center;padding:16px 0;">
+                                    <div style="font-size:36px;font-weight:700;color:#409eff;">{{ dashboard.test_case_coverage?.total_cases || 0 }}</div>
+                                    <div style="color:#909399;margin:4px 0 12px;">测试用例总数</div>
+                                    <el-row>
+                                        <el-col :span="12"><div style="font-size:20px;font-weight:600;color:#e6a23c;">{{ dashboard.test_case_coverage?.simulated || 0 }}</div><div style="font-size:12px;color:#909399;">模拟</div></el-col>
+                                        <el-col :span="12"><div style="font-size:20px;font-weight:600;color:#67c23a;">{{ dashboard.test_case_coverage?.real || 0 }}</div><div style="font-size:12px;color:#909399;">真实</div></el-col>
+                                    </el-row>
+                                </el-card>
+                            </el-col>
+                        </el-row>
+
+                        <el-row :gutter="16">
+                            <!-- 最近创建的题目 -->
+                            <el-col :span="12">
+                                <div style="font-weight:600;margin-bottom:8px;">最近创建的题目</div>
+                                <el-table :data="dashboard.recent_questions || []" stripe size="small" style="width:100%;">
+                                    <el-table-column prop="id" label="ID" width="50" />
+                                    <el-table-column prop="title" label="标题" show-overflow-tooltip />
+                                    <el-table-column prop="subject" label="科目" width="80">
+                                        <template #default="{ row }">{{ getSubjectLabel(row.subject) }}</template>
+                                    </el-table-column>
+                                    <el-table-column prop="created_at" label="创建时间" width="160" />
+                                </el-table>
+                                <div v-if="!(dashboard.recent_questions || []).length" style="color:#909399;font-size:13px;text-align:center;padding:20px 0;">暂无题目</div>
+                            </el-col>
+                            <!-- 最近评分记录 -->
+                            <el-col :span="12">
+                                <div style="font-weight:600;margin-bottom:8px;">最近评分记录</div>
+                                <el-table :data="dashboard.recent_gradings || []" stripe size="small" style="width:100%;">
+                                    <el-table-column prop="title" label="题目" show-overflow-tooltip />
+                                    <el-table-column prop="score" label="得分" width="60" />
+                                    <el-table-column prop="model_used" label="模型" width="100" />
+                                    <el-table-column prop="graded_at" label="评分时间" width="160" />
+                                </el-table>
+                                <div v-if="!(dashboard.recent_gradings || []).length" style="color:#909399;font-size:13px;text-align:center;padding:20px 0;">暂无评分记录</div>
+                            </el-col>
+                        </el-row>
+                    </div>
+                </div>
+
                 <!-- 科目管理 -->
                 <div v-if="currentPage === 'subject-manage'">
                     <div class="page-card">
@@ -133,56 +258,56 @@
                             <div class="page-title">模型配置</div>
                             <div class="page-desc">管理大模型 API 连接，支持启用/禁用、编辑参数、测试连通性</div>
                         </div>
-                        <div style="margin-bottom: 16px;">
+                        <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
                             <el-button type="primary" @click="testAllModels" :loading="modelTestAllLoading">
                                 测试所有已启用模型
                             </el-button>
+                            <el-button @click="enableAllModels">启用所有</el-button>
+                            <el-button @click="disableAllModels">禁用所有</el-button>
+                            <span style="color: #909399; font-size: 13px; margin-left: 8px;">已启用 {{ modelConfigs.filter(m => m.enabled).length }} / {{ modelConfigs.length }} 个服务商</span>
                         </div>
                         <el-table :data="modelConfigs" stripe style="width: 100%;">
                             <el-table-column prop="name" label="模型提供商" width="200"></el-table-column>
-                            <el-table-column label="启用" width="80">
+                            <el-table-column label="服务商启用" width="100">
                                 <template #default="scope">
                                     <el-switch v-model="scope.row.enabled" @change="toggleModelProvider(scope.row)"></el-switch>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="当前模型" min-width="180">
+                            <el-table-column label="默认模型" min-width="180">
                                 <template #default="scope">
                                     <span>{{ scope.row.model || '未配置' }}</span>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="连接状态" width="120">
+                            <el-table-column label="可用模型" min-width="260">
                                 <template #default="scope">
-                                    <template v-if="scope.row.testResult === undefined">
-                                        <el-tag size="small" type="info">未测试</el-tag>
+                                    <template v-if="scope.row.available_models && scope.row.available_models.length">
+                                        <div v-for="m in scope.row.available_models" :key="m.id" style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
+                                            <el-switch :model-value="m.model_enabled" size="small" @change="toggleSingleModel(scope.row, m, $event)"></el-switch>
+                                            <span style="font-size: 13px;" :style="{ opacity: m.model_enabled ? 1 : 0.4 }">{{ m.name }}</span>
+                                        </div>
                                     </template>
-                                    <template v-else-if="scope.row.testResult.success === true">
-                                        <el-tag size="small" type="success">{{ scope.row.testResult.latency_ms }}ms</el-tag>
-                                    </template>
-                                    <template v-else-if="scope.row.testResult.success === false">
-                                        <el-tag size="small" type="danger">异常</el-tag>
-                                    </template>
-                                    <template v-else>
-                                        <el-tag size="small" type="info">跳过</el-tag>
-                                    </template>
+                                    <span v-else style="color: #909399; font-size: 13px;">—</span>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="操作" width="180" fixed="right">
+                            <el-table-column label="操作" width="140" fixed="right">
                                 <template #default="scope">
                                     <el-button size="small" @click="editModelProvider(scope.row)">编辑</el-button>
-                                    <el-button size="small" @click="testSingleModel(scope.row)" :loading="scope.row.testing">测试</el-button>
                                 </template>
                             </el-table-column>
                         </el-table>
 
                         <!-- 测试结果详情 -->
                         <div v-if="modelTestResults.length" style="margin-top: 16px;">
-                            <div v-for="r in modelTestResults" :key="r.provider" style="margin-bottom: 4px; font-size: 13px;">
+                            <div v-for="(r, i) in modelTestResults" :key="i" style="margin-bottom: 4px; font-size: 13px;">
                                 <template v-if="r.success === true">
-                                    <span style="color: #67c23a;">✓</span> {{ r.name }}: 正常 ({{ r.latency_ms }}ms)
+                                    <span style="color: #67c23a;">✓</span> {{ r.name }} — {{ r.model_name || r.model }}: 正常 ({{ r.latency_ms }}ms)
                                     <span v-if="r.reply" style="color: #909399;"> — "{{ r.reply }}"</span>
                                 </template>
                                 <template v-else-if="r.success === false">
-                                    <span style="color: #f56c6c;">✗</span> {{ r.name }}: {{ r.error }}
+                                    <span style="color: #f56c6c;">✗</span> {{ r.name }}<template v-if="r.model_name"> — {{ r.model_name }}</template>: {{ r.error }}
+                                </template>
+                                <template v-else>
+                                    <span style="color: #909399;">—</span> {{ r.name }}: {{ r.error || '跳过' }}
                                 </template>
                             </div>
                         </div>
@@ -222,7 +347,7 @@
                         <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div>
                                 <div class="page-title">
-                                    <span v-if="viewMode === 'create'">新建题目</span>
+                                    <span v-if="viewMode === 'create'">人工出题</span>
                                     <span v-else-if="viewMode === 'view'">查看题目 #{{ editingQuestionId }}</span>
                                     <span v-else>编辑题目 #{{ editingQuestionId }}</span>
                                     <el-tag v-if="viewMode === 'view'" type="info" size="small" style="margin-left: 12px;">只读模式</el-tag>
@@ -400,7 +525,7 @@
                                 </template>
                             </el-table-column>
                         </el-table>
-                        <el-empty v-if="filteredQuestions.length === 0" description="暂无题目，请先在「新建题目」中创建题目"></el-empty>
+                        <el-empty v-if="filteredQuestions.length === 0" description="暂无题目，请先在「人工出题」中创建题目"></el-empty>
                         <div v-if="filteredQuestions.length > 0" style="margin-top: 16px; display: flex; justify-content: flex-end;">
                             <el-pagination
                                 v-model:current-page="listPage"
@@ -703,7 +828,7 @@
 </div>
 
 <script>
-const { createApp, ref, reactive, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted } = Vue;
 const { ElMessage, ElMessageBox } = ElementPlus;
 
 const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
@@ -726,6 +851,7 @@ const app = createApp({
         const currentPage = ref('question-manage');
         const questions = ref([]);
         const stats = ref({});
+        const dashboard = ref({});
         const newSubjectName = ref('');
         const autoImportText = ref('');
         const parseResult = ref(null);
@@ -914,6 +1040,34 @@ const app = createApp({
             }
         };
 
+        const loadDashboard = async () => {
+            try {
+                const params = {};
+                if (!isAdmin.value && currentSubject.value) {
+                    params.subject = currentSubject.value;
+                }
+                const res = await axios.get('/api/dashboard', { params });
+                if (res.data.success) {
+                    dashboard.value = res.data.data;
+                }
+            } catch (e) {
+                console.error('加载题库总览失败', e);
+            }
+        };
+
+        const qualityDistTable = computed(() => {
+            const qd = dashboard.value.quality_dist;
+            if (!qd) return [];
+            const total = (qd.not_evaluated || 0) + (qd.low || 0) + (qd.medium || 0) + (qd.high || 0);
+            const pct = (n) => total ? Math.round(n / total * 100) : 0;
+            return [
+                { label: '优秀 (80+)', count: qd.high || 0, percentage: pct(qd.high || 0) },
+                { label: '良好 (60-80)', count: qd.medium || 0, percentage: pct(qd.medium || 0) },
+                { label: '较差 (<60)', count: qd.low || 0, percentage: pct(qd.low || 0) },
+                { label: '未评估', count: qd.not_evaluated || 0, percentage: pct(qd.not_evaluated || 0) },
+            ];
+        });
+
         const loadQuestions = async () => {
             try {
                 const res = await axios.get('/api/questions');
@@ -933,6 +1087,9 @@ const app = createApp({
             if (index === 'question-list') {
                 loadQuestions();
                 listPage.value = 1;
+            }
+            if (index === 'overview') {
+                loadDashboard();
             }
             currentPage.value = index;
         };
@@ -1854,6 +2011,43 @@ const app = createApp({
             }
         };
 
+        const enableAllModels = async () => {
+            try {
+                await fetch('/api/config/models/toggle-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: true }),
+                });
+                modelConfigs.value.forEach(m => m.enabled = true);
+                ElMessage.success('已启用所有模型');
+            } catch (e) { ElMessage.error('操作失败'); }
+        };
+
+        const disableAllModels = async () => {
+            try {
+                await fetch('/api/config/models/toggle-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: false }),
+                });
+                modelConfigs.value.forEach(m => m.enabled = false);
+                ElMessage.success('已禁用所有模型');
+            } catch (e) { ElMessage.error('操作失败'); }
+        };
+
+        const toggleSingleModel = async (providerRow, modelItem, newVal) => {
+            try {
+                await fetch(`/api/config/models/${providerRow.provider}/toggle-model`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_id: modelItem.id, enabled: newVal }),
+                });
+                modelItem.model_enabled = newVal;
+            } catch (e) {
+                ElMessage.error('切换失败');
+            }
+        };
+
         const editModelProvider = (row) => {
             editingModelConfig.value = row;
             modelForm.api_key = row.api_key;
@@ -1941,7 +2135,7 @@ const app = createApp({
         });
 
         return {
-            currentPage, questions, stats, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
+            currentPage, questions, stats, dashboard, qualityDistTable, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
             evaluatingQuality, qualityScore, viewMode, editingQuestionId, currentSubject, currentSubjectLabel, switchSubject,
             filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
@@ -1950,7 +2144,7 @@ const app = createApp({
             autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
             isAdmin, userRole,
             modelConfigs, modelTestResults, modelTestAllLoading, showModelDialog, editingModelConfig, modelForm,
-            loadModelConfigs, toggleModelProvider, editModelProvider, resetModelForm, saveModelConfig, testSingleModel, testAllModels,
+            loadModelConfigs, toggleModelProvider, enableAllModels, disableAllModels, toggleSingleModel, editModelProvider, resetModelForm, saveModelConfig, testSingleModel, testAllModels,
             loadSubjects, saveSubjects, addSubject, deleteSubject, getSubjectLabel,
             handleMenuSelect, generateRubric, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
             autoParseText, clearAutoImport, cleanAnswerScores,

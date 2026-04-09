@@ -10,14 +10,8 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from openai import OpenAI
 
-from config.settings import (
-    GRADING_CONFIG,
-    QWEN_CONFIG,
-    GLM_CONFIG,
-    ERNIE_CONFIG,
-    DOUBAO_CONFIG,
-    XIAOMI_MIMIMO_CONFIG,
-)
+from config.settings import GRADING_CONFIG
+from app.models.db_models import get_effective_config
 
 
 class QwenGradingResult(BaseModel):
@@ -51,52 +45,57 @@ class QwenGradingEngine:
         })
 
         # 选择第一个启用的模型
-        self.client, self.model = self._init_client()
+        self._selected_provider = None
+        self.client, self.model, self._selected_provider = self._init_client()
 
-    def _init_client(self):
-        """初始化 OpenAI 兼容客户端，选择第一个启用的模型"""
-        # 优先级：任意启用的模型都可以
-        if QWEN_CONFIG.get("enabled", False) and QWEN_CONFIG.get("api_key"):
-            client = OpenAI(
-                api_key=QWEN_CONFIG["api_key"],
-                base_url=QWEN_CONFIG["base_url"],
-            )
-            return client, QWEN_CONFIG["model"]
-        elif GLM_CONFIG.get("enabled", False) and GLM_CONFIG.get("api_key"):
-            client = OpenAI(
-                api_key=GLM_CONFIG["api_key"],
-                base_url=GLM_CONFIG["base_url"],
-            )
-            return client, GLM_CONFIG["model"]
-        elif ERNIE_CONFIG.get("enabled", False) and ERNIE_CONFIG.get("api_key"):
-            # 文心一言也支持 OpenAI 兼容格式
-            client = OpenAI(
-                api_key=ERNIE_CONFIG["api_key"],
-                base_url=ERNIE_CONFIG["base_url"],
-            )
-            return client, ERNIE_CONFIG["model"]
-        elif DOUBAO_CONFIG.get("enabled", False) and DOUBAO_CONFIG.get("api_key"):
-            # 字节跳动豆包 (火山引擎)
-            client = OpenAI(
-                api_key=DOUBAO_CONFIG["api_key"],
-                base_url=DOUBAO_CONFIG["base_url"],
-            )
-            return client, DOUBAO_CONFIG["model"]
-        elif XIAOMI_MIMIMO_CONFIG.get("enabled", False) and XIAOMI_MIMIMO_CONFIG.get("api_key"):
-            # 小米 Mimimo Claude 兼容端点 (OpenAI 格式)
-            client = OpenAI(
-                api_key=XIAOMI_MIMIMO_CONFIG["api_key"],
-                base_url=XIAOMI_MIMIMO_CONFIG["base_url"],
-            )
-            return client, XIAOMI_MIMIMO_CONFIG["model"]
-        else:
-            # 回退到环境变量
-            import os
-            api_key = os.getenv("OPENAI_API_KEY")
-            base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-            model = os.getenv("OPENAI_MODEL", "gpt-4o")
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            return client, model
+    def set_provider(self, provider: str):
+        """切换当前使用的 provider"""
+        client, model, prov = self._init_client(provider)
+        if prov:
+            self.client = client
+            self.model = model
+            self._selected_provider = prov
+            return True
+        return False
+
+    def _init_client(self, preferred_provider: str = None):
+        """初始化 OpenAI 兼容客户端
+
+        优先从数据库读取配置（管理员通过 Web UI 修改后的值），
+        数据库无记录时降级到 .env 默认值。
+
+        Returns:
+            (client, model, provider) 或 (None, None, None)
+        """
+        import os
+
+        # 如果指定了 provider，只尝试它
+        if preferred_provider:
+            cfg = get_effective_config(preferred_provider)
+            if cfg.get("enabled") and cfg.get("api_key"):
+                client = OpenAI(
+                    api_key=cfg["api_key"],
+                    base_url=cfg["base_url"],
+                )
+                return client, cfg["model"], preferred_provider
+            return None, None, None
+
+        # 默认优先级：qwen > glm > ernie > doubao > xiaomi_mimimo
+        for provider in ('qwen', 'glm', 'ernie', 'doubao', 'xiaomi_mimimo'):
+            cfg = get_effective_config(provider)
+            if cfg.get("enabled") and cfg.get("api_key"):
+                client = OpenAI(
+                    api_key=cfg["api_key"],
+                    base_url=cfg["base_url"],
+                )
+                return client, cfg["model"], provider
+
+        # 回退到环境变量
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        model = os.getenv("OPENAI_MODEL", "gpt-4o")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        return client, model, "openai"
 
     async def grade(
         self,

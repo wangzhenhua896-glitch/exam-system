@@ -16,10 +16,39 @@ from app.models.db_models import (
 )
 # 使用 Qwen-Agent 官方评分引擎替换原聚合引擎
 from app.qwen_engine import QwenGradingEngine
+from app.models.registry import model_registry
 from config.settings import GRADING_CONFIG
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 grading_engine = QwenGradingEngine(GRADING_CONFIG)
+
+
+PROVIDER_NAMES = {
+    'qwen': '通义千问',
+    'glm': '智谱 GLM',
+    'ernie': '文心一言',
+    'doubao': '豆包',
+    'xiaomi_mimimo': '小米 Mimimo',
+    'minimax': 'MiniMax',
+    'spark': '讯飞星火',
+}
+
+
+@api_bp.route('/providers', methods=['GET'])
+def list_enabled_providers():
+    """列出所有已启用的 provider，供前端选择"""
+    from app.models.db_models import get_effective_config
+    providers = []
+    for pid in ('qwen', 'glm', 'ernie', 'doubao', 'xiaomi_mimimo', 'minimax', 'spark'):
+        cfg = get_effective_config(pid)
+        if cfg.get("enabled") and cfg.get("api_key"):
+            providers.append({
+                "id": pid,
+                "name": PROVIDER_NAMES.get(pid, pid),
+                "model": cfg.get("model", ""),
+                "active": pid == getattr(grading_engine, '_selected_provider', ''),
+            })
+    return jsonify({"success": True, "data": providers})
 
 
 # =============================================================================
@@ -243,6 +272,11 @@ async def grade_answer():
     question_id = data.get('question_id') or data.get('questionId')
     student_answer = data.get('answer', '')
 
+    # 支持前端指定 provider
+    provider = data.get('provider')
+    if provider:
+        grading_engine.set_provider(provider)
+
     # 如果传了 question_id，优先从数据库加载题目信息
     question_text = data.get('question', '')
     rubric = data.get('rubric', {})
@@ -428,6 +462,209 @@ def get_stats():
             'subjects': subjects
         }
     })
+
+
+@api_bp.route('/dashboard', methods=['GET'])
+def get_dashboard():
+    """题库总览 — 全面统计数据
+
+    支持 ?subject=xxx 按科目过滤（科目老师只看本科目数据）
+    不传 subject 则返回全部数据（管理员视图）
+    """
+    from app.models.db_models import get_db_connection
+
+    subject = request.args.get('subject', '').strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 条件子句（questions 表）
+    if subject:
+        q_cond = 'WHERE subject = ?'
+        q_params = [subject]
+    else:
+        q_cond = ''
+        q_params = []
+
+    # 1. 基础统计
+    cursor.execute(f'SELECT COUNT(*) FROM questions {q_cond}', q_params)
+    total_questions = cursor.fetchone()[0]
+
+    if subject:
+        total_subjects = 1
+    else:
+        cursor.execute('SELECT COUNT(DISTINCT subject) FROM questions')
+        total_subjects = cursor.fetchone()[0]
+
+    if subject:
+        cursor.execute("""
+            SELECT COUNT(*) FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ?
+        """, [subject])
+        total_gradings = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT AVG(gr.score) FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ? AND gr.score IS NOT NULL
+        """, [subject])
+    else:
+        cursor.execute('SELECT COUNT(*) FROM grading_records')
+        total_gradings = cursor.fetchone()[0]
+
+        cursor.execute('SELECT AVG(score) FROM grading_records WHERE score IS NOT NULL')
+    avg_score = cursor.fetchone()[0] or 0
+
+    # 2. 各科目题目分布（管理员视图显示全部，科目老师视图不需要）
+    if not subject:
+        cursor.execute('SELECT subject, COUNT(*) FROM questions GROUP BY subject ORDER BY COUNT(*) DESC')
+        subject_dist = [{'subject': row[0], 'count': row[1]} for row in cursor.fetchall()]
+    else:
+        subject_dist = []
+
+    # 3. 评分脚本覆盖率
+    if subject:
+        cursor.execute("""
+            SELECT COUNT(*) FROM questions
+            WHERE subject = ? AND rubric_script IS NOT NULL AND rubric_script != ''
+        """, [subject])
+    else:
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE rubric_script IS NOT NULL AND rubric_script != ''")
+    has_script = cursor.fetchone()[0]
+    no_script = total_questions - has_script
+
+    # 4. 测试用例覆盖
+    if subject:
+        cursor.execute("""
+            SELECT COUNT(DISTINCT tc.question_id) FROM test_cases tc
+            JOIN questions q ON tc.question_id = q.id
+            WHERE q.subject = ?
+        """, [subject])
+        questions_with_tc = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM test_cases tc
+            JOIN questions q ON tc.question_id = q.id
+            WHERE q.subject = ?
+        """, [subject])
+        total_test_cases = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM test_cases tc
+            JOIN questions q ON tc.question_id = q.id
+            WHERE q.subject = ? AND tc.case_type = 'simulated'
+        """, [subject])
+        tc_simulated = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM test_cases tc
+            JOIN questions q ON tc.question_id = q.id
+            WHERE q.subject = ? AND tc.case_type = 'real'
+        """, [subject])
+        tc_real = cursor.fetchone()[0]
+    else:
+        cursor.execute('SELECT COUNT(DISTINCT question_id) FROM test_cases')
+        questions_with_tc = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM test_cases')
+        total_test_cases = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM test_cases WHERE case_type = 'simulated'")
+        tc_simulated = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM test_cases WHERE case_type = 'real'")
+        tc_real = cursor.fetchone()[0]
+
+    questions_without_tc = total_questions - questions_with_tc
+
+    # 5. 质量评分分布
+    quality_dist = {}
+    for cond, val in [('quality_score IS NULL', 'not_evaluated'), ('quality_score < 60', 'low'), ('quality_score >= 60 AND quality_score < 80', 'medium'), ('quality_score >= 80', 'high')]:
+        if subject:
+            cursor.execute(f'SELECT COUNT(*) FROM questions WHERE subject = ? AND {cond}', [subject])
+        else:
+            cursor.execute(f'SELECT COUNT(*) FROM questions WHERE {cond}')
+        quality_dist[val] = cursor.fetchone()[0]
+
+    # 6. 最近评分趋势（最近 7 天）
+    if subject:
+        cursor.execute("""
+            SELECT DATE(gr.graded_at) as day, COUNT(*) as cnt
+            FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ? AND gr.graded_at >= DATE('now', '-7 days')
+            GROUP BY DATE(gr.graded_at)
+            ORDER BY day
+        """, [subject])
+    else:
+        cursor.execute("""
+            SELECT DATE(graded_at) as day, COUNT(*) as cnt
+            FROM grading_records
+            WHERE graded_at >= DATE('now', '-7 days')
+            GROUP BY DATE(graded_at)
+            ORDER BY day
+        """)
+    grading_trend = [{'date': row[0], 'count': row[1]} for row in cursor.fetchall()]
+
+    # 7. 最近创建的题目
+    cursor.execute(f'SELECT id, title, subject, created_at FROM questions {q_cond} ORDER BY created_at DESC LIMIT 5', q_params)
+    recent_questions = [dict(zip(['id', 'title', 'subject', 'created_at'], row)) for row in cursor.fetchall()]
+
+    # 8. 最近评分记录
+    if subject:
+        cursor.execute("""
+            SELECT gr.id, gr.question_id, q.title, gr.score, gr.model_used, gr.graded_at
+            FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ?
+            ORDER BY gr.graded_at DESC LIMIT 5
+        """, [subject])
+    else:
+        cursor.execute("""
+            SELECT gr.id, gr.question_id, q.title, gr.score, gr.model_used, gr.graded_at
+            FROM grading_records gr
+            LEFT JOIN questions q ON gr.question_id = q.id
+            ORDER BY gr.graded_at DESC LIMIT 5
+        """)
+    recent_gradings = [dict(zip(['id', 'question_id', 'title', 'score', 'model_used', 'graded_at'], row)) for row in cursor.fetchall()]
+
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'subject': subject or None,
+            'overview': {
+                'total_questions': total_questions,
+                'total_subjects': total_subjects,
+                'total_gradings': total_gradings,
+                'average_score': round(avg_score, 2),
+            },
+            'subject_dist': subject_dist,
+            'rubric_coverage': {
+                'has_script': has_script,
+                'no_script': no_script,
+            },
+            'test_case_coverage': {
+                'questions_with_tc': questions_with_tc,
+                'questions_without_tc': questions_without_tc,
+                'total_cases': total_test_cases,
+                'simulated': tc_simulated,
+                'real': tc_real,
+            },
+            'quality_dist': quality_dist,
+            'grading_trend': grading_trend,
+            'recent_questions': recent_questions,
+            'recent_gradings': recent_gradings,
+        }
+    })
+
+
+@api_bp.route('/models/available', methods=['GET'])
+def available_models():
+    """获取所有可用模型列表"""
+    models = model_registry.list_models()
+    return jsonify({"success": True, "models": models})
 
 
 @api_bp.route('/generate-rubric-script', methods=['POST'])
@@ -680,8 +917,9 @@ def remove_syllabus(subject, content_type):
 
 @api_bp.route('/test-cases/overview', methods=['GET'])
 def test_cases_overview():
-    """获取所有题目的测试用例统计概览"""
-    data = get_all_test_cases_overview()
+    """获取所有题目的测试用例统计概览，支持 ?subject= 筛选"""
+    subject = request.args.get('subject')
+    data = get_all_test_cases_overview(subject)
     return jsonify({'success': True, 'data': data})
 
 
@@ -740,6 +978,14 @@ def update_test_case_detail(question_id, test_case_id):
         description=data.get('description', tc['description']),
         case_type=data.get('case_type', tc['case_type'])
     )
+
+    # 支持回写评分结果
+    if 'last_actual_score' in data and 'last_error' in data:
+        update_test_case_result(
+            test_case_id,
+            actual_score=float(data['last_actual_score']),
+            error=float(data['last_error'])
+        )
     return jsonify({'success': True, 'data': {'id': test_case_id}})
 
 
@@ -751,6 +997,268 @@ def delete_test_case_detail(question_id, test_case_id):
         return jsonify({'success': False, 'error': '测试用例不存在'}), 404
     delete_test_case(test_case_id)
     return jsonify({'success': True})
+
+
+@api_bp.route('/questions/<int:question_id>/generate-test-cases', methods=['POST'])
+async def generate_test_cases_for_question(question_id):
+    """为已有题目自动生成测试用例（支持参数化配置）"""
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+
+    data = request.json or {}
+    count = int(data.get('count', 7))
+    distribution = data.get('distribution', 'gradient')  # gradient / edge / middle / uniform
+    styles = data.get('styles', ['标准规范', '口语化', '要点遗漏'])
+    extra = data.get('extra', '').strip()
+
+    # 构建题目数据
+    question_data = {
+        'content': q.get('content', ''),
+        'max_score': q.get('max_score', 10),
+        'standard_answer': q.get('standard_answer', ''),
+        'rubric_points': q.get('rubric_points', ''),
+        'rubric_script': q.get('rubric_script', ''),
+        'rubric_rules': q.get('rubric_rules', ''),
+    }
+
+    if not question_data['content']:
+        return jsonify({'success': False, 'error': '题目内容为空'}), 400
+
+    # 使用评分引擎的 client
+    client = grading_engine.client
+    model = grading_engine.model
+
+    max_score = question_data['max_score']
+
+    # 分数分布描述
+    dist_desc = {
+        'gradient': f'梯度分布：{max_score}分、{round(max_score*0.75,1)}分、{round(max_score*0.5,1)}分、{round(max_score*0.35,1)}分、{round(max_score*0.15,1)}分、0分 均匀覆盖',
+        'edge': f'边界为主：重点在 {max_score}分（满分）、{round(max_score*0.5,1)}分（及格线附近）、0分（零分）附近密集分布，临界分值仔细覆盖',
+        'middle': f'中段为主：重点在 {round(max_score*0.4,1)}~{round(max_score*0.8,1)}分区间密集分布，少量满分和零分',
+        'uniform': f'均匀分布：从0到{max_score}分，每个分数段数量相等',
+    }
+
+    # 作答风格详细描述
+    style_guide = {
+        '标准规范': '使用标准书面语，逻辑清晰，要点齐全，像优秀学生答卷',
+        '口语化': '使用口语化表达，句子不完整，有错别字或语病，但核心意思到了',
+        '要点遗漏': '部分内容答对但遗漏了关键要点，导致部分失分',
+        '偏题跑题': '没有理解题意，答非所问，内容与题目无关或严重偏离',
+        '复制原文': '照抄题目原文或标准答案原文（用于测试反作弊规则）',
+        '空白作答': '空白、只写"不知道"、或写与题目完全无关的内容',
+    }
+
+    style_instructions = []
+    for s in styles:
+        desc = style_guide.get(s, s)
+        style_instructions.append(f'- {s}：{desc}')
+
+    # Prompt
+    system_prompt = f"""你是一位经验丰富的阅卷老师，熟悉各类考生作答模式。
+
+你的任务：根据题目和标准答案，生成 {count} 份模拟考生作答。
+
+严格要求：
+1. 每份作答必须像真实考生写的——有合理的对错、表达习惯和写作水平差异
+2. expected_score 必须是根据评分标准可以明确给出的分数，不能有争议
+3. 分数分布按以下策略：{dist_desc.get(distribution, dist_desc['gradient'])}
+4. 作答风格覆盖以下类型：
+{chr(10).join(style_instructions)}
+5. 每份作答必须有明显的差异——不要出现两份内容相似的作答
+6. 如果提供了【已有测试用例】区块，新生成的作答必须与每一条已有用例都明显不同：
+   - 不同的表述方式（不能只是换同义词）
+   - 不同的得分点组合（已有满分的，生成一个漏了关键点的）
+   - 不同的错误模式（已有遗漏要点的，生成一个偏题的）
+   - 不同的详细程度（已有详细的，生成一个简略的）
+7. 如果包含"复制原文"风格，确保作答是照抄题目或标准答案（用于触发反作弊）
+8. 如果包含"口语化"风格，要模拟真实口语表达习惯，有语气词、断句、错别字等
+
+输出格式（严格 JSON 数组）：
+[
+    {{
+        "description": "简短描述（如：满分作答、要点不全、完全偏题）",
+        "case_type": "simulated",
+        "answer_text": "模拟的考生作答内容",
+        "expected_score": 期望分数
+    }}
+]
+
+注意：
+- expected_score 必须是具体数字，不能是范围
+- 每份作答的 answer_text 要足够长且真实（不能只写一句话）
+- 不要输出任何 JSON 以外的内容"""
+
+    rubric_parts = []
+    if question_data.get('rubric_script'):
+        rubric_parts.append(f"【评分脚本】\n{question_data['rubric_script']}")
+    if question_data.get('rubric_rules'):
+        rubric_parts.append(f"【评分规则】\n{question_data['rubric_rules']}")
+    if question_data.get('rubric_points'):
+        rubric_parts.append(f"【评分要点】\n{question_data['rubric_points']}")
+
+    rubric_text = '\n\n'.join(rubric_parts) if rubric_parts else '无'
+
+    # 已有测试用例（用于去重提示）
+    existing_cases = get_test_cases(question_id)
+    existing_block = ''
+    if existing_cases:
+        existing_lines = []
+        for i, ec in enumerate(existing_cases, 1):
+            snippet = ec['answer_text'][:80].replace('\n', ' ')
+            existing_lines.append(f"{i}. [期望{ec['expected_score']}分] {snippet}...")
+        existing_block = f"""
+
+【已有测试用例（共{len(existing_cases)}条，新生成的必须与以下内容明显不同）】
+{chr(10).join(existing_lines)}"""
+
+    user_prompt = f"""请为以下题目生成 {count} 份模拟考生作答：
+
+【题目】
+{question_data['content']}
+
+【满分】
+{max_score} 分
+
+【标准答案】
+{question_data['standard_answer']}
+
+{rubric_text}
+
+【分数分布】
+{dist_desc.get(distribution, dist_desc['gradient'])}
+
+【要求覆盖的作答风格】
+{chr(10).join(style_instructions)}{existing_block}"""
+
+    if extra:
+        user_prompt += f"\n\n【补充要求】\n{extra}"
+
+    user_prompt += "\n\n直接输出 JSON 数组，不要任何解释。"
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=4096,
+            stream=False,
+        )
+        raw = response.choices[0].message.content.strip()
+
+        # 解析 JSON
+        import re
+        cases = None
+        try:
+            cases = json.loads(raw)
+        except json.JSONDecodeError:
+            match = re.search(r'\[[\s\S]*\]', raw)
+            if match:
+                try:
+                    cases = json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+
+        if not cases or not isinstance(cases, list):
+            return jsonify({'success': False, 'error': 'AI 返回格式无法解析', 'raw': raw[:200]}), 500
+
+        # 保存测试用例
+        saved = []
+        for c in cases:
+            if not c.get('answer_text') or c.get('expected_score') is None:
+                continue
+            row_id = add_test_case(
+                question_id=question_id,
+                answer_text=c['answer_text'],
+                expected_score=float(c['expected_score']),
+                description=c.get('description', '模拟作答'),
+                case_type=c.get('case_type', 'simulated')
+            )
+            saved.append({'id': row_id, 'description': c.get('description', ''), 'expected_score': float(c['expected_score'])})
+
+        return jsonify({'success': True, 'data': {'count': len(saved), 'cases': saved}})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:200]}), 500
+
+
+@api_bp.route('/generate-answer', methods=['POST'])
+def generate_answer():
+    """为指定题目生成一份模拟学生答案（供人工评分）"""
+    data = request.json or {}
+    question_id = data.get('question_id')
+
+    if not question_id:
+        return jsonify({'success': False, 'error': 'question_id 不能为空'}), 400
+
+    q = get_question(int(question_id))
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+
+    content = q.get('content', '')
+    max_score = q.get('max_score', 10)
+    standard_answer = q.get('standard_answer', '')
+
+    if not content:
+        return jsonify({'success': False, 'error': '题目内容为空'}), 400
+
+    # 随机选择一个水平
+    import random
+    levels = [
+        ('优秀作答', 0.85, 1.0),
+        ('良好作答', 0.65, 0.85),
+        ('中等作答', 0.45, 0.65),
+        ('偏低作答', 0.2, 0.45),
+        ('较差作答', 0.0, 0.2),
+    ]
+    level_name, ratio_low, ratio_high = random.choice(levels)
+    target_score = round(random.uniform(ratio_low * max_score, ratio_high * max_score), 1)
+
+    system_prompt = f"""你是一位中等职业学校的学生，正在回答考试题目。
+
+要求：
+1. 模拟真实学生的作答，不要写得太完美
+2. 根据目标水平作答：{level_name}（目标得分约 {target_score} 分，满分 {max_score} 分）
+3. 作答要像真实学生写的，可以有口语化表达、语句不完整等情况
+4. 只输出学生答案的纯文本内容，不要任何解释、标题或格式标记"""
+
+    user_prompt = f"""【题目】
+{content}
+
+【标准答案（仅供参考，不要照抄）】
+{standard_answer}
+
+请以学生的口吻作答，目标水平：{level_name}。"""
+
+    try:
+        response = grading_engine.client.chat.completions.create(
+            model=grading_engine.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.8,
+            max_tokens=1024,
+        )
+        answer = response.choices[0].message.content.strip()
+
+        if not answer or len(answer) < 10:
+            return jsonify({'success': False, 'error': '生成的答案过短，请重试'}), 500
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'answer': answer,
+                'level': level_name,
+                'target_score': target_score,
+            }
+        })
+    except Exception as e:
+        logger.error(f"生成模拟答案失败: {e}")
+        return jsonify({'success': False, 'error': f'生成失败：{str(e)}'}), 500
 
 
 # =============================================================================

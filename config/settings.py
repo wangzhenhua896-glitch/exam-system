@@ -52,12 +52,26 @@ SPARK_CONFIG = {
     "enabled": os.getenv("SPARK_ENABLED", "false").lower() == "true",
 }
 
-# 字节跳动豆包 (火山引擎)
+# 字节跳动豆包 (火山引擎 ARK)
 DOUBAO_CONFIG = {
     "api_key": os.getenv("DOUBAO_API_KEY", ""),
-    "base_url": os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
-    "model": os.getenv("DOUBAO_MODEL", "doubao-lite-128k"),
+    "base_url": os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding/v3"),
+    "model": os.getenv("DOUBAO_MODEL", "deepseek-v3-250324"),
     "enabled": os.getenv("DOUBAO_ENABLED", "false").lower() == "true",
+    # 可用模型列表（coding plan 实测可用）
+    "available_models": [
+        # DeepSeek 系列
+        {"id": "deepseek-v3-250324", "name": "DeepSeek-V3", "provider": "DeepSeek"},
+        {"id": "deepseek-v3-2-251201", "name": "DeepSeek-V3.2", "provider": "DeepSeek"},
+        # 豆包 Seed 系列
+        {"id": "doubao-seed-2-0-pro-260215", "name": "豆包 Seed 2.0 Pro", "provider": "字节跳动"},
+        {"id": "doubao-seed-2-0-lite-260215", "name": "豆包 Seed 2.0 Lite", "provider": "字节跳动"},
+        {"id": "doubao-seed-2-0-mini-260215", "name": "豆包 Seed 2.0 Mini", "provider": "字节跳动"},
+        {"id": "doubao-seed-2-0-code-preview-260215", "name": "豆包 Seed 2.0 Code", "provider": "字节跳动"},
+        {"id": "doubao-seed-code-preview-251028", "name": "豆包 Seed Code", "provider": "字节跳动"},
+        # 智谱 GLM 系列
+        {"id": "glm-4-7-251222", "name": "GLM-4-7", "provider": "智谱"},
+    ],
 }
 
 # 小米 Mimimo Claude 兼容端点

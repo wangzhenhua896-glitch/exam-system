@@ -3,692 +3,821 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能评分系统 v2.0</title>
-    <link href="/static/vendor/tailwind.min.css" rel="stylesheet">
+    <title>AI 智能评分系统 - 单题评分</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
     <style>
-        :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #141414;
-            --bg-tertiary: #1e1e1e;
-            --bg-card: #1a1a1a;
-            --accent-primary: #6366f1;
-            --accent-secondary: #818cf8;
-            --accent-success: #10b981;
-            --accent-warning: #f59e0b;
-            --accent-danger: #ef4444;
-            --text-primary: #ffffff;
-            --text-secondary: #a0a0a0;
-            --border-color: #2a2a2a;
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 260px;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            height: 100vh;
-            position: fixed;
-            left: 0;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            transition: margin-left 0.25s ease, opacity 0.25s ease;
-        }
-        .sidebar.collapsed {
-            margin-left: -260px;
-        }
-        .main-content {
-            margin-left: 260px;
-            min-height: 100vh;
-            padding: 24px;
-            transition: margin-left 0.25s ease;
-        }
-        .main-content.expanded {
-            margin-left: 0;
-        }
-        .sidebar-toggle {
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            z-index: 100;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 6px 10px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 18px;
-            transition: left 0.25s ease;
-        }
-        .sidebar-toggle:hover { color: var(--text-primary); }
-        .sidebar:not(.collapsed) ~ .sidebar-toggle { left: 268px; }
-        .nav-item {
-            display: flex; align-items: center; gap: 12px;
-            padding: 12px 16px; color: var(--text-secondary);
-            cursor: pointer; border-radius: 8px; margin: 4px 8px; transition: all 0.2s;
-        }
-        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-        .nav-item.active { background: var(--accent-primary); color: white; }
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: 12px; padding: 24px; margin-bottom: 24px;
-        }
-        .card-header { font-size: 18px; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); }
-        .form-label { display: block; font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
-        .form-textarea, .form-input, .form-select {
-            width: 100%; padding: 12px 16px; background: var(--bg-tertiary);
-            border: 1px solid var(--border-color); border-radius: 8px;
-            color: var(--text-primary); font-size: 14px; transition: all 0.2s;
-        }
-        .form-textarea:focus, .form-input:focus, .form-select:focus {
-            outline: none; border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-        .btn {
-            padding: 12px 24px; border-radius: 8px; font-weight: 600;
-            cursor: pointer; transition: all 0.2s; border: none;
-            display: inline-flex; align-items: center; gap: 8px;
-        }
-        .btn-primary { background: var(--accent-primary); color: white; }
-        .btn-primary:hover { background: var(--accent-secondary); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .result-card {
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            border: 1px solid var(--accent-primary);
-            border-radius: 16px; padding: 32px; text-align: center;
-        }
-        .result-score {
-            font-size: 72px; font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .result-confidence { font-size: 24px; color: var(--accent-success); margin-top: 16px; }
-        .model-score-item {
-            display: flex; justify-content: space-between;
-            padding: 12px 16px; background: var(--bg-tertiary);
-            border-radius: 8px; margin-top: 8px;
-        }
-        .stat-card { background: var(--bg-tertiary); border-radius: 12px; padding: 20px; text-align: center; }
-        .stat-value { font-size: 32px; font-weight: 700; color: var(--accent-primary); }
-        .stat-value.success { color: var(--accent-success); }
-        .stat-value.error { color: var(--accent-danger); }
-        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
-        .empty-icon { font-size: 64px; display: block; margin-bottom: 16px; }
-        .toast {
-            position: fixed; bottom: 24px; right: 24px;
-            padding: 16px 24px; background: var(--bg-card);
-            border: 1px solid var(--accent-success); border-radius: 8px;
-            color: white; animation: slideIn 0.3s ease; z-index: 1000;
-        }
-        .toast.error { border-color: var(--accent-danger); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .warning-box { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-warning); border-radius: 8px; padding: 16px; margin-top: 16px; }
-        .progress-container { background: var(--bg-tertiary); border-radius: 8px; height: 8px; overflow: hidden; margin: 16px 0; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); width: 0%; transition: width 0.3s ease; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        th { color: var(--text-secondary); font-weight: 600; }
-        .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; }
-        .badge-success { background: var(--accent-success); }
-        .badge-error { background: var(--accent-danger); }
-        .page { display: none; }
-        .page.active { display: block; }
-        .model-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; }
-        .history-item { background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-        .history-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .history-score { font-weight: 700; color: var(--accent-primary); }
-        .form-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-        .validation-status { font-weight: 600; }
-        .validation-status.success { color: var(--accent-success); }
-        .validation-status.error { color: var(--accent-danger); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
+        .subtitle { font-size: 12px; color: #909399; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 220px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; display: flex; flex-direction: column; transition: width 0.25s ease, opacity 0.25s ease; }
+        .sidebar.collapsed { width: 0; overflow: hidden; opacity: 0; }
+        .sidebar-nav { flex: 1; }
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid #e4e7ed; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .result-score { font-size: 56px; font-weight: 700; color: #409EFF; text-align: center; }
+        .result-score .unit { font-size: 20px; color: #909399; font-weight: 400; }
+        .score-bar-wrap { margin: 16px auto 0; max-width: 400px; }
+        .answer-count { font-size: 12px; color: #909399; text-align: right; margin-top: 4px; }
     </style>
 </head>
 <body>
-    <aside class="sidebar">
-        <div class="sidebar-header p-6 border-b border-gray-800">
-            <div class="flex items-center gap-3">
-                <span class="text-3xl">📝</span>
-                <div>
-                    <div class="font-bold text-lg bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">AI 评分系统</div>
-                    <p class="text-xs text-gray-500 mt-1">国产大模型 · 高精度评分</p>
+<div id="app">
+    <div class="layout">
+        <!-- 顶部导航 -->
+        <div class="header">
+            <div class="header-left">
+                <el-button text @click="sidebarCollapsed = !sidebarCollapsed" style="font-size: 18px; padding: 4px 8px;">
+                    <el-icon><Fold /></el-icon>
+                </el-button>
+                <div class="logo">📝 AI 评分系统</div>
+                <div class="subtitle">国产大模型 · 高精度评分</div>
+            </div>
+            <div class="header-right">
+                <el-tag size="small" type="info">{{ currentModelLabel || '未选择模型' }}</el-tag>
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>系统就绪</span>
                 </div>
+                <el-tag size="small" type="primary">单题评分</el-tag>
             </div>
         </div>
-        <nav class="flex-1 py-4">
-            <a href="/management" style="text-decoration: none; color: inherit;">
-                <div class="nav-item"><span>📚</span><span>题库管理</span></div>
-            </a>
-            <div class="nav-item active" data-page="single"><span>✏️</span><span>单题评分</span></div>
-            <div class="nav-item" data-page="history"><span>📜</span><span>历史记录</span></div>
-            <div class="nav-item" data-page="batch" style="opacity:0.4;"><span>📊</span><span>批量测试（暂未开放）</span></div>
-            <div class="nav-item" data-page="validation" style="opacity:0.4;"><span>✅</span><span>规则验证（暂未开放）</span></div>
-            <div class="nav-item" data-page="tuning" style="opacity:0.4;"><span>🎯</span><span>自动调优（暂未开放）</span></div>
-            <div class="nav-item" data-page="config"><span>⚙️</span><span>评分配置</span></div>
-        </nav>
-        <div class="p-4 border-t border-gray-800">
-            <div class="flex items-center gap-2 text-sm text-gray-500"><span class="w-2 h-2 rounded-full bg-green-500"></span><span>系统就绪</span></div>
-            <p class="text-xs text-gray-600 mt-2">v2.0.0</p>
-        </div>
-    </aside>
-    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="收起/展开侧边栏">☰</button>
 
-    <main class="main-content" id="main-content">
-        <header class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold" id="page-title">单题评分</h1>
-            <div class="text-sm text-gray-500"><span id="model-count">加载中...</span></div>
-        </header>
-
-        <!-- 单题评分 -->
-        <div class="page active" id="page-single">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="card">
-                    <div class="card-header">题目与答案</div>
-
-                    <!-- 题库选择器 -->
-                    <div class="mb-4">
-                        <label class="form-label">从题库选择题目</label>
-                        <div class="flex gap-2">
-                            <select class="form-select" id="question-select" onchange="onQuestionSelect(this.value)">
-                                <option value="">-- 手动输入 --</option>
-                            </select>
-                            <button class="btn" style="background:var(--bg-tertiary);padding:8px 12px;flex-shrink:0;" onclick="loadQuestionList()" title="刷新列表">🔄</button>
-                        </div>
-                        <p class="form-hint">选择题目后自动加载题目信息，仅需输入学生答案</p>
+        <div class="main-container">
+            <!-- 左侧导航 -->
+            <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+                <div class="sidebar-nav">
+                    <el-menu :default-active="currentPage" @select="handleMenuSelect">
+                        <el-menu-item index="single"><el-icon><EditPen /></el-icon><span>单题评分</span></el-menu-item>
+                        <el-menu-item index="testset"><el-icon><List /></el-icon><span>测试集</span></el-menu-item>
+                        <el-menu-item index="history"><el-icon><Clock /></el-icon><span>历史记录</span></el-menu-item>
+                    </el-menu>
+                </div>
+                <div class="sidebar-footer">
+                    <div style="margin-bottom: 8px;">
+                        <div style="font-size: 12px; color: #909399; margin-bottom: 6px;">当前模型</div>
+                        <el-select v-model="currentProvider" size="small" style="width: 100%;" @change="onProviderChange">
+                            <el-option v-for="p in providers" :key="p.id" :label="p.name + ' · ' + p.model" :value="p.id"></el-option>
+                        </el-select>
                     </div>
+                    <a href="/management" style="text-decoration: none;">
+                        <el-button size="small" plain style="width: 100%;"><el-icon><Back /></el-icon> 返回题库管理</el-button>
+                    </a>
+                </div>
+            </div>
 
-                    <!-- 只读信息卡片（题库模式显示） -->
-                    <div id="question-info-cards" style="display:none;">
-                        <div class="mb-3">
-                            <label class="form-label">题目标题</label>
-                            <div id="info-title" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;font-weight:600;border:1px solid var(--border-color);"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">题目内容</label>
-                            <div id="info-content" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:120px;overflow-y:auto;"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">标准答案</label>
-                            <div id="info-standard-answer" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:100px;overflow-y:auto;color:var(--accent-success);"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">评分脚本</label>
-                            <div style="position:relative;">
-                                <div id="info-rubric-script" style="padding:10px 14px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);white-space:pre-wrap;max-height:80px;overflow-y:auto;font-size:12px;color:var(--text-secondary);cursor:pointer;" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'80px':'none'" title="点击展开/收起"></div>
-                                <button onclick="copyRubricScript(this)" style="position:absolute;top:8px;right:8px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;color:var(--text-secondary);font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.borderColor='var(--accent-primary)';this.style.color='var(--accent-primary)'" onmouseleave="this.style.borderColor='var(--border-color)';this.style.color='var(--text-secondary)'" title="复制评分脚本">📋 复制</button>
+            <!-- 右侧内容区 -->
+            <div class="content">
+                <!-- ========== 单题评分 ========== -->
+                <template v-if="currentPage === 'single'">
+                    <div style="display: flex; gap: 20px; align-items: flex-start;">
+                        <!-- 左侧输入区 -->
+                        <div :style="{ width: inputCollapsed ? '0' : '400px', overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
+                            <div class="page-card" style="margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <span style="font-size: 16px; font-weight: 600; color: #303133;">题目与答案</span>
+                                    <el-button size="small" text @click="inputCollapsed = true">
+                                        <el-icon><DArrowLeft /></el-icon> 折叠
+                                    </el-button>
+                                </div>
+
+                                <!-- 题库选择 -->
+                                <div style="margin-bottom: 16px;">
+                                    <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">从题库选择题目</div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <el-select v-model="selectedQuestionId" filterable clearable placeholder="-- 手动输入 --" style="flex: 1;" @change="onQuestionSelect">
+                                            <el-option v-for="q in questionList" :key="q.id" :label="'#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
+                                        </el-select>
+                                        <el-button size="default" @click="loadQuestionList" :loading="loadingQuestions">
+                                            <el-icon><Refresh /></el-icon>
+                                        </el-button>
+                                    </div>
+                                    <div style="font-size: 12px; color: #909399; margin-top: 4px;">选择题目后自动加载题目信息，仅需输入学生答案</div>
+                                </div>
+
+                                <!-- 题目信息卡片（选题后显示） -->
+                                <template v-if="selectedQuestion">
+                                    <div style="background: #f5f7fa; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                            <span style="flex: 1; font-weight: 600; font-size: 14px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedQuestion.title || '(无标题)' }}</span>
+                                            <el-tag type="primary" size="small">{{ selectedQuestion.max_score || 10 }} 分</el-tag>
+                                        </div>
+                                        <el-collapse>
+                                            <el-collapse-item title="题目 / 答案 / 评分脚本">
+                                                <div style="margin-bottom: 8px;">
+                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">题目内容</div>
+                                                    <div style="padding: 8px; background: #fff; border-radius: 4px; font-size: 13px; color: #606266; white-space: pre-wrap; max-height: 100px; overflow-y: auto; border: 1px solid #ebeef5;">{{ selectedQuestion.content }}</div>
+                                                </div>
+                                                <div style="margin-bottom: 8px;">
+                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">标准答案</div>
+                                                    <div style="padding: 8px; background: #fff; border-radius: 4px; font-size: 13px; color: #67c23a; white-space: pre-wrap; max-height: 80px; overflow-y: auto; border: 1px solid #ebeef5;">{{ selectedQuestion.standard_answer || '(无标准答案)' }}</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">评分脚本</div>
+                                                    <el-input type="textarea" :model-value="selectedQuestion.rubric_script || '(未生成评分脚本)'" :rows="3" readonly size="small"></el-input>
+                                                    <el-button size="small" text type="primary" style="margin-top: 4px;" @click="copyRubricScript">
+                                                        <el-icon><CopyDocument /></el-icon> 复制评分脚本
+                                                    </el-button>
+                                                </div>
+                                            </el-collapse-item>
+                                        </el-collapse>
+                                    </div>
+                                </template>
+
+                                <!-- 手动输入（未选题时显示） -->
+                                <template v-if="!selectedQuestionId">
+                                    <div style="margin-bottom: 16px;">
+                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">题目</div>
+                                        <el-input v-model="manualQuestion" type="textarea" :rows="3" placeholder="请输入简答题题目..."></el-input>
+                                    </div>
+                                    <div style="margin-bottom: 16px;">
+                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">评分规则 (JSON格式)</div>
+                                        <el-input v-model="manualRubric" type="textarea" :rows="3" placeholder='{"points": [{"description": "要点1", "score": 5}]}'></el-input>
+                                        <div style="font-size: 12px; color: #909399; margin-top: 4px;">支持JSON格式，包含得分要点和关键词</div>
+                                    </div>
+                                    <div style="margin-bottom: 16px;">
+                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">满分</div>
+                                        <el-input-number v-model="manualMaxScore" :min="1" :max="100" style="width: 100%;"></el-input-number>
+                                    </div>
+                                </template>
+
+                                <!-- 学生答案 -->
+                                <div style="margin-bottom: 16px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <div style="font-size: 13px; color: #606266;">学生答案</div>
+                                        <el-button v-if="selectedQuestionId" size="small" text type="primary" :loading="genAnswerLoading" @click="generateAnswer">
+                                            <el-icon><MagicStick /></el-icon> AI 生成答案
+                                        </el-button>
+                                    </div>
+                                    <el-input v-model="studentAnswer" type="textarea" :rows="6" placeholder="请输入学生的答案..."></el-input>
+                                    <div class="answer-count">{{ studentAnswer.length }} 字</div>
+                                </div>
+
+                                <el-button type="primary" style="width: 100%;" :loading="grading" @click="gradeAnswer">
+                                    <el-icon><Promotion /></el-icon> 开始评分
+                                </el-button>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">满分</label>
-                            <span id="info-max-score" class="badge" style="background:var(--accent-primary);font-size:14px;padding:6px 16px;"></span>
+
+                        <!-- 折叠时的展开按钮 -->
+                        <el-button v-if="inputCollapsed" @click="inputCollapsed = false" style="flex-shrink: 0; height: auto; padding: 20px 8px; writing-mode: vertical-lr; letter-spacing: 2px;">
+                            <el-icon><DArrowRight /></el-icon> 展开输入
+                        </el-button>
+
+                        <!-- 右侧结果区 -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="page-card" style="margin-bottom: 0;">
+                                <div style="font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 16px;">评分结果</div>
+
+                                <!-- 空状态 -->
+                                <div v-if="!gradeResult" style="text-align: center; padding: 60px 20px; color: #909399;">
+                                    <el-icon size="64" color="#c0c4cc"><Document /></el-icon>
+                                    <p style="margin-top: 12px;">提交评分后将在此显示结果</p>
+                                </div>
+
+                                <!-- 评分结果 -->
+                                <template v-if="gradeResult">
+                                    <!-- 分数 -->
+                                    <div style="text-align: center; padding: 20px 0;">
+                                        <template v-if="gradeResult.score === null || gradeResult.score === undefined">
+                                            <div class="result-score" style="color: #f56c6c;">评分异常 <span style="font-size: 20px;">需人工处理</span></div>
+                                        </template>
+                                        <template v-else>
+                                            <div class="result-score">{{ gradeResult.score }} <span class="unit">/ {{ currentMaxScore }} 分</span></div>
+                                            <div class="score-bar-wrap">
+                                                <el-progress :percentage="Math.round(gradeResult.score / currentMaxScore * 100)" :stroke-width="10" :color="scoreColor"></el-progress>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <!-- 置信度 -->
+                                    <div style="text-align: center; margin-bottom: 16px;">
+                                        <el-tag :type="gradeResult.confidence >= 0.8 ? 'success' : gradeResult.confidence >= 0.6 ? 'warning' : 'danger'" size="large">
+                                            置信度 {{ (gradeResult.confidence * 100).toFixed(1) }}%
+                                        </el-tag>
+                                    </div>
+
+                                    <!-- 预警 -->
+                                    <el-alert v-if="gradeResult.warning" :title="gradeResult.warning" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
+                                    <el-alert v-if="gradeResult.needs_review && !gradeResult.warning" title="建议人工复核" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
+
+                                    <!-- 评语 -->
+                                    <div v-if="gradeResult.comment" style="margin-bottom: 16px;">
+                                        <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📝 评语</div>
+                                        <div style="background: #f5f7fa; border-radius: 8px; padding: 12px; color: #606266; line-height: 1.6; white-space: pre-wrap;">{{ gradeResult.comment }}</div>
+                                    </div>
+
+                                    <!-- 原始详情 -->
+                                    <el-collapse v-if="gradeResult.details" style="margin-bottom: 16px;">
+                                        <el-collapse-item title="查看原始评分详情">
+                                            <pre style="background: #f5f7fa; padding: 12px; border-radius: 4px; font-size: 12px; color: #909399; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">{{ JSON.stringify(gradeResult.details, null, 2) }}</pre>
+                                        </el-collapse-item>
+                                    </el-collapse>
+
+                                    <!-- 底部信息 + 操作 -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="font-size: 12px; color: #c0c4cc;">引擎: {{ gradeResult.model_used || 'qwen-agent' }} · 记录ID: {{ gradeResult.record_id }}</span>
+                                        <el-button v-if="selectedQuestionId" type="success" size="small" @click="saveAsTestCase">
+                                            <el-icon><FolderAdd /></el-icon> 保存为测试用例
+                                        </el-button>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
+                </template>
 
-                    <!-- 学生答案（始终可见） -->
-                    <div class="mb-4">
-                        <label class="form-label">学生答案</label>
-                        <textarea class="form-textarea" id="answer" rows="8" placeholder="请输入学生的答案..."></textarea>
-                    </div>
-
-                    <!-- 手动输入区域（手动模式显示） -->
-                    <div id="manual-input-section" style="display:none;">
-                        <div class="mb-4">
-                            <label class="form-label">题目</label>
-                            <textarea class="form-textarea" id="question" rows="4" placeholder="请输入简答题题目..."></textarea>
+                <!-- ========== 测试集 ========== -->
+                <template v-if="currentPage === 'testset'">
+                    <div class="page-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <span style="font-size: 16px; font-weight: 600; color: #303133;">测试集</span>
+                                <el-tag v-if="selectedQuestion" size="small" style="margin-left: 8px;">{{ selectedQuestion.title || '#' + selectedQuestion.id }}</el-tag>
+                            </div>
+                            <div v-if="selectedQuestionId" style="display: flex; gap: 8px;">
+                                <el-button type="primary" size="small" @click="showGenDialog = true">
+                                    <el-icon><MagicStick /></el-icon> 自动生成
+                                </el-button>
+                                <el-button size="small" :disabled="selectedCaseIds.length === 0" @click="runSelectedCases">
+                                    运行选中项<span v-if="selectedCaseIds.length > 0"> ({{ selectedCaseIds.length }})</span>
+                                </el-button>
+                                <el-button size="small" :disabled="testCases.length === 0" @click="runAllCases">全部运行</el-button>
+                            </div>
                         </div>
-                        <div class="mb-4">
-                            <label class="form-label">评分规则 (JSON格式)</label>
-                            <textarea class="form-textarea" id="rubric" rows="4" placeholder='{"points": [{"description": "要点1", "score": 5}]}'></textarea>
-                            <p class="form-hint">支持JSON格式，包含得分要点和关键词</p>
+
+                        <!-- 未选题提示 -->
+                        <el-empty v-if="!selectedQuestionId" description="请先在「单题评分」中选择题目"></el-empty>
+
+                        <!-- 测试用例表格 -->
+                        <template v-if="selectedQuestionId">
+                            <el-empty v-if="testCases.length === 0" description="该题目暂无测试用例"></el-empty>
+                            <el-table v-else :data="testCases" style="width: 100%;" @selection-change="onCaseSelectionChange">
+                                <el-table-column type="selection" width="40"></el-table-column>
+                                <el-table-column prop="description" label="描述" show-overflow-tooltip min-width="150"></el-table-column>
+                                <el-table-column label="类型" width="70">
+                                    <template #default="scope">
+                                        <el-tag :type="scope.row.case_type === 'real' ? 'success' : 'warning'" size="small">
+                                            {{ scope.row.case_type === 'real' ? '真实' : '模拟' }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="期望分" width="80">
+                                    <template #default="scope">
+                                        <strong>{{ scope.row.expected_score }}</strong>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="实际分" width="80">
+                                    <template #default="scope">
+                                        {{ scope.row.last_actual_score !== null && scope.row.last_actual_score !== undefined ? scope.row.last_actual_score : '-' }}
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="误差" width="70">
+                                    <template #default="scope">
+                                        <span v-if="scope.row.last_run_at" :style="{ color: scope.row.last_error > 1 ? '#f56c6c' : scope.row.last_error > 0.5 ? '#e6a23c' : '#67c23a' }">
+                                            {{ scope.row.last_error !== null && scope.row.last_error !== undefined ? parseFloat(scope.row.last_error).toFixed(1) : '-' }}
+                                        </span>
+                                        <span v-else>-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="操作" width="150" fixed="right">
+                                    <template #default="scope">
+                                        <el-button size="small" type="primary" link @click="gradeTestCase(scope.row)" title="用此答案评分">
+                                            <el-icon><EditPen /></el-icon>
+                                        </el-button>
+                                        <el-button size="small" type="primary" link @click="runSingleCase(scope.row.id)" title="运行">
+                                            <el-icon><VideoPlay /></el-icon>
+                                        </el-button>
+                                        <el-button size="small" type="danger" link @click="deleteTestCase(scope.row.id)" title="删除">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+
+                            <!-- 进度条 -->
+                            <div v-if="testSetRunning" style="margin-top: 16px;">
+                                <el-progress :percentage="testSetProgress" :stroke-width="8" :status="testSetProgress >= 100 ? 'success' : ''"></el-progress>
+                                <div style="text-align: center; margin-top: 8px; font-size: 13px; color: #909399;">{{ testSetText }}</div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- 自动生成参数对话框 -->
+                    <el-dialog v-model="showGenDialog" title="自动生成测试用例" width="520px" :close-on-click-modal="false">
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">生成数量</div>
+                            <el-slider v-model="genCount" :min="3" :max="20" show-input></el-slider>
                         </div>
-                        <div class="mb-4">
-                            <label class="form-label">满分</label>
-                            <input type="number" class="form-input" id="max-score" value="10" min="1" max="100">
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">分数分布策略</div>
+                            <el-radio-group v-model="genDist">
+                                <el-radio value="gradient">
+                                    <div><strong>梯度分布</strong><div style="font-size: 12px; color: #909399;">满分→中等→低分→零分</div></div>
+                                </el-radio>
+                                <el-radio value="edge">
+                                    <div><strong>边界为主</strong><div style="font-size: 12px; color: #909399;">重点覆盖满分/零分/临界分</div></div>
+                                </el-radio>
+                                <el-radio value="middle">
+                                    <div><strong>中段为主</strong><div style="font-size: 12px; color: #909399;">重点覆盖中等水平作答</div></div>
+                                </el-radio>
+                                <el-radio value="uniform">
+                                    <div><strong>均匀分布</strong><div style="font-size: 12px; color: #909399;">各分数段均匀覆盖</div></div>
+                                </el-radio>
+                            </el-radio-group>
                         </div>
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">模拟作答风格（可多选）</div>
+                            <el-checkbox-group v-model="genStyles">
+                                <el-checkbox value="标准规范">标准规范</el-checkbox>
+                                <el-checkbox value="口语化">口语化</el-checkbox>
+                                <el-checkbox value="要点遗漏">要点遗漏</el-checkbox>
+                                <el-checkbox value="偏题跑题">偏题跑题</el-checkbox>
+                                <el-checkbox value="复制原文">复制原文</el-checkbox>
+                                <el-checkbox value="空白作答">空白作答</el-checkbox>
+                            </el-checkbox-group>
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">补充要求（可选）</div>
+                            <el-input v-model="genExtra" type="textarea" :rows="2" placeholder="例如：重点测试反作弊规则、增加方言化表达..."></el-input>
+                        </div>
+                        <template #footer>
+                            <el-button @click="showGenDialog = false">取消</el-button>
+                            <el-button type="primary" :loading="genRunning" @click="autoGenerateTestCases">开始生成</el-button>
+                        </template>
+                    </el-dialog>
+                </template>
+
+                <!-- ========== 历史记录 ========== -->
+                <template v-if="currentPage === 'history'">
+                    <div class="page-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <span style="font-size: 16px; font-weight: 600; color: #303133;">评分历史</span>
+                            <el-button size="small" @click="clearHistory">
+                                <el-icon><Delete /></el-icon> 清空历史
+                            </el-button>
+                        </div>
+                        <el-empty v-if="history.length === 0" description="暂无评分记录"></el-empty>
+                        <el-timeline v-else>
+                            <el-timeline-item v-for="(item, idx) in history" :key="idx" :timestamp="item.time" placement="top" :type="item.score !== null ? 'primary' : 'danger'">
+                                <el-card shadow="hover" style="margin-bottom: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <el-tag :type="item.score !== null ? 'primary' : 'danger'" size="large">
+                                            {{ item.score !== null ? item.score + ' 分' : '评分异常' }}
+                                        </el-tag>
+                                        <el-tag :type="item.confidence >= 0.8 ? 'success' : item.confidence >= 0.6 ? 'warning' : 'danger'" size="small">
+                                            置信度 {{ (item.confidence * 100).toFixed(1) }}%
+                                        </el-tag>
+                                    </div>
+                                    <div style="font-size: 13px; color: #606266; line-height: 1.5;">{{ item.question }}</div>
+                                </el-card>
+                            </el-timeline-item>
+                        </el-timeline>
                     </div>
-
-                    <button class="btn btn-primary w-full" id="grade-btn" onclick="gradeAnswer()"><span>🚀</span><span>开始评分</span></button>
-                </div>
-                <div class="card">
-                    <div class="card-header">评分结果</div>
-                    <div id="result-container">
-                        <div class="empty-state"><span class="empty-icon">📝</span><p>提交评分后将在此显示结果</p></div>
-                    </div>
-                </div>
+                </template>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- 批量测试 -->
-        <div class="page" id="page-batch">
-            <div class="card">
-                <div class="card-header">批量性能测试</div>
-                <div class="empty-state"><span class="empty-icon">🚧</span><p>批量测试功能暂未开放，敬请期待</p></div>
-            </div>
-        </div>
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
 
-        <!-- 规则验证 -->
-        <div class="page" id="page-validation">
-            <div class="card">
-                <div class="card-header">评分规则验证</div>
-                <div class="empty-state"><span class="empty-icon">🚧</span><p>规则验证功能暂未开放，敬请期待</p></div>
-            </div>
-        </div>
-
-        <!-- 自动调优 -->
-        <div class="page" id="page-tuning">
-            <div class="card">
-                <div class="card-header">自动调优</div>
-                <div class="empty-state"><span class="empty-icon">🚧</span><p>自动调优功能暂未开放，敬请期待</p></div>
-            </div>
-        </div>
-
-        <!-- 配置页面 -->
-        <div class="page" id="page-config">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="card">
-                    <div class="card-header">模型配置</div>
-                    <div id="models-list">
-                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">🤖</span><div><div class="font-semibold">通义千问 (Qwen)</div><div class="text-sm text-gray-500">qwen-max</div></div></div><span class="badge badge-success">已启用</span></div>
-                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">🧠</span><div><div class="font-semibold">智谱 GLM</div><div class="text-sm text-gray-500">glm-4</div></div></div><span class="badge badge-success">已启用</span></div>
-                        <div class="model-item"><div class="flex items-center gap-3"><span class="text-2xl">✨</span><div><div class="font-semibold">MiniMax</div><div class="text-sm text-gray-500">abab6.5-chat</div></div></div><span class="badge badge-success">已启用</span></div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header">评分设置</div>
-                    <div class="mb-4"><label class="form-label">默认采样次数</label><select class="form-select" id="config-sample-count"><option value="1">1 次</option><option value="3" selected>3 次</option><option value="5">5 次</option><option value="7">7 次</option></select></div>
-                    <div class="mb-4"><label class="form-label">默认聚合策略</label><select class="form-select" id="config-strategy"><option value="confidence_weighted" selected>置信度加权</option><option value="weighted_average">加权平均</option><option value="majority_vote">多数投票</option></select></div>
-                    <div class="mb-4"><label class="form-label">低置信度阈值</label><input type="number" class="form-input" id="config-low-threshold" value="0.6" step="0.1" min="0" max="1"></div>
-                    <div class="mb-4"><label class="form-label">中置信度阈值</label><input type="number" class="form-input" id="config-medium-threshold" value="0.7" step="0.1" min="0" max="1"></div>
-                    <div class="mb-4"><label class="form-label">高置信度阈值</label><input type="number" class="form-input" id="config-high-threshold" value="0.8" step="0.1" min="0" max="1"></div>
-                    <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 历史记录 -->
-        <div class="page" id="page-history">
-            <div class="card">
-                <div class="card-header flex justify-between items-center"><span>评分历史</span><button class="btn" style="background: var(--bg-tertiary);" onclick="clearHistory()">清空历史</button></div>
-                <div id="history-list"><div class="empty-state"><span class="empty-icon">📜</span><p>暂无评分记录</p></div></div>
-            </div>
-        </div>
-    </main>
-
-    <div id="toast-container"></div>
-
-    <script>
+const app = createApp({
+    setup() {
         const API_BASE = window.location.origin;
-        let history = JSON.parse(localStorage.getItem('grading-history') || '[]');
 
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const page = item.dataset.page;
-                switchPage(page);
-            });
+        // ========== 页面状态 ==========
+        const currentPage = ref('single');
+        const inputCollapsed = ref(false);
+        const sidebarCollapsed = ref(false);
+
+        // ========== 模型选择 ==========
+        const providers = ref([]);
+        const currentProvider = ref('');
+        const currentModelLabel = computed(() => {
+            const p = providers.value.find(x => x.id === currentProvider.value);
+            return p ? p.name + ' · ' + p.model : '';
         });
 
-        function switchPage(page) {
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === page));
-            document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
-            const titles = {single: '单题评分', batch: '批量测试', validation: '规则验证', tuning: '自动调优', config: '评分配置', history: '历史记录'};
-            document.getElementById('page-title').textContent = titles[page] || page;
-            renderHistory();
+        async function loadProviders() {
+            try {
+                const { data } = await axios.get(API_BASE + '/api/providers');
+                if (data.success && data.data) {
+                    providers.value = data.data;
+                    const active = data.data.find(p => p.active) || data.data[0];
+                    if (active) currentProvider.value = active.id;
+                }
+            } catch (e) {
+                console.error('加载模型列表失败', e);
+            }
         }
 
-        // ========== 单题评分：题库选题 ==========
+        function onProviderChange(val) {
+            ElMessage.success('已切换到：' + currentModelLabel.value);
+        }
+
+        // ========== 题目选择 ==========
+        const questionList = ref([]);
+        const selectedQuestionId = ref(null);
+        const selectedQuestion = ref(null);
+        const loadingQuestions = ref(false);
 
         async function loadQuestionList() {
+            loadingQuestions.value = true;
             try {
-                const resp = await fetch(API_BASE + '/api/questions');
-                const data = await resp.json();
+                const { data } = await axios.get(API_BASE + '/api/questions');
                 if (data.success && data.data) {
-                    const select = document.getElementById('question-select');
-                    const currentVal = select.value;
-                    select.innerHTML = '<option value="">-- 手动输入 --</option>';
-                    data.data.forEach(function(q) {
-                        var opt = document.createElement('option');
-                        opt.value = q.id;
-                        var label = '#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30));
-                        if (q.quality_score !== null && q.quality_score !== undefined) {
-                            var status = q.quality_score >= 80 ? '合格' : q.quality_score >= 60 ? '待改' : '毛题';
-                            label += ' [' + q.quality_score + '分-' + status + ']';
-                        }
-                        opt.textContent = label;
-                        select.appendChild(opt);
-                    });
-                    if (currentVal) select.value = currentVal;
+                    questionList.value = data.data;
                 }
             } catch (e) {
                 console.error('加载题目列表失败', e);
             }
+            loadingQuestions.value = false;
         }
 
-        async function onQuestionSelect(questionId) {
-            var infoCards = document.getElementById('question-info-cards');
-            var manualSection = document.getElementById('manual-input-section');
+        async function onQuestionSelect(qid) {
+            if (!qid) {
+                selectedQuestion.value = null;
+                return;
+            }
+            try {
+                const { data } = await axios.get(API_BASE + '/api/questions/' + qid);
+                if (data.success && data.data) {
+                    selectedQuestion.value = data.data;
+                    ElMessage.success('题目已加载: ' + (data.data.title || data.data.content.substring(0, 20)));
+                }
+            } catch (e) {
+                ElMessage.error('加载题目失败');
+            }
+        }
 
-            if (!questionId) {
-                infoCards.style.display = 'none';
-                manualSection.style.display = 'block';
-                window._selectedQuestionId = null;
+        // ========== 手动输入 ==========
+        const manualQuestion = ref('');
+        const manualRubric = ref('');
+        const manualMaxScore = ref(10);
+
+        // ========== 学生答案 ==========
+        const studentAnswer = ref('');
+
+        // ========== 当前满分 ==========
+        const currentMaxScore = computed(() => {
+            if (selectedQuestion.value) return selectedQuestion.value.max_score || 10;
+            return manualMaxScore.value;
+        });
+
+        // ========== 评分 ==========
+        const grading = ref(false);
+        const gradeResult = ref(null);
+
+        async function gradeAnswer() {
+            if (!studentAnswer.value.trim()) {
+                ElMessage.warning('请填写学生答案');
                 return;
             }
 
-            manualSection.style.display = 'none';
+            grading.value = true;
+            let requestBody;
 
-            try {
-                var resp = await fetch(API_BASE + '/api/questions/' + questionId);
-                var data = await resp.json();
-                if (data.success && data.data) {
-                    var q = data.data;
-                    window._selectedQuestionId = q.id;
-
-                    document.getElementById('info-title').textContent = q.title || '(无标题)';
-                    document.getElementById('info-content').textContent = q.content || '';
-                    document.getElementById('info-standard-answer').textContent = q.standard_answer || '(无标准答案)';
-                    document.getElementById('info-rubric-script').textContent = q.rubric_script || '(未生成评分脚本，请在题库管理中生成)';
-                    document.getElementById('info-max-score').textContent = (q.max_score || 10) + ' 分';
-
-                    infoCards.style.display = 'block';
-                    showToast('题目已加载: ' + (q.title || (q.content || '').substring(0, 20)), 'success');
-                }
-            } catch (e) {
-                showToast('加载题目失败', 'error');
-            }
-        }
-
-        // ========== 单题评分：核心评分 ==========
-
-        async function gradeAnswer() {
-            var answer = document.getElementById('answer').value.trim();
-            if (!answer) { showToast('请填写学生答案', 'error'); return; }
-
-            var btn = document.getElementById('grade-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span><span>评分中...</span>';
-
-            var requestBody;
-            var qid = window._selectedQuestionId;
-
-            if (qid) {
-                requestBody = { question_id: qid, answer: answer };
+            if (selectedQuestionId.value) {
+                requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), provider: currentProvider.value };
             } else {
-                var question = document.getElementById('question').value.trim();
-                var rubricInput = document.getElementById('rubric').value.trim();
-                var maxScore = parseFloat(document.getElementById('max-score').value);
-                if (!question) { showToast('请填写题目', 'error'); resetBtn(); return; }
-                var rubric = {};
-                if (rubricInput) {
-                    try { rubric = JSON.parse(rubricInput); }
-                    catch (e) { showToast('评分规则JSON格式错误', 'error'); resetBtn(); return; }
+                if (!manualQuestion.value.trim()) {
+                    ElMessage.warning('请填写题目');
+                    grading.value = false;
+                    return;
                 }
-                requestBody = { question: question, answer: answer, rubric: rubric, max_score: maxScore };
+                let rubric = {};
+                if (manualRubric.value.trim()) {
+                    try { rubric = JSON.parse(manualRubric.value); }
+                    catch (e) { ElMessage.error('评分规则JSON格式错误'); grading.value = false; return; }
+                }
+                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), rubric, max_score: manualMaxScore.value, provider: currentProvider.value };
             }
 
             try {
-                var response = await fetch(API_BASE + '/api/grade', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-                var result = await response.json();
+                const { data: result } = await axios.post(API_BASE + '/api/grade', requestBody);
                 if (result.success) {
-                    var data = result.data;
-                    // ┌──────────────────────────────────────────────────────────┐
-                    // │ 评分异常处理（考试场景）                                  │
-                    // │ 后端已自动重试3次仍失败时返回 score=null                  │
-                    // │ 此处由用户决定：重试 或 联系监考老师人工处理               │
-                    // │ 绝不能将 null 显示为 0 分（等同于误判）                    │
-                    // └──────────────────────────────────────────────────────────┘
-                    if (data.score === null || data.score === undefined) {
-                        var msg = data.comment || '评分系统暂时无法评分';
-                        if (confirm(msg + '\n\n点击"确定"重新评分，点击"取消"联系监考老师人工处理')) {
-                            resetBtn();
-                            gradeAnswer(); // 用户选择重试，重新走完整流程（后端会再次自动重试）
+                    const d = result.data;
+                    if (d.score === null || d.score === undefined) {
+                        try {
+                            await ElMessageBox.confirm(d.comment || '评分系统暂时无法评分', '评分异常', { confirmButtonText: '重新评分', cancelButtonText: '联系监考老师', type: 'warning' });
+                            grading.value = false;
+                            gradeAnswer();
                             return;
-                        } else {
-                            showToast('请通知监考老师进行人工评分', 'warning');
+                        } catch {
+                            ElMessage.warning('请通知监考老师进行人工评分');
                         }
                     } else {
-                        showToast('评分完成', 'success');
+                        ElMessage.success('评分完成');
                     }
-                    window._lastGradeResult = data;
-                    renderResult(data);
-                    addToHistory(requestBody, data);
+                    gradeResult.value = d;
+                    addToHistory(requestBody, d);
                 } else {
-                    showToast(result.error || '评分失败', 'error');
+                    ElMessage.error(result.error || '评分失败');
                 }
-            } catch (error) {
-                showToast('评分失败：后端服务未启动', 'error');
-            } finally {
-                resetBtn();
+            } catch (e) {
+                ElMessage.error('评分失败：后端服务未启动');
             }
-
-            function resetBtn() {
-                btn.disabled = false;
-                btn.innerHTML = '<span>🚀</span><span>开始评分</span>';
-            }
+            grading.value = false;
         }
 
-        function copyRubricScript(btn) {
-            var text = document.getElementById('info-rubric-script').textContent;
-            if (!text || text === '(未生成评分脚本，请在题库管理中生成)') { showToast('没有可复制的评分脚本', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() {
-                btn.textContent = '✓ 已复制';
-                btn.style.color = 'var(--accent-success)';
-                btn.style.borderColor = 'var(--accent-success)';
-                setTimeout(function() { btn.textContent = '📋 复制'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
-            }).catch(function() {
-                showToast('复制失败，请手动选择复制', 'error');
+        // ========== 评分辅助 ==========
+        const scoreColor = computed(() => {
+            if (!gradeResult.value || gradeResult.value.score === null) return '#909399';
+            const pct = gradeResult.value.score / currentMaxScore.value * 100;
+            if (pct >= 80) return '#67c23a';
+            if (pct >= 60) return '#e6a23c';
+            return '#f56c6c';
+        });
+
+        function copyRubricScript() {
+            if (!selectedQuestion.value || !selectedQuestion.value.rubric_script) {
+                ElMessage.warning('没有可复制的评分脚本');
+                return;
+            }
+            navigator.clipboard.writeText(selectedQuestion.value.rubric_script).then(() => {
+                ElMessage.success('已复制到剪贴板');
+            }).catch(() => {
+                ElMessage.error('复制失败，请手动选择复制');
             });
         }
 
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+        async function saveAsTestCase() {
+            if (!selectedQuestionId.value || !gradeResult.value) {
+                ElMessage.warning('没有可保存的评分结果');
+                return;
+            }
+            try {
+                const { data } = await axios.post(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases', {
+                    answer_text: studentAnswer.value.trim(),
+                    expected_score: gradeResult.value.score,
+                    description: '来自评分页面 ' + new Date().toLocaleString('zh-CN'),
+                    case_type: 'real'
+                });
+                if (data.success) {
+                    ElMessage.success('已保存为测试用例（期望分 ' + gradeResult.value.score + '）');
+                } else {
+                    ElMessage.error(data.error || '保存失败');
+                }
+            } catch (e) {
+                ElMessage.error('保存失败：' + e.message);
+            }
         }
 
-        function renderResult(data) {
-            var container = document.getElementById('result-container');
+        // ========== AI 生成答案 ==========
+        const genAnswerLoading = ref(false);
 
-            // 置信度颜色
-            var confColor = 'var(--accent-success)';
-            if (data.confidence < 0.6) confColor = 'var(--accent-danger)';
-            else if (data.confidence < 0.8) confColor = 'var(--accent-warning)';
-
-            // 满分
-            var maxScore = 10;
-            if (window._selectedQuestionId) {
-                var txt = document.getElementById('info-max-score').textContent;
-                maxScore = parseFloat(txt) || 10;
-            } else {
-                maxScore = parseFloat(document.getElementById('max-score').value) || 10;
+        async function generateAnswer() {
+            if (!selectedQuestionId.value) {
+                ElMessage.warning('请先选择题目');
+                return;
             }
-
-            var html = '<div class="result-card">';
-            // score=null 表示评分系统异常（非0分），必须明确提示人工处理，不能显示为"0/满分 分"
-            if (data.score === null || data.score === undefined) {
-                html += '<div class="result-score" style="color: var(--accent-danger);">评分异常 <span style="font-size:24px;">需人工处理</span></div>';
-            } else {
-                html += '<div class="result-score">' + data.score + ' <span style="font-size:24px;">/ ' + maxScore + ' 分</span></div>';
+            genAnswerLoading.value = true;
+            try {
+                const { data } = await axios.post(API_BASE + '/api/generate-answer', {
+                    question_id: selectedQuestionId.value
+                });
+                if (data.success) {
+                    studentAnswer.value = data.data.answer;
+                    gradeResult.value = null;
+                    ElMessage.success('已生成「' + data.data.level + '」水平的模拟答案（目标约 ' + data.data.target_score + ' 分）');
+                } else {
+                    ElMessage.error(data.error || '生成失败');
+                }
+            } catch (e) {
+                ElMessage.error('生成失败：' + e.message);
             }
+            genAnswerLoading.value = false;
+        }
 
-            // 置信度
-            html += '<div style="margin-top:16px;font-size:20px;color:' + confColor + ';">🎯 置信度：' + (data.confidence * 100).toFixed(1) + '%</div>';
+        // ========== 测试集 ==========
+        const testCases = ref([]);
+        const selectedCaseIds = ref([]);
+        const testSetRunning = ref(false);
+        const testSetProgress = ref(0);
+        const testSetText = ref('');
 
-            // 预警
-            if (data.warning) {
-                html += '<div class="warning-box mt-4 text-left">' + escapeHtml(data.warning) + '</div>';
+        async function loadTestCases() {
+            if (!selectedQuestionId.value) { testCases.value = []; return; }
+            try {
+                const { data } = await axios.get(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases');
+                if (data.success) testCases.value = data.data || [];
+            } catch (e) {
+                console.error('加载测试用例失败', e);
             }
-            if (data.needs_review && !data.warning) {
-                html += '<div class="warning-box mt-4 text-left">⚠️ 建议人工复核</div>';
+        }
+
+        function onCaseSelectionChange(rows) {
+            selectedCaseIds.value = rows.map(r => r.id);
+        }
+
+        function gradeTestCase(tc) {
+            studentAnswer.value = tc.answer_text;
+            gradeResult.value = null;
+            currentPage.value = 'single';
+            ElMessage.info('已载入测试用例答案：' + (tc.description || '期望分 ' + tc.expected_score));
+        }
+
+        async function runSingleCase(caseId) {
+            if (testSetRunning.value || !selectedQuestionId.value) return;
+            const tc = testCases.value.find(c => c.id === caseId);
+            if (!tc) return;
+            testSetRunning.value = true;
+            try {
+                const { data: result } = await axios.post(API_BASE + '/api/grade', {
+                    question_id: selectedQuestionId.value,
+                    answer: tc.answer_text,
+                    provider: currentProvider.value
+                });
+                if (result.success && result.data && result.data.score !== null) {
+                    const actualScore = result.data.score;
+                    const error = Math.abs(actualScore - tc.expected_score);
+                    await axios.put(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases/' + caseId, {
+                        last_actual_score: actualScore, last_error: error, last_run_at: new Date().toISOString()
+                    });
+                    ElMessage.success('测试用例运行完成：' + actualScore + ' 分');
+                } else {
+                    ElMessage.error('评分失败：' + (result.data?.comment || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('运行失败：' + e.message);
             }
+            testSetRunning.value = false;
+            loadTestCases();
+        }
 
-            // 评语
-            if (data.comment) {
-                html += '<div class="text-left mt-4" style="background:var(--bg-tertiary);border-radius:8px;padding:16px;">';
-                html += '<strong style="color:var(--accent-secondary);">📝 评语</strong>';
-                html += '<p class="mt-2" style="color:#d1d5db;line-height:1.6;white-space:pre-wrap;">' + escapeHtml(data.comment) + '</p></div>';
+        async function runSelectedCases() {
+            const ids = [...selectedCaseIds.value];
+            if (ids.length === 0) return;
+            testSetRunning.value = true;
+            for (let i = 0; i < ids.length; i++) {
+                testSetText.value = '运行中... (' + (i + 1) + '/' + ids.length + ')';
+                testSetProgress.value = Math.round((i + 1) / ids.length * 100);
+                await runSingleCase(ids[i]);
             }
+            testSetText.value = '全部完成';
+            testSetProgress.value = 100;
+            setTimeout(() => { testSetRunning.value = false; }, 2000);
+        }
 
-            // 原始详情（可展开）
-            if (data.details) {
-                html += '<details class="mt-4 text-left"><summary style="cursor:pointer;color:var(--text-secondary);font-size:13px;">查看原始评分详情</summary>';
-                html += '<pre style="background:var(--bg-tertiary);padding:12px;border-radius:8px;font-size:12px;color:var(--text-secondary);max-height:200px;overflow-y:auto;margin-top:8px;white-space:pre-wrap;">';
-                html += escapeHtml(JSON.stringify(data.details, null, 2));
-                html += '</pre></details>';
+        async function runAllCases() {
+            if (testCases.value.length === 0) return;
+            testSetRunning.value = true;
+            for (let i = 0; i < testCases.value.length; i++) {
+                testSetText.value = '运行中... (' + (i + 1) + '/' + testCases.value.length + ')';
+                testSetProgress.value = Math.round((i + 1) / testCases.value.length * 100);
+                await runSingleCase(testCases.value[i].id);
             }
+            testSetText.value = '全部完成';
+            testSetProgress.value = 100;
+            setTimeout(() => { testSetRunning.value = false; }, 2000);
+        }
 
-            // 底部信息
-            html += '<div class="flex justify-between text-sm text-gray-500 mt-4">';
-            html += '<span>引擎：' + (data.model_used || 'qwen-agent') + '</span>';
-            if (data.record_id) html += '<span>记录ID：' + data.record_id + '</span>';
-            html += '</div>';
-
-            // 保存为测试用例按钮
-            if (window._selectedQuestionId) {
-                html += '<div style="margin-top:16px;text-align:center;">';
-                html += '<button class="btn" style="background:var(--accent-success);color:white;padding:8px 20px;font-size:13px;" onclick="saveAsTestCase()">💾 保存为测试用例</button>';
-                html += '</div>';
+        async function deleteTestCase(caseId) {
+            if (!selectedQuestionId.value) return;
+            try {
+                await ElMessageBox.confirm('确定删除此测试用例？', '确认', { type: 'warning' });
+                await axios.delete(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases/' + caseId);
+                ElMessage.success('已删除');
+                loadTestCases();
+            } catch (e) {
+                // 用户取消
             }
+        }
 
-            html += '</div>';
-            container.innerHTML = html;
+        // ========== 自动生成 ==========
+        const showGenDialog = ref(false);
+        const genCount = ref(7);
+        const genDist = ref('gradient');
+        const genStyles = ref(['标准规范', '口语化', '要点遗漏']);
+        const genExtra = ref('');
+        const genRunning = ref(false);
+
+        async function autoGenerateTestCases() {
+            if (!selectedQuestionId.value) return;
+            if (genStyles.value.length === 0) {
+                ElMessage.warning('请至少选择一种作答风格');
+                return;
+            }
+            genRunning.value = true;
+            showGenDialog.value = false;
+            try {
+                const { data } = await axios.post(API_BASE + '/api/questions/' + selectedQuestionId.value + '/generate-test-cases', {
+                    count: genCount.value,
+                    distribution: genDist.value,
+                    styles: genStyles.value,
+                    extra: genExtra.value.trim()
+                });
+                if (data.success) {
+                    ElMessage.success('已生成 ' + data.data.count + ' 个测试用例');
+                    loadTestCases();
+                } else {
+                    ElMessage.error('生成失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('生成失败：' + e.message);
+            }
+            genRunning.value = false;
         }
 
         // ========== 历史记录 ==========
+        const history = ref([]);
 
         function addToHistory(requestBody, data) {
-            var questionText = requestBody.question || document.getElementById('info-content').textContent || '(题库题目 #' + requestBody.question_id + ')';
-            history.unshift({
+            let questionText = requestBody.question || '';
+            if (!questionText && selectedQuestion.value) questionText = selectedQuestion.value.content || '';
+            if (!questionText) questionText = '(题库题目 #' + requestBody.question_id + ')';
+            history.value.unshift({
                 question: questionText.substring(0, 80),
                 answer: (requestBody.answer || '').substring(0, 50) + '...',
                 score: data.score,
-                confidence: data.confidence,
+                confidence: data.confidence || 0,
                 time: new Date().toLocaleString()
             });
-            if (history.length > 50) history.pop();
-            localStorage.setItem('grading-history', JSON.stringify(history));
+            if (history.value.length > 50) history.value.pop();
+            localStorage.setItem('grading-history', JSON.stringify(history.value));
         }
 
         async function loadHistoryFromApi() {
             try {
-                var resp = await fetch(API_BASE + '/api/history?limit=50');
-                var data = await resp.json();
+                const { data } = await axios.get(API_BASE + '/api/history?limit=50');
                 if (data.success && data.data) {
-                    history = data.data.map(function(r) {
-                        return {
-                            question: (r.student_answer || '').substring(0, 80),
-                            answer: (r.student_answer || '').substring(0, 50) + '...',
-                            score: r.score,
-                            confidence: r.confidence || 0,
-                            time: r.graded_at || ''
-                        };
-                    });
+                    history.value = data.data.map(r => ({
+                        question: (r.student_answer || '').substring(0, 80),
+                        score: r.score,
+                        confidence: r.confidence || 0,
+                        time: r.graded_at || ''
+                    }));
                 }
             } catch (e) {
-                console.error('加载历史记录失败，使用本地缓存', e);
-            }
-            renderHistory();
-        }
-
-        function renderHistory() {
-            var container = document.getElementById('history-list');
-            if (history.length === 0) { container.innerHTML = '<div class="empty-state"><span class="empty-icon">📜</span><p>暂无评分记录</p></div>'; return; }
-            container.innerHTML = history.map(function(item) {
-                return '<div class="history-item"><div class="history-header"><span class="history-score">' + item.score + ' 分</span><span class="text-sm text-gray-500">' + item.time + '</span></div><div class="text-sm text-gray-400 mt-2">' + escapeHtml(item.question) + '</div><div class="text-xs text-gray-600 mt-1">置信度：' + (item.confidence * 100).toFixed(1) + '%</div></div>';
-            }).join('');
-        }
-
-        function clearHistory() { history = []; localStorage.removeItem('grading-history'); renderHistory(); showToast('历史已清空', 'success'); }
-
-        // ========== 保存为测试用例 ==========
-
-        async function saveAsTestCase() {
-            var qid = window._selectedQuestionId;
-            var lastResult = window._lastGradeResult;
-            if (!qid || !lastResult) { showToast('没有可保存的评分结果', 'error'); return; }
-            var answer = document.getElementById('answer').value.trim();
-            if (!answer) { showToast('学生答案为空', 'error'); return; }
-            try {
-                var resp = await fetch(API_BASE + '/api/questions/' + qid + '/test-cases', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        answer_text: answer,
-                        expected_score: lastResult.score,
-                        description: '来自评分页面 ' + new Date().toLocaleString('zh-CN'),
-                        case_type: 'real'
-                    })
-                });
-                var data = await resp.json();
-                if (data.success) {
-                    showToast('已保存为测试用例（期望分 ' + lastResult.score + '）', 'success');
-                } else {
-                    showToast(data.error || '保存失败', 'error');
-                }
-            } catch (e) {
-                showToast('保存失败：' + e.message, 'error');
+                history.value = JSON.parse(localStorage.getItem('grading-history') || '[]');
             }
         }
 
-        // ========== 评分配置 ==========
-
-        function saveConfig() {
-            var config = {sampleCount: document.getElementById('config-sample-count').value, strategy: document.getElementById('config-strategy').value, lowThreshold: document.getElementById('config-low-threshold').value, mediumThreshold: document.getElementById('config-medium-threshold').value, highThreshold: document.getElementById('config-high-threshold').value};
-            localStorage.setItem('grading-config', JSON.stringify(config));
-            showToast('配置已保存', 'success');
+        function clearHistory() {
+            history.value = [];
+            localStorage.removeItem('grading-history');
+            ElMessage.success('历史已清空');
         }
 
-        // ========== 侧边栏收起/展开 ==========
-
-        function toggleSidebar() {
-            var sidebar = document.querySelector('.sidebar');
-            var main = document.getElementById('main-content');
-            var toggle = document.getElementById('sidebar-toggle');
-            sidebar.classList.toggle('collapsed');
-            main.classList.toggle('expanded');
-            toggle.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
-            toggle.style.left = sidebar.classList.contains('collapsed') ? '12px' : '268px';
-        }
-
-        // ========== 通用 ==========
-
-        function showToast(message, type) {
-            var container = document.getElementById('toast-container');
-            var toast = document.createElement('div');
-            toast.className = 'toast ' + type;
-            toast.innerHTML = '<span>' + (type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ') + '</span><span>' + message + '</span>';
-            container.appendChild(toast);
-            setTimeout(function() { toast.remove(); }, 3000);
+        // ========== 页面切换 ==========
+        function handleMenuSelect(page) {
+            currentPage.value = page;
+            if (page === 'testset') loadTestCases();
+            if (page === 'history') loadHistoryFromApi();
         }
 
         // ========== 初始化 ==========
-
-        async function loadQuestionFromUrl() {
-            var urlParams = new URLSearchParams(window.location.search);
-            var questionId = urlParams.get('question_id');
-            if (!questionId) return;
-
-            // 等题库列表加载完后再选中
+        onMounted(async () => {
+            await loadProviders();
             await loadQuestionList();
-            var select = document.getElementById('question-select');
-            select.value = questionId;
-            await onQuestionSelect(questionId);
-            switchPage('single');
-        }
+            await loadHistoryFromApi();
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadHistoryFromApi();
-            document.getElementById('model-count').textContent = '评分引擎：Qwen-Agent';
-            loadQuestionList();
-            loadQuestionFromUrl();
+            // 从 URL 参数加载题目
+            const params = new URLSearchParams(window.location.search);
+            const qid = params.get('question_id');
+            if (qid) {
+                selectedQuestionId.value = parseInt(qid);
+                await onQuestionSelect(parseInt(qid));
+            }
         });
-    </script>
+
+        return {
+            currentPage, inputCollapsed, sidebarCollapsed,
+            providers, currentProvider, currentModelLabel, onProviderChange,
+            questionList, selectedQuestionId, selectedQuestion, loadingQuestions,
+            loadQuestionList, onQuestionSelect,
+            manualQuestion, manualRubric, manualMaxScore,
+            studentAnswer, currentMaxScore,
+            grading, gradeResult, gradeAnswer, scoreColor,
+            genAnswerLoading, generateAnswer,
+            copyRubricScript, saveAsTestCase,
+            testCases, selectedCaseIds, testSetRunning, testSetProgress, testSetText,
+            loadTestCases, onCaseSelectionChange, gradeTestCase, runSingleCase, runSelectedCases, runAllCases, deleteTestCase,
+            showGenDialog, genCount, genDist, genStyles, genExtra, genRunning, autoGenerateTestCases,
+            history, loadHistoryFromApi, clearHistory,
+            handleMenuSelect
+        };
+    }
+});
+
+app.use(ElementPlus);
+app.mount('#app');
+</script>
 </body>
 </html>

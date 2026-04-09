@@ -91,9 +91,25 @@ def _get_config_with_meta(provider: str) -> dict:
 
     # 提取 extra_config 中的额外字段
     extra_config = {}
+    db_cfg = get_model_config(provider)
+    if db_cfg:
+        try:
+            extra_config = json.loads(db_cfg.get('extra_config', '{}'))
+        except (json.JSONDecodeError, TypeError):
+            extra_config = {}
     for field in meta.get('extra_fields', []):
         key = field['key']
-        extra_config[key] = cfg.get(key, '')
+        if key not in extra_config:
+            extra_config[key] = cfg.get(key, '')
+
+    # available_models 标记每个模型的启用状态
+    enabled_models = set(extra_config.get('enabled_models', []))
+    available_models = []
+    for m in meta.get('available_models', []):
+        item = dict(m)
+        # 如果没有单独设置过 enabled_models，默认全部启用
+        item['model_enabled'] = m['id'] in enabled_models if enabled_models else True
+        available_models.append(item)
 
     return {
         'provider': provider,
@@ -102,7 +118,7 @@ def _get_config_with_meta(provider: str) -> dict:
         'base_url': cfg.get('base_url', ''),
         'model': cfg.get('model', ''),
         'enabled': cfg.get('enabled', False),
-        'available_models': meta.get('available_models', []),
+        'available_models': available_models,
         'extra_fields': meta.get('extra_fields', []),
         'extra_config': extra_config,
     }
@@ -161,6 +177,57 @@ def toggle_model(provider):
     return jsonify({'success': True, 'enabled': enabled})
 
 
+@config_bp.route('/models/toggle-all', methods=['POST'])
+def toggle_all_models():
+    """批量启用/禁用所有 provider"""
+    data = request.get_json()
+    enabled = data.get('enabled', True)
+
+    for provider in PROVIDER_META:
+        current = _get_config_with_meta(provider)
+        upsert_model_config(
+            provider, current['api_key'], current['base_url'],
+            current['model'], enabled, json.dumps(current['extra_config'])
+        )
+    return jsonify({'success': True, 'enabled': enabled})
+
+
+@config_bp.route('/models/<provider>/toggle-model', methods=['POST'])
+def toggle_single_model(provider):
+    """启用/禁用 provider 下的单个模型"""
+    if provider not in PROVIDER_META:
+        return jsonify({'error': f'未知的 provider: {provider}'}), 400
+
+    data = request.get_json()
+    model_id = data.get('model_id', '')
+    model_enabled = data.get('enabled', True)
+
+    if not model_id:
+        return jsonify({'error': '缺少 model_id'}), 400
+
+    current = _get_config_with_meta(provider)
+    extra = dict(current['extra_config'])
+    enabled_models = set(extra.get('enabled_models', []))
+
+    # 未设置过 enabled_models 时，先初始化为全部启用
+    if not enabled_models:
+        meta = PROVIDER_META.get(provider, {})
+        enabled_models = {m['id'] for m in meta.get('available_models', [])}
+
+    if model_enabled:
+        enabled_models.add(model_id)
+    else:
+        enabled_models.discard(model_id)
+
+    extra['enabled_models'] = sorted(enabled_models)
+
+    upsert_model_config(
+        provider, current['api_key'], current['base_url'],
+        current['model'], current['enabled'], json.dumps(extra)
+    )
+    return jsonify({'success': True, 'model_id': model_id, 'enabled': model_enabled})
+
+
 @config_bp.route('/models/<provider>/test', methods=['POST'])
 def test_model(provider):
     """测试单个 provider 的连通性"""
@@ -201,7 +268,7 @@ def test_model(provider):
 
 @config_bp.route('/models/test-all', methods=['POST'])
 def test_all_models():
-    """测试所有已启用的 provider"""
+    """测试所有已启用 provider 的所有可用模型"""
     results = []
     for provider in PROVIDER_META:
         config = _get_config_with_meta(provider)
@@ -209,6 +276,7 @@ def test_all_models():
             results.append({
                 'provider': provider,
                 'name': config['name'],
+                'model': '',
                 'success': None,
                 'error': '未启用，跳过',
                 'latency_ms': 0,
@@ -219,37 +287,53 @@ def test_all_models():
             results.append({
                 'provider': provider,
                 'name': config['name'],
+                'model': '',
                 'success': False,
                 'error': '未配置 API Key',
                 'latency_ms': 0,
             })
             continue
 
-        try:
-            client = OpenAI(api_key=config['api_key'], base_url=config['base_url'])
-            start = time.time()
-            response = client.chat.completions.create(
-                model=config['model'],
-                messages=[{'role': 'user', 'content': '你好'}],
-                max_tokens=10,
-                stream=False,
-            )
-            latency = int((time.time() - start) * 1000)
-            reply = response.choices[0].message.content
-            results.append({
-                'provider': provider,
-                'name': config['name'],
-                'success': True,
-                'latency_ms': latency,
-                'reply': reply[:50] if reply else '',
-            })
-        except Exception as e:
-            results.append({
-                'provider': provider,
-                'name': config['name'],
-                'success': False,
-                'error': str(e)[:200],
-                'latency_ms': 0,
-            })
+        available_models = config.get('available_models', [])
+        # 只测试已启用的模型；没有 available_models 的 provider 测试默认模型
+        if available_models:
+            models_to_test = [m for m in available_models if m.get('model_enabled', True)]
+        else:
+            models_to_test = [{'id': config['model'], 'name': config['model']}]
+
+        client = OpenAI(api_key=config['api_key'], base_url=config['base_url'])
+
+        for m in models_to_test:
+            model_id = m['id']
+            model_name = m.get('name', model_id)
+            try:
+                start = time.time()
+                response = client.chat.completions.create(
+                    model=model_id,
+                    messages=[{'role': 'user', 'content': '你好'}],
+                    max_tokens=10,
+                    stream=False,
+                )
+                latency = int((time.time() - start) * 1000)
+                reply = response.choices[0].message.content
+                results.append({
+                    'provider': provider,
+                    'name': config['name'],
+                    'model': model_id,
+                    'model_name': model_name,
+                    'success': True,
+                    'latency_ms': latency,
+                    'reply': reply[:50] if reply else '',
+                })
+            except Exception as e:
+                results.append({
+                    'provider': provider,
+                    'name': config['name'],
+                    'model': model_id,
+                    'model_name': model_name,
+                    'success': False,
+                    'error': str(e)[:200],
+                    'latency_ms': 0,
+                })
 
     return jsonify(results)

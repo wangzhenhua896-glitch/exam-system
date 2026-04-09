@@ -279,14 +279,40 @@
                 <!-- 模型配置 -->
                 <div v-if="currentPage === 'model-config'">
                     <div class="page-card">
-                        <div class="page-header"><div class="page-title">模型配置</div><div class="page-desc">配置大模型 API 和评分参数</div></div>
+                        <div class="page-header"><div class="page-title">模型配置</div><div class="page-desc">配置评分使用的大模型（当前使用单模型评分，多模型差异分析功能待评分脚本调优后启用）</div></div>
                         <el-form label-position="top">
-                            <el-form-item label="API Key"><el-input v-model="modelConfig.apiKey" type="password" show-password placeholder="请输入 API Key..."></el-input></el-form-item>
-                            <el-form-item label="Temperature"><el-radio-group v-model="modelConfig.temperature"><el-radio-button label="0">0 (确定性)</el-radio-button><el-radio-button label="0.1">0.1</el-radio-button><el-radio-button label="0.3">0.3 (推荐)</el-radio-button></el-radio-group></el-form-item>
-                            <el-form-item label="模型选择"><el-select v-model="modelConfig.model" style="width: 100%;"><el-option label="通义千问 VL" value="qwen-vl"></el-option><el-option label="通义千问 Max" value="qwen-max"></el-option><el-option label="智谱 GLM-4V" value="glm-4v"></el-option></el-select></el-form-item>
-                            <el-form-item label="JSON 输出模式"><el-switch v-model="modelConfig.jsonMode" active-text="启用"></el-switch></el-form-item>
+                            <el-form-item label="默认评分模型">
+                                <el-select v-model="modelConfig.model" style="width: 100%;" placeholder="请选择评分模型">
+                                    <el-option-group v-for="group in modelGroups" :key="group.provider" :label="group.label">
+                                        <el-option v-for="m in group.models" :key="m.model_name" :label="m.display_name || m.model_name" :value="m.model_name">
+                                            <span>{{ m.display_name || m.model_name }}</span>
+                                            <span style="float:right;color:#999;font-size:12px;">{{ m.model_name }}</span>
+                                        </el-option>
+                                    </el-option-group>
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="Temperature">
+                                <el-radio-group v-model="modelConfig.temperature">
+                                    <el-radio-button label="0">0 (确定性)</el-radio-button>
+                                    <el-radio-button label="0.1">0.1</el-radio-button>
+                                    <el-radio-button label="0.3">0.3 (推荐)</el-radio-button>
+                                </el-radio-group>
+                            </el-form-item>
                             <el-form-item><el-button type="primary" @click="saveModelConfig">保存配置</el-button></el-form-item>
                         </el-form>
+                        <el-divider>已注册模型（{{ availableModels.length }} 个）</el-divider>
+                        <el-table :data="availableModels" stripe size="small" style="width: 100%;">
+                            <el-table-column prop="display_name" label="模型名称" width="200">
+                                <template #default="{ row }">{{ row.display_name || row.model_name }}</template>
+                            </el-table-column>
+                            <el-table-column prop="model_name" label="Model ID" />
+                            <el-table-column prop="provider" label="服务商" width="100" />
+                            <el-table-column label="状态" width="80">
+                                <template #default="{ row }">
+                                    <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
                     </div>
                 </div>
 
@@ -325,7 +351,7 @@
 </div>
 
 <script>
-const { createApp, ref, reactive } = Vue;
+const { createApp, ref, reactive, computed } = Vue;
 const { ElMessage } = ElementPlus;
 
 const app = createApp({
@@ -351,7 +377,18 @@ const app = createApp({
         const tuningForm = reactive({ maxIterations: 10, targetAccuracy: 0.8, targetKappa: 0.85 });
         const batchForm = reactive({ count: 100, sampleCount: 3 });
         const consistencyForm = reactive({ sampleCount: 100, repeatCount: 3 });
-        const modelConfig = reactive({ apiKey: '', temperature: '0.3', model: 'qwen-max', jsonMode: true });
+        const modelConfig = reactive({ apiKey: '', temperature: '0.3', model: 'deepseek-v3-250324', jsonMode: true });
+        const availableModels = ref([]);
+        const modelGroups = computed(() => {
+            const providerLabels = { qwen: '通义千问', glm: '智谱 GLM', minimax: 'MiniMax', ernie: '百度文心', spark: '讯飞星火', doubao: '火山引擎 ARK' };
+            const groups = {};
+            availableModels.value.filter(m => m.enabled).forEach(m => {
+                const p = m.provider || 'other';
+                if (!groups[p]) groups[p] = { provider: p, label: providerLabels[p] || p, models: [] };
+                groups[p].models.push(m);
+            });
+            return Object.values(groups);
+        });
         const systemConfig = reactive({ sampleCount: 3, temperature: 0.3, confidenceThreshold: 0.7 });
         const goldenStandards = ref([
             { subject: '人工智能', question: '简述 AI 发展历程', standard_answer: 'AI 起源于 1956 年...', score: 10 },
@@ -423,7 +460,16 @@ const app = createApp({
         const saveAndGrade = () => { saveQuestion(); currentPage.value = 'smart-grading'; };
         const loadSampleBank = () => ElMessage.success('示例题库已加载（5 科目 × 10 题）');
         const addGoldenStandard = () => ElMessage.info('添加标准答案功能开发中');
-        const saveModelConfig = () => ElMessage.success('模型配置已保存');
+        const saveModelConfig = async () => {
+            try {
+                await axios.put('/api/config/models/doubao', { model: modelConfig.model });
+                ElMessage.success('模型配置已保存');
+            } catch (e) { ElMessage.error('保存失败：' + (e.response?.data?.error || e.message)); }
+        };
+        const loadModels = async () => {
+            try { const r = await axios.get('/api/models/available'); if (r.data.success) availableModels.value = r.data.models; } catch (e) { console.warn('加载模型列表失败', e); }
+        };
+        loadModels();
         const saveSystemConfig = () => ElMessage.success('系统配置已保存');
 
         return {
@@ -432,7 +478,7 @@ const app = createApp({
             tuningForm, tuningLoading, tuningResult, tuningProgress,
             batchForm, batchLoading, batchResult, batchProgress,
             consistencyForm, consistencyLoading, consistencyResult, consistencyProgress,
-            modelConfig, systemConfig, goldenStandards,
+            modelConfig, systemConfig, goldenStandards, availableModels, modelGroups,
             handleMenuSelect, startGrading: gradeSingle, runValidation, runTuning, runBatchTest, runConsistencyTest,
             generateRubric, saveQuestion, saveAndGrade, loadSampleBank, addGoldenStandard, saveModelConfig, saveSystemConfig
         };

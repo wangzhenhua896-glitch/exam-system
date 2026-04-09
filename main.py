@@ -20,9 +20,9 @@ def main():
     app = create_app()
     
     logger.info("🚀 AI 智能评分系统启动")
-    logger.info("📍 地址：http://localhost:5005")
+    logger.info("📍 地址：http://localhost:5001")
 
-    app.run(host="0.0.0.0", port=5005, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
 
 
 if __name__ == "__main__":
