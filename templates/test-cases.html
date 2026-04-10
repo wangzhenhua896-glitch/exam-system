@@ -188,6 +188,9 @@
                                     <el-tag :type="detailQuestion.has_rubric_script ? 'success' : 'info'" size="small">
                                         {{ detailQuestion.has_rubric_script ? '已生成' : '未生成' }}
                                     </el-tag>
+                                    <el-tag v-if="currentScriptVersion" type="primary" size="small" style="margin-left: 4px;">
+                                        v{{ currentScriptVersion }}
+                                    </el-tag>
                                 </div>
                             </div>
                         </div>
@@ -530,6 +533,7 @@ const app = createApp({
         const verifyProgress = ref(0);
         const verifyResults = ref([]);
         const verifySummary = reactive({ accuracy: 0, meanError: 0, maxError: 0, passed: 0, total: 0 });
+        const currentScriptVersion = ref(null);
 
         const filteredTestCases = computed(() => {
             if (!caseSearchKeyword.value) return testCaseList.value;
@@ -551,6 +555,15 @@ const app = createApp({
             verifyResults.value = [];
             selectedCaseRows.value = [];
             caseSearchKeyword.value = '';
+            // 加载当前脚本版本号
+            currentScriptVersion.value = null;
+            if (row.has_rubric_script) {
+                axios.get('/api/questions/' + row.question_id + '/script-history').then(res => {
+                    if (res.data.success && res.data.data.length > 0) {
+                        currentScriptVersion.value = res.data.data[0].version;
+                    }
+                }).catch(() => {});
+            }
         }
 
         function backToOverview() {
@@ -717,6 +730,7 @@ const app = createApp({
             dialogVisible, testCaseForm, editingTestCaseId,
             openAddDialog, saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm,
             tolerance, verifying, verifyProgress, verifyResults, verifySummary,
+            currentScriptVersion,
             openDetail, backToOverview, loadTestCases,
             runVerification, verifyFromOverview,
             // icons

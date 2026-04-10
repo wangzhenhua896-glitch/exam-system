@@ -81,10 +81,16 @@ def init_database():
             details TEXT,
             model_used TEXT,
             confidence REAL,
+            grading_flags TEXT DEFAULT NULL,
             graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (question_id) REFERENCES questions(id)
         )
     ''')
+    # 兼容已有数据库
+    try:
+        cursor.execute('ALTER TABLE grading_records ADD COLUMN grading_flags TEXT DEFAULT NULL')
+    except Exception:
+        pass
 
     # 评分规则表（题库）
     cursor.execute('''
@@ -142,6 +148,26 @@ def init_database():
         )
     ''')
 
+    # 评分脚本版本历史表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rubric_script_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL,
+            version INTEGER NOT NULL,
+            script_text TEXT NOT NULL,
+            avg_error REAL DEFAULT NULL,
+            passed_count INTEGER DEFAULT NULL,
+            total_cases INTEGER DEFAULT NULL,
+            note TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_rsh_question_version
+        ON rubric_script_history(question_id, version)
+    ''')
+
     # 模型配置表（管理员通过 Web UI 配置，覆盖 .env 默认值）
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS model_configs (
@@ -152,6 +178,31 @@ def init_database():
             enabled INTEGER DEFAULT 0,
             extra_config TEXT DEFAULT '{}',
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 已有数据迁移：为已有评分脚本回填版本 1（幂等）
+    try:
+        cursor.execute('''
+            INSERT INTO rubric_script_history (question_id, version, script_text, note)
+            SELECT id, 1, rubric_script, '迁移：已有脚本（初始版本）'
+            FROM questions
+            WHERE rubric_script IS NOT NULL AND rubric_script != ''
+            AND id NOT IN (SELECT question_id FROM rubric_script_history)
+        ''')
+    except Exception:
+        pass
+
+    # Bug 日志表（内部记录评分异常）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bug_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bug_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            details TEXT DEFAULT '',
+            question_id INTEGER,
+            model_used TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -359,6 +410,83 @@ def delete_test_cases_by_question(question_id: int):
     conn.close()
 
 
+# 评分脚本版本历史操作
+def save_script_version(question_id: int, script_text: str, note: str = '',
+                         avg_error: float = None, passed_count: int = None,
+                         total_cases: int = None) -> int:
+    """保存一个脚本版本，version 自动递增"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT COALESCE(MAX(version), 0) + 1 FROM rubric_script_history WHERE question_id = ?',
+        (question_id,)
+    )
+    next_ver = cursor.fetchone()[0]
+    cursor.execute(
+        '''INSERT INTO rubric_script_history
+           (question_id, version, script_text, note, avg_error, passed_count, total_cases)
+           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        (question_id, next_ver, script_text, note, avg_error, passed_count, total_cases)
+    )
+    conn.commit()
+    row_id = cursor.lastrowid
+    conn.close()
+    return row_id
+
+
+def get_script_history(question_id: int) -> List[Dict]:
+    """获取某题目的所有脚本版本，version DESC"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT * FROM rubric_script_history WHERE question_id = ? ORDER BY version DESC',
+        (question_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_script_version(question_id: int, version: int) -> Optional[Dict]:
+    """获取单个脚本版本"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT * FROM rubric_script_history WHERE question_id = ? AND version = ?',
+        (question_id, version)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_script_history(question_id: int):
+    """删除某题目的所有脚本版本"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM rubric_script_history WHERE question_id = ?', (question_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_script_version_result(question_id: int, version: int,
+                                  avg_error: float, passed_count: int,
+                                  total_cases: int) -> bool:
+    """更新某版本的验证结果"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        '''UPDATE rubric_script_history
+           SET avg_error = ?, passed_count = ?, total_cases = ?
+           WHERE question_id = ? AND version = ?''',
+        (avg_error, passed_count, total_cases, question_id, version)
+    )
+    conn.commit()
+    changes = cursor.rowcount
+    conn.close()
+    return changes > 0
+
+
 # 题目操作
 def add_question(subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float = 10.0, quality_score: Optional[float] = None) -> int:
     """添加题目"""
@@ -398,13 +526,50 @@ def get_question(question_id: int) -> Optional[Dict]:
 
 
 def update_question(question_id: int, subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float, quality_score: Optional[float] = None) -> bool:
-    """更新题目"""
+    """更新题目，自动快照评分脚本版本"""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # 自动快照：检查旧脚本
+    cursor.execute('SELECT rubric_script FROM questions WHERE id = ?', (question_id,))
+    old_row = cursor.fetchone()
+    is_first_script = False
+    if old_row:
+        old_script = old_row['rubric_script']
+        if old_script and old_script.strip() and old_script != rubric_script:
+            # 旧脚本非空且有变化 → 保存旧脚本为版本
+            cursor.execute(
+                'SELECT COALESCE(MAX(version), 0) + 1 FROM rubric_script_history WHERE question_id = ?',
+                (question_id,)
+            )
+            next_ver = cursor.fetchone()[0]
+            cursor.execute(
+                '''INSERT INTO rubric_script_history
+                   (question_id, version, script_text, note) VALUES (?, ?, ?, ?)''',
+                (question_id, next_ver, old_script, '自动保存旧版本')
+            )
+        elif not old_script and rubric_script:
+            # 首次设置脚本
+            is_first_script = True
+
     cursor.execute(
         'UPDATE questions SET subject = ?, title = ?, content = ?, original_text = ?, standard_answer = ?, rubric_rules = ?, rubric_points = ?, rubric_script = ?, rubric = ?, max_score = ?, quality_score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_id)
     )
+
+    # 首次设置脚本 → 记录为版本 1
+    if is_first_script:
+        cursor.execute(
+            'SELECT COALESCE(MAX(version), 0) + 1 FROM rubric_script_history WHERE question_id = ?',
+            (question_id,)
+        )
+        next_ver = cursor.fetchone()[0]
+        cursor.execute(
+            '''INSERT INTO rubric_script_history
+               (question_id, version, script_text, note) VALUES (?, ?, ?, ?)''',
+            (question_id, next_ver, rubric_script, '初始版本')
+        )
+
     conn.commit()
     changes = cursor.rowcount
     conn.close()
@@ -415,8 +580,9 @@ def delete_question(question_id: int) -> bool:
     """删除题目"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # 级联删除测试用例
+    # 级联删除测试用例和脚本版本历史
     cursor.execute('DELETE FROM test_cases WHERE question_id = ?', (question_id,))
+    cursor.execute('DELETE FROM rubric_script_history WHERE question_id = ?', (question_id,))
     cursor.execute('DELETE FROM questions WHERE id = ?', (question_id,))
     conn.commit()
     changes = cursor.rowcount
@@ -426,13 +592,14 @@ def delete_question(question_id: int) -> bool:
 
 # 评分记录操作
 def add_grading_record(question_id: int, student_answer: str, score: float,
-                        details: str, model_used: str, confidence: float) -> int:
+                        details: str, model_used: str, confidence: float,
+                        grading_flags: str = None) -> int:
     """添加评分记录"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence) VALUES (?, ?, ?, ?, ?, ?)',
-        (question_id, student_answer, score, details, model_used, confidence)
+        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence, grading_flags) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (question_id, student_answer, score, details, model_used, confidence, grading_flags)
     )
     conn.commit()
     record_id = cursor.lastrowid
@@ -626,6 +793,18 @@ def get_all_effective_configs() -> dict:
     for provider in defaults:
         result[provider] = get_effective_config(provider)
     return result
+
+
+def log_bug(bug_type: str, description: str, details: str = '', question_id: int = None, model_used: str = ''):
+    """记录 bug 到 bug_log 表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO bug_log (bug_type, description, details, question_id, model_used) VALUES (?, ?, ?, ?, ?)',
+        (bug_type, description, details, question_id, model_used)
+    )
+    conn.commit()
+    conn.close()
 
 
 # 初始化数据库

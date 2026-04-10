@@ -32,3 +32,18 @@ temp_*/
 
 # Node (if any)
 node_modules/
+
+# Database
+data/*.db
+
+# Exports & results
+exports/
+results/
+
+# Vendor
+static/vendor/
+
+# Backup / temp files
+*.bak
+*.bak2
+*.docx

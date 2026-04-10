@@ -73,6 +73,7 @@
                     <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
                         <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
                         <el-menu-item index="model-config"><el-icon><Monitor /></el-icon><span>模型配置</span></el-menu-item>
+                        <el-menu-item index="bug-log"><el-icon><WarningFilled /></el-icon><span>Bug 清单</span></el-menu-item>
                     </el-menu>
                 </template>
 
@@ -448,6 +449,9 @@
                                             <el-icon><CircleCheck /></el-icon>验证脚本
                                             <span v-if="testCaseCount > 0">（{{testCaseCount}}个用例）</span>
                                         </el-button>
+                                        <el-button type="info" plain size="small" @click="openScriptHistory" :disabled="!editingQuestionId">
+                                            <el-icon><Clock /></el-icon>版本历史
+                                        </el-button>
                                     </div>
                                 </el-form-item>
                             </div>
@@ -456,7 +460,7 @@
                             <el-form-item v-if="viewMode !== 'view'">
                                 <el-button type="success" plain @click="evaluateQuality" :loading="evaluatingQuality">
                                     <el-icon><Search /></el-icon>
-                                    {{ qualityScore !== null ? '质量评估: ' + qualityScore + '分' : 'AI 质量评估' }}
+                                    {{ qualityScore !== null ? '科学性评估: ' + qualityScore + '分' : '试题科学性评估' }}
                                 </el-button>
                                 <el-button type="primary" @click="saveQuestion">{{ viewMode === 'edit' ? '更新题目' : '保存题目' }}</el-button>
                                 <el-button @click="resetForm">{{ viewMode === 'edit' ? '取消' : '重置' }}</el-button>
@@ -492,8 +496,11 @@
                                     <el-option label="未评估" value="unrated"></el-option>
                                 </el-select>
                             </el-col>
-                            <el-col :span="4" style="text-align: right; line-height: 32px; color: #909399; font-size: 13px;">
-                                共 {{ filteredQuestions.length }} 题
+                            <el-col :span="4" style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+                                <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
+                                    <el-icon><Download /></el-icon> 导出评分脚本
+                                </el-button>
+                                <span style="color: #909399; font-size: 13px;">共 {{ filteredQuestions.length }} 题</span>
                             </el-col>
                         </el-row>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
@@ -594,6 +601,64 @@
                                 <el-table-column prop="test_cases" label="测试用例" width="90"></el-table-column>
                             </el-table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Bug 清单 -->
+                <div v-if="currentPage === 'bug-log'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">Bug 清单</div>
+                            <div class="page-desc">评分引擎异常记录与统计</div>
+                        </div>
+
+                        <!-- 统计卡片 -->
+                        <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                            <div style="flex: 1; background: #fdf6ec; border: 1px solid #faecd8; border-radius: 8px; padding: 16px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #e6a23c;">{{ bugStats.score_mismatch || 0 }}</div>
+                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总分不一致</div>
+                            </div>
+                            <div style="flex: 1; background: #f0f9eb; border: 1px solid #e1f3d8; border-radius: 8px; padding: 16px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #67c23a;">{{ bugTotal }}</div>
+                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总计</div>
+                            </div>
+                        </div>
+
+                        <!-- 按模型统计 -->
+                        <div v-if="bugByModel.length > 0" style="margin-bottom: 20px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">按模型统计</div>
+                            <el-table :data="bugByModelTable" size="small" style="width: 100%;">
+                                <el-table-column prop="model_used" label="模型" min-width="200"></el-table-column>
+                                <el-table-column prop="score_mismatch" label="总分不一致" width="120"></el-table-column>
+                                <el-table-column prop="total" label="合计" width="80"></el-table-column>
+                            </el-table>
+                        </div>
+
+                        <!-- 筛选 -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+                            <el-select v-model="bugTypeFilter" size="small" style="width: 160px;" @change="loadBugs" clearable placeholder="全部类型">
+                                <el-option label="总分不一致" value="score_mismatch"></el-option>
+                            </el-select>
+                            <el-button size="small" @click="loadBugs"><el-icon><Refresh /></el-icon> 刷新</el-button>
+                            <span style="font-size: 12px; color: #909399; margin-left: auto;">共 {{ bugList.length }} 条记录</span>
+                        </div>
+
+                        <!-- Bug 列表 -->
+                        <el-table :data="bugList" size="small" style="width: 100%;" max-height="500">
+                            <el-table-column prop="created_at" label="时间" width="170"></el-table-column>
+                            <el-table-column prop="bug_type" label="类型" width="130">
+                                <template #default="scope">
+                                    <el-tag size="small" type="warning">{{ scope.row.bug_type === 'score_mismatch' ? '总分不一致' : scope.row.bug_type }}</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="model_used" label="模型" width="180"></el-table-column>
+                            <el-table-column prop="description" label="描述" min-width="300" show-overflow-tooltip></el-table-column>
+                            <el-table-column label="详情" width="60">
+                                <template #default="scope">
+                                    <el-button v-if="scope.row.details" size="small" link type="primary" @click="showBugDetail(scope.row)">查看</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
                     </div>
                 </div>
 
@@ -824,6 +889,47 @@
             </div>
         </el-dialog>
 
+        <!-- 评分脚本版本历史 Dialog -->
+        <el-dialog v-model="scriptHistoryVisible" title="评分脚本版本历史" width="800px" :close-on-click-modal="false">
+            <el-table :data="scriptHistory" v-loading="scriptHistoryLoading" stripe size="small" max-height="460">
+                <el-table-column prop="version" label="版本" width="60" align="center">
+                    <template #default="scope">
+                        <el-tag size="small" :type="scope.row.$index === 0 ? 'primary' : 'info'">v{{scope.row.version}}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column label="脚本预览" min-width="200">
+                    <template #default="scope">
+                        <div style="max-height:60px;overflow:hidden;font-size:12px;color:#606266;line-height:1.4;">
+                            {{ scope.row.script_text ? scope.row.script_text.substring(0, 120) : '' }}
+                            <span v-if="scope.row.script_text && scope.row.script_text.length > 120">...</span>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="验证结果" width="120" align="center">
+                    <template #default="scope">
+                        <template v-if="scope.row.avg_error !== null && scope.row.avg_error !== undefined">
+                            <div style="font-size:12px;">误差: <b>{{scope.row.avg_error}}</b></div>
+                            <div style="font-size:12px;">通过: {{scope.row.passed_count}}/{{scope.row.total_cases}}</div>
+                        </template>
+                        <el-tag v-else size="small" type="info">未验证</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="note" label="备注" width="140" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="created_at" label="保存时间" width="140" show-overflow-tooltip></el-table-column>
+                <el-table-column label="操作" width="130" fixed="right">
+                    <template #default="scope">
+                        <el-button size="small" type="primary" link @click="previewScriptVersion(scope.row)">预览</el-button>
+                        <el-button size="small" type="warning" link @click="rollbackScriptVersion(scope.row)" v-if="scope.row.$index > 0">回退</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </el-dialog>
+
+        <!-- 版本预览 Dialog -->
+        <el-dialog v-model="scriptPreviewVisible" title="评分脚本预览" width="700px">
+            <div style="background:#f5f7fa;padding:16px;border-radius:4px;white-space:pre-wrap;font-size:13px;line-height:1.6;max-height:400px;overflow-y:auto;">{{scriptPreviewText}}</div>
+        </el-dialog>
+
     </div>
 </div>
 
@@ -837,13 +943,7 @@ const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
 const DEFAULT_SUBJECTS = [
     { label: '思想政治', value: 'politics' },
     { label: '语文', value: 'chinese' },
-    { label: '英语', value: 'english' },
-    { label: '数学', value: 'math' },
-    { label: '历史', value: 'history' },
-    { label: '地理', value: 'geography' },
-    { label: '物理', value: 'physics' },
-    { label: '化学', value: 'chemistry' },
-    { label: '生物', value: 'biology' }
+    { label: '英语', value: 'english' }
 ];
 
 const app = createApp({
@@ -1091,12 +1191,51 @@ const app = createApp({
             if (index === 'overview') {
                 loadDashboard();
             }
+            if (index === 'bug-log') {
+                loadBugs();
+            }
             currentPage.value = index;
         };
 
         const generatingScript = ref(false);
         const evaluatingQuality = ref(false);
         const qualityScore = ref(null);
+
+        // Bug 清单
+        const bugList = ref([]);
+        const bugStats = ref({});
+        const bugByModel = ref([]);
+        const bugTypeFilter = ref('');
+        const bugTotal = computed(() => Object.values(bugStats.value).reduce((a, b) => a + b, 0));
+        const bugByModelTable = computed(() => {
+            const map = {};
+            for (const r of bugByModel.value) {
+                const key = r.model_used || '未知';
+                if (!map[key]) map[key] = { model_used: key, total: 0 };
+                map[key][r.bug_type] = r.count;
+                map[key].total += r.count;
+            }
+            return Object.values(map).sort((a, b) => b.total - a.total);
+        });
+
+        async function loadBugs() {
+            try {
+                const params = { limit: 200 };
+                if (bugTypeFilter.value) params.bug_type = bugTypeFilter.value;
+                const { data } = await axios.get('/api/bugs', { params });
+                if (data.success) {
+                    bugList.value = data.data || [];
+                    bugStats.value = data.stats || {};
+                    bugByModel.value = data.by_model || [];
+                }
+            } catch (e) {
+                console.error('加载 Bug 日志失败', e);
+            }
+        }
+
+        function showBugDetail(row) {
+            ElMessageBox.alert('<pre style="white-space: pre-wrap; font-size: 12px; max-height: 400px; overflow-y: auto;">' + (row.details || '').replace(/</g, '&lt;') + '</pre>', 'Bug 详情', { dangerouslyUseHTMLString: true, confirmButtonText: '关闭' });
+        }
 
         // AI 批量生成
         const autoGenSubject = ref(currentSubject.value);
@@ -1173,6 +1312,27 @@ const app = createApp({
         // 筛选条件变化时回到第一页
         Vue.watch([filterSubject, searchKeyword, filterQuality], () => { listPage.value = 1; });
 
+        // 导出评分脚本
+        const exportLoading = ref(false);
+
+        function exportRubricScripts() {
+            const subject = filterSubject.value || '';
+            if (!subject) {
+                ElMessage.warning('请先在筛选栏选择一个科目');
+                return;
+            }
+            exportLoading.value = true;
+            const url = API_BASE + '/api/export-rubric-scripts?subject=' + subject;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => { exportLoading.value = false; }, 1500);
+            ElMessage.success('正在导出「' + getSubjectLabel(subject) + '」评分脚本...');
+        }
+
         // 测试用例验证
         const showTestCaseDialog = ref(false);
         const showTestCaseForm = ref(false);
@@ -1185,6 +1345,13 @@ const app = createApp({
         const testCaseForm = reactive({ answer_text: '', expected_score: null, description: '', case_type: 'simulated' });
         const editingTestCaseId = ref(null);
         const tolerance = ref(1.0);
+
+        // 版本历史相关
+        const scriptHistoryVisible = ref(false);
+        const scriptHistory = ref([]);
+        const scriptHistoryLoading = ref(false);
+        const scriptPreviewVisible = ref(false);
+        const scriptPreviewText = ref('');
 
         const loadTestCases = async () => {
             if (!editingQuestionId.value) return;
@@ -1394,7 +1561,7 @@ const app = createApp({
 
                     html += '</div>';
 
-                    ElMessageBox.alert(html, '命题质量评估报告', {
+                    ElMessageBox.alert(html, '试题科学性评估报告', {
                         dangerouslyUseHTMLString: true,
                         confirmButtonText: d.verdict === 'fail' ? '我知道了，去修改' : '确定',
                         customStyle: { maxWidth: '560px' }
@@ -1403,7 +1570,7 @@ const app = createApp({
                     ElMessage.error('评估失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('质量评估失败：' + (e.response?.data?.error || e.message));
+                ElMessage.error('科学性评估失败：' + (e.response?.data?.error || e.message));
             } finally {
                 evaluatingQuality.value = false;
             }
@@ -1415,7 +1582,7 @@ const app = createApp({
                 return;
             }
             if (qualityScore.value !== null && qualityScore.value < 60) {
-                ElMessage.error('命题质量评估未通过（' + qualityScore.value + '分），请根据评估结果修改后再保存');
+                ElMessage.error('试题科学性评估未通过（' + qualityScore.value + '分），请根据评估结果修改后再保存');
                 return;
             }
             try {
@@ -1476,6 +1643,55 @@ const app = createApp({
             qualityScore.value = null;
             viewMode.value = 'create';
             editingQuestionId.value = null;
+        };
+
+        // 版本历史方法
+        const openScriptHistory = async () => {
+            if (!editingQuestionId.value) return;
+            scriptHistoryVisible.value = true;
+            scriptHistoryLoading.value = true;
+            try {
+                const res = await axios.get('/api/questions/' + editingQuestionId.value + '/script-history');
+                if (res.data.success) {
+                    scriptHistory.value = res.data.data;
+                }
+            } catch (e) {
+                ElMessage.error('加载版本历史失败');
+            }
+            scriptHistoryLoading.value = false;
+        };
+
+        const previewScriptVersion = (row) => {
+            scriptPreviewText.value = row.script_text || '';
+            scriptPreviewVisible.value = true;
+        };
+
+        const rollbackScriptVersion = async (row) => {
+            try {
+                await ElMessageBox.confirm(
+                    '确定要回退到版本 v' + row.version + ' 吗？当前脚本会自动保存为新版本。',
+                    '确认回退',
+                    { type: 'warning' }
+                );
+                const res = await axios.post('/api/questions/' + editingQuestionId.value + '/script-rollback', {
+                    version: row.version
+                });
+                if (res.data.success) {
+                    ElMessage.success('已回退到版本 v' + row.version);
+                    // 重新加载题目数据
+                    const qRes = await axios.get('/api/questions/' + editingQuestionId.value);
+                    if (qRes.data.success) {
+                        const q = qRes.data.data;
+                        questionForm.rubricScript = q.rubric_script || '';
+                    }
+                    // 刷新版本历史
+                    openScriptHistory();
+                }
+            } catch (e) {
+                if (e !== 'cancel') {
+                    ElMessage.error('回退失败');
+                }
+            }
         };
 
         const startGrading = (questionId) => {
@@ -2138,10 +2354,11 @@ const app = createApp({
         return {
             currentPage, questions, stats, dashboard, qualityDistTable, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
             evaluatingQuality, qualityScore, viewMode, editingQuestionId, currentSubject, currentSubjectLabel, switchSubject,
-            filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
+            filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions, exportLoading, exportRubricScripts,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
             showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
             verifyRunning, verifyProgress, verifyResults, testCaseForm, editingTestCaseId, tolerance,
+            scriptHistoryVisible, scriptHistory, scriptHistoryLoading, scriptPreviewVisible, scriptPreviewText,
             autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
             isAdmin, userRole,
             modelConfigs, modelTestResults, modelTestAllLoading, showModelDialog, editingModelConfig, modelForm,
@@ -2151,6 +2368,7 @@ const app = createApp({
             autoParseText, clearAutoImport, cleanAnswerScores,
             loadSyllabusContent, saveSyllabusContent, viewQuestion, editQuestion,
             openTestCaseDialog, loadTestCases, saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm, runVerification,
+            openScriptHistory, previewScriptVersion, rollbackScriptVersion,
             runAutoGenerate
         };
     }

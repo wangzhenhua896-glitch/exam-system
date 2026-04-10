@@ -16,10 +16,10 @@ from app.models.db_models import get_effective_config
 
 class QwenGradingResult(BaseModel):
     """评分结果"""
-    final_score: float
-    confidence: float
-    strategy: str
-    total_score: float
+    final_score: Optional[float] = None
+    confidence: float = 0
+    strategy: str = ""
+    total_score: float = 0
     comment: str = ""
     error: Optional[str] = None
     needs_review: bool = False
@@ -109,6 +109,7 @@ class QwenGradingEngine:
         answer: str,
         rubric: Dict[str, Any],
         max_score: float,
+        subject: str = "general",
     ) -> QwenGradingResult:
         """
         对学生答案进行评分
@@ -118,6 +119,7 @@ class QwenGradingEngine:
             answer: 学生答案
             rubric: 评分标准（包含 points 等信息）
             max_score: 满分
+            subject: 科目标识（politics/chinese/english 等），后续用于分科评分策略
 
         Returns:
             QwenGradingResult
@@ -196,10 +198,9 @@ class QwenGradingEngine:
             final_score = float(parsed.get("总分", parsed.get("score", 0)))
             comment = parsed.get("评语", parsed.get("comment", content))
 
-            # 提取分项得分明细
+            # 提取分项得分明细（总分已在 _parse_output 中由分项累加得出）
             scoring_items = parsed.get("scoring_items")
             if scoring_items and isinstance(scoring_items, list):
-                # 校验每个 item 的基本结构
                 validated_items = []
                 for item in scoring_items:
                     if isinstance(item, dict):
@@ -209,6 +210,7 @@ class QwenGradingEngine:
                             "max_score": float(item.get("max_score", 0)),
                             "hit": bool(item.get("hit", False)),
                             "reason": str(item.get("reason", "")),
+                            "quoted_text": str(item.get("quoted_text", "")),
                         })
                 scoring_items = validated_items if validated_items else None
             else:
@@ -232,11 +234,12 @@ class QwenGradingEngine:
 
         except Exception as e:
             return QwenGradingResult(
-                final_score=0,
+                final_score=None,
                 confidence=0,
                 strategy="qwen_engine",
                 total_score=max_score,
                 error=str(e),
+                comment='⚠️ 评分系统暂时无法评分，请点击"重新评分"重试，如多次失败请联系监考老师人工处理',
                 needs_review=True
             )
 
@@ -247,32 +250,36 @@ class QwenGradingEngine:
 评分流程（必须严格按此顺序执行）：
 1. 先检查反作弊规则：如果评分标准中包含【反作弊规则】，必须先执行反作弊检查。
    命中反作弊条件（如复制原文、复制题干、空白、答非所问）→ 该问直接判0分，跳过逐项评分。
-2. 再逐项评分：按照评分标准的评分要点逐一判断给分，每一项独立计分，最后求和。
+2. 再逐项评分：按照评分标准的评分要点逐一判断给分，每一项独立计分。
 3. 不要漏判也不要错判，部分答对给部分分数。
-4. 总分不能超过满分，也不能低于 0 分。
-5. 最后给出总分和评语，评语需要指出学生答案的优点和不足（评语不超过100字）。
-6. 你必须使用 JSON 格式输出。输出格式：
+4. 评语需要指出学生答案的优点和不足（评语不超过100字）。
+5. 你必须使用 JSON 格式输出。输出格式：
 {
-  "总分": 分数,
   "评语": "你的评语",
   "scoring_items": [
-    {"name": "要点名称", "score": 得分, "max_score": 该要点满分, "hit": true/false, "reason": "命中/未命中的简要原因"}
+    {"name": "要点名称", "score": 得分, "max_score": 该要点满分, "hit": true/false, "reason": "命中/未命中的简要原因", "quoted_text": "从学生答案中摘录的原文"}
   ]
 }
+
+注意：总分由系统根据各要点得分自动累加，你不需要输出总分，只需准确给出每个要点的得分即可。
 
 scoring_items 规则：
 - 逐条列出评分标准中的每个得分要点
 - hit=true 表示学生答案命中该要点，hit=false 表示未命中或命中不完整
 - score 为该要点实际得分，max_score 为该要点满分
 - reason 用一句话说明为什么给这个分（不超过30字）
+- quoted_text 必须是学生答案中的原文摘录，用于证明你的判断依据。hit=true 时摘录命中的关键句，hit=false 时为空字符串""。禁止编造或改写学生原文。
 - 如果评分标准没有明确的分要点，则按你自己的判断拆分出要点
-- 反作弊命中时，scoring_items 中所有要点 hit=false、score=0
+- 反作弊命中时，scoring_items 中所有要点 hit=false、score=0、quoted_text=""
 
 重要：反作弊检查优先于所有评分规则。如果考生只是照抄原文/题干，即使原文中包含关键词，也必须判0分。
 不要因为整体印象调整分数。对同一内容，无论学生用什么表述方式，只要语义等价，给相同分数。"""
 
     def _build_user_prompt(self, question: str, rubric: str, answer: str, max_score: float) -> str:
         """构建用户提示词"""
+        import hashlib, time
+        # 用答案内容+时间戳生成随机标记，打破大模型 API 的服务端缓存
+        cache_buster = hashlib.md5(f"{answer}:{time.time()}".encode()).hexdigest()[:8]
         return f"""# 题目
 {question}
 
@@ -285,7 +292,8 @@ scoring_items 规则：
 # 学生答案
 {answer}
 
-请评分，并按要求输出 JSON："""
+请评分，并按要求输出 JSON：
+<!-- req:{cache_buster} -->"""
 
     def _format_rubric(self, rubric: Dict[str, Any], max_score: float) -> str:
         """格式化评分标准为文本
@@ -344,12 +352,7 @@ scoring_items 规则：
     def _parse_output(self, content: str) -> Dict[str, Any]:
         """解析 LLM 输出
 
-        支持两种输出格式：
-        1. 简单格式：{"总分": X, "评语": "..."}
-        2. 逐问格式：{"第一问": {"得分": X}, "第二问": {"得分": X}, ..., "总分": X, "评语": "..."}
-
-        注意：模型有时在逐问格式中总分计算错误（分项和≠总分），
-        因此当存在逐问得分时，优先自行累加，不信任模型的总分。
+        总分始终由系统从 scoring_items 累加得出，不信任模型给出的总分。
         """
         # 尝试直接解析 JSON
         try:
@@ -360,7 +363,20 @@ scoring_items 规则：
             else:
                 parsed = json.loads(content)
 
-            # 逐问格式：检测是否包含"得分"字段的子对象，自行累加总分
+            # 优先从 scoring_items 累加总分
+            scoring_items = parsed.get("scoring_items")
+            if scoring_items and isinstance(scoring_items, list):
+                total = 0
+                for item in scoring_items:
+                    if isinstance(item, dict):
+                        try:
+                            total += float(item.get("score", 0))
+                        except (ValueError, TypeError):
+                            pass
+                parsed["总分"] = round(total, 2)
+                return parsed
+
+            # 兼容旧的逐问格式：{"第一问": {"得分": X}}
             question_scores = []
             for key, value in parsed.items():
                 if isinstance(value, dict) and "得分" in value:
@@ -370,9 +386,7 @@ scoring_items 规则：
                         pass
 
             if question_scores:
-                # 有逐问得分 → 自行累加，忽略模型可能写错的总分
-                computed_total = sum(question_scores)
-                parsed["总分"] = computed_total
+                parsed["总分"] = round(sum(question_scores), 2)
                 return parsed
 
             return parsed
@@ -423,18 +437,28 @@ scoring_items 规则：
 
     def boundary_check(self, result: QwenGradingResult) -> QwenGradingResult:
         """边界检查，触发人工复核"""
+        # 评分异常（final_score=None）跳过边界检查，直接返回
+        if result.final_score is None:
+            result.needs_review = True
+            return result
+
         max_score = result.total_score
+        warnings = []
+        if result.warning:
+            warnings.append(result.warning)
 
         if result.final_score >= max_score * 0.95:
-            result.warning = "⚠️ 接近满分，建议人工复核"
+            warnings.append("⚠️ 接近满分，建议人工复核")
             result.needs_review = True
         elif result.final_score <= max_score * 0.05:
-            result.warning = "⚠️ 接近零分，建议人工复核"
+            warnings.append("⚠️ 接近零分，建议人工复核")
             result.needs_review = True
 
         if result.confidence < self.confidence_thresholds["low"]:
-            result.warning = "⚠️ 置信度过低，必须人工复核"
+            warnings.append("⚠️ 置信度过低，必须人工复核")
             result.needs_review = True
+
+        result.warning = '；'.join(dict.fromkeys(warnings)) if warnings else None
 
         # 截断分数到合法范围
         if result.final_score < 0:

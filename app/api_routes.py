@@ -12,7 +12,9 @@ from app.models.db_models import (
     get_syllabus, get_all_syllabus, upsert_syllabus, delete_syllabus,
     add_test_case, get_test_cases, get_test_case,
     update_test_case, delete_test_case, update_test_case_result,
-    get_all_test_cases_overview, get_all_test_cases_with_question
+    get_all_test_cases_overview, get_all_test_cases_with_question,
+    save_script_version, get_script_history, get_script_version,
+    update_script_version_result
 )
 # 使用 Qwen-Agent 官方评分引擎替换原聚合引擎
 from app.qwen_engine import QwenGradingEngine
@@ -43,15 +45,22 @@ def list_enabled_providers():
         cfg = get_effective_config(pid)
         if cfg.get("enabled") and cfg.get("api_key"):
             available = cfg.get("available_models", [])
+            enabled_models = set(cfg.get("extra_config", {}).get("enabled_models", []))
+            # 未设置过 enabled_models 时，所有模型默认可用
+            all_enabled = not enabled_models
             if available:
                 for m in available:
+                    # 子模型是否被用户启用：在 enabled_models 列表中，或列表为空（全部默认可用）
+                    is_enabled = all_enabled or m["id"] in enabled_models
+                    is_selected = pid == getattr(grading_engine, '_selected_provider', '') and m["id"] == getattr(grading_engine, 'model', '')
                     providers.append({
                         "id": pid + '/' + m["id"],
                         "provider": pid,
                         "model": m["id"],
                         "name": PROVIDER_NAMES.get(pid, pid),
                         "display_name": m.get("name", m["id"]),
-                        "active": pid == getattr(grading_engine, '_selected_provider', '') and m["id"] == getattr(grading_engine, 'model', ''),
+                        "active": is_enabled,
+                        "selected": is_selected,
                     })
             else:
                 providers.append({
@@ -277,6 +286,97 @@ def delete_question_detail(question_id):
     return jsonify({'success': True, 'data': {'id': question_id}})
 
 
+@api_bp.route('/export-rubric-scripts', methods=['GET'])
+def export_rubric_scripts():
+    """按科目导出评分脚本，生成 Markdown 格式"""
+    from flask import Response
+    subject = request.args.get('subject', '').strip()
+    if not subject:
+        return jsonify({'success': False, 'error': '请指定科目参数'}), 400
+    questions = get_questions(subject)
+
+    # 过滤有评分脚本的题目
+    questions_with_script = [q for q in questions if (q.get('rubric_script') or '').strip()]
+    if not questions_with_script:
+        return jsonify({'success': False, 'error': '没有找到包含评分脚本的题目'}), 404
+
+    # 按科目分组
+    grouped = {}
+    for q in questions_with_script:
+        subj = q.get('subject', '未分类')
+        grouped.setdefault(subj, []).append(q)
+
+    # 生成 Markdown
+    lines = []
+    lines.append('# 评分脚本导出')
+    lines.append('')
+    lines.append(f'> 导出时间：{__import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M")}')
+    lines.append(f'> 共 {len(questions_with_script)} 道题')
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    for subj, qs in grouped.items():
+        # 科目标题
+        subject_labels = {
+            'politics': '思想政治', 'chinese': '语文', 'english': '英语',
+            'math': '数学', 'history': '历史', 'geography': '地理',
+            'physics': '物理', 'chemistry': '化学', 'biology': '生物',
+        }
+        label = subject_labels.get(subj, subj)
+        lines.append(f'## {label}')
+        lines.append('')
+
+        for q in qs:
+            title = q.get('title') or q.get('content', '')[:30]
+            max_score = q.get('max_score', '?')
+            lines.append(f'### {title}（{max_score}分）')
+            lines.append('')
+
+            # 题目内容
+            content = q.get('content', '').strip()
+            if content:
+                lines.append('**题目：**')
+                lines.append('')
+                lines.append(content)
+                lines.append('')
+
+            # 标准答案
+            standard_answer = q.get('standard_answer', '').strip()
+            if standard_answer:
+                lines.append('**标准答案：**')
+                lines.append('')
+                lines.append(standard_answer)
+                lines.append('')
+
+            # 评分脚本
+            rubric_script = q.get('rubric_script', '').strip()
+            if rubric_script:
+                lines.append('**评分脚本：**')
+                lines.append('')
+                lines.append(rubric_script)
+                lines.append('')
+
+            lines.append('---')
+            lines.append('')
+
+    md_content = '\n'.join(lines)
+
+    # 确定文件名（中文需 URL 编码，避免 latin-1 header 报错）
+    from urllib.parse import quote
+    filename = f'评分脚本_{subject}.md'
+    filename_encoded = quote(filename)
+
+    return Response(
+        md_content,
+        mimetype='text/markdown',
+        headers={
+            'Content-Disposition': f"attachment; filename*=UTF-8''{filename_encoded}",
+            'Content-Type': 'text/markdown; charset=utf-8',
+        }
+    )
+
+
 import asyncio
 
 @api_bp.route('/grade', methods=['POST'])
@@ -285,6 +385,49 @@ async def grade_answer():
     data = request.json
     question_id = data.get('question_id') or data.get('questionId')
     student_answer = data.get('answer', '')
+
+    # 空答案前置拦截：去除空格和标点后长度 < 2，直接0分，不调LLM
+    import re as _re
+    stripped = _re.sub(r'[\s\W]+', '', student_answer)
+    if len(stripped) < 2:
+        max_score = data.get('max_score', 10.0)
+        if question_id:
+            q = get_question(int(question_id))
+            if q:
+                max_score = q.get('max_score') or max_score
+        record_id = add_grading_record(
+            question_id=question_id,
+            student_answer=student_answer,
+            score=0,
+            details=json.dumps({
+                "final_score": 0,
+                "comment": "考生未作答",
+                "scoring_items": [],
+                "needs_review": False,
+                "warning": "答案为空或仅含标点，系统直接判0分"
+            }, ensure_ascii=False),
+            model_used='precheck',
+            confidence=1.0
+        )
+        return jsonify({
+            'success': True,
+            'data': {
+                'record_id': record_id,
+                'score': 0,
+                'confidence': 1.0,
+                'comment': '考生未作答',
+                'details': {
+                    'final_score': 0,
+                    'comment': '考生未作答',
+                    'scoring_items': [],
+                    'needs_review': False,
+                    'warning': '答案为空或仅含标点，系统直接判0分'
+                },
+                'model_used': 'precheck',
+                'needs_review': False,
+                'warning': '答案为空或仅含标点，系统直接判0分'
+            }
+        })
 
     # 支持前端指定 provider 和 model
     provider = data.get('provider')
@@ -296,12 +439,15 @@ async def grade_answer():
     question_text = data.get('question', '')
     rubric = data.get('rubric', {})
     max_score = data.get('max_score', 10.0)
+    subject = data.get('subject', 'general')
 
     if question_id:
         q = get_question(int(question_id))
         if q:
             question_text = q.get('content') or question_text
             max_score = q.get('max_score') or max_score
+            if q.get('subject'):
+                subject = q['subject']
             # 将数据库字段注入 rubric 字典，供 _format_rubric 使用
             if not rubric:
                 rubric = {}
@@ -330,11 +476,29 @@ async def grade_answer():
         question=question_text,
         answer=student_answer,
         rubric=rubric,
-        max_score=max_score
+        max_score=max_score,
+        subject=subject
     )
 
     # 边界检查
     result = grading_engine.boundary_check(result)
+
+    # 证据真实性验证：检查 quoted_text 是否真实存在于原始答案中
+    grading_flags = []
+    if result.scoring_items:
+        for item in result.scoring_items:
+            quoted = item.get("quoted_text", "")
+            if quoted and quoted not in student_answer:
+                grading_flags.append({
+                    "type": "fake_quote",
+                    "severity": "warning",
+                    "desc": f"评分点'{item.get('name', '')}'引用的原文不存在于学生答案中",
+                    "point_name": item.get("name", "")
+                })
+                result.needs_review = True
+                if not result.warning:
+                    result.warning = ""
+                result.warning += f"；评分点'{item.get('name', '')}'引用原文疑似编造"
 
     # 保存评分记录
     record_id = add_grading_record(
@@ -343,7 +507,8 @@ async def grade_answer():
         score=result.final_score,
         details=json.dumps(result.dict(), ensure_ascii=False),
         model_used='qwen-agent',
-        confidence=result.confidence
+        confidence=result.confidence,
+        grading_flags=json.dumps(grading_flags, ensure_ascii=False) if grading_flags else None
     )
 
     return jsonify({
@@ -356,7 +521,8 @@ async def grade_answer():
             'details': result.dict(),
             'model_used': 'qwen-agent',
             'needs_review': result.needs_review,
-            'warning': result.warning
+            'warning': result.warning,
+            'grading_flags': grading_flags
         }
     })
 
@@ -760,6 +926,38 @@ def generate_rubric_script():
         return jsonify({'success': False, 'error': f'生成失败：{str(e)}'}), 500
 
 
+@api_bp.route('/bugs', methods=['GET'])
+def get_bugs():
+    """获取 bug 日志列表"""
+    import sqlite3
+    from config.settings import GRADING_CONFIG
+    db_path = GRADING_CONFIG.get('db_path') or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'exam_system.db')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    bug_type = request.args.get('bug_type', '')
+    limit = int(request.args.get('limit', 100))
+
+    if bug_type:
+        cursor.execute('SELECT * FROM bug_log WHERE bug_type = ? ORDER BY created_at DESC LIMIT ?', (bug_type, limit))
+    else:
+        cursor.execute('SELECT * FROM bug_log ORDER BY created_at DESC LIMIT ?', (limit,))
+
+    rows = [dict(r) for r in cursor.fetchall()]
+
+    # 统计
+    cursor.execute('SELECT bug_type, COUNT(*) as count FROM bug_log GROUP BY bug_type')
+    stats = {r['bug_type']: r['count'] for r in cursor.fetchall()}
+
+    # 按模型统计
+    cursor.execute('SELECT model_used, bug_type, COUNT(*) as count FROM bug_log GROUP BY model_used, bug_type')
+    by_model = [dict(r) for r in cursor.fetchall()]
+
+    conn.close()
+    return jsonify({'success': True, 'data': rows, 'stats': stats, 'by_model': by_model})
+
+
 @api_bp.route('/evaluate-question', methods=['POST'])
 def evaluate_question():
     """AI 命题质量评估"""
@@ -986,6 +1184,19 @@ def create_test_case(question_id):
         description=data.get('description', ''),
         case_type=data.get('case_type', 'simulated')
     )
+
+    # 场景联动：新增场景后，在版本历史中记录
+    try:
+        q = get_question(question_id)
+        if q and q.get('rubric_script'):
+            total = len(get_test_cases(question_id))
+            save_script_version(
+                question_id, q['rubric_script'],
+                note=f'新增场景（当前共{total}个场景）',
+            )
+    except Exception as e:
+        logger.warning(f"新增场景联动版本历史失败: {e}")
+
     return jsonify({'success': True, 'data': {'id': row_id}})
 
 
@@ -1205,6 +1416,19 @@ async def generate_test_cases_for_question(question_id):
             )
             saved.append({'id': row_id, 'description': c.get('description', ''), 'expected_score': float(c['expected_score'])})
 
+        # 场景联动：批量新增场景后，在版本历史中记录
+        if saved:
+            try:
+                q_latest = get_question(question_id)
+                if q_latest and q_latest.get('rubric_script'):
+                    total = len(get_test_cases(question_id))
+                    save_script_version(
+                        question_id, q_latest['rubric_script'],
+                        note=f'批量新增{len(saved)}个场景（当前共{total}个场景）',
+                    )
+            except Exception as e:
+                logger.warning(f"批量新增场景联动版本历史失败: {e}")
+
         return jsonify({'success': True, 'data': {'count': len(saved), 'cases': saved}})
 
     except Exception as e:
@@ -1285,6 +1509,68 @@ def generate_answer():
     except Exception as e:
         logger.error(f"生成模拟答案失败: {e}")
         return jsonify({'success': False, 'error': f'生成失败：{str(e)}'}), 500
+
+
+# =============================================================================
+# 评分脚本版本管理
+# =============================================================================
+
+@api_bp.route('/questions/<int:question_id>/script-history', methods=['GET'])
+def get_question_script_history(question_id):
+    """获取评分脚本版本历史"""
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    history = get_script_history(question_id)
+    return jsonify({'success': True, 'data': history})
+
+
+@api_bp.route('/questions/<int:question_id>/script-rollback', methods=['POST'])
+def rollback_script(question_id):
+    """回退到指定版本的评分脚本"""
+    data = request.json
+    version = data.get('version')
+    if version is None:
+        return jsonify({'success': False, 'error': 'version 不能为空'}), 400
+
+    ver = get_script_version(question_id, int(version))
+    if not ver:
+        return jsonify({'success': False, 'error': '版本不存在'}), 404
+
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+
+    # update_question 内部会自动快照当前版本
+    update_question(
+        question_id,
+        subject=q['subject'],
+        title=q['title'],
+        content=q['content'],
+        original_text=q.get('original_text'),
+        standard_answer=q.get('standard_answer'),
+        rubric_rules=q.get('rubric_rules'),
+        rubric_points=q.get('rubric_points'),
+        rubric_script=ver['script_text'],
+        rubric=q['rubric'],
+        max_score=q['max_score'],
+        quality_score=q.get('quality_score')
+    )
+
+    # 记录回退原因到最新版本
+    history = get_script_history(question_id)
+    if history:
+        latest = history[0]
+        from app.models.db_models import get_db_connection
+        conn = get_db_connection()
+        conn.execute(
+            'UPDATE rubric_script_history SET note = ? WHERE id = ?',
+            (f'回退到版本 {version}', latest['id'])
+        )
+        conn.commit()
+        conn.close()
+
+    return jsonify({'success': True, 'data': {'restored_version': int(version)}})
 
 
 # =============================================================================
@@ -1386,6 +1672,24 @@ async def verify_rubric():
     valid_results = [r for r in results if r['actual_score'] is not None]
     passed_count = sum(1 for r in valid_results if r['passed'])
     errors = [r['error'] for r in valid_results]
+    avg_err = round(sum(errors) / len(errors), 2) if errors else None
+
+    # 联动版本历史：更新当前脚本对应版本的验证结果
+    try:
+        script_text = rubric.get('rubricScript', '') or q.get('rubric_script', '')
+        if script_text:
+            history = get_script_history(int(question_id))
+            for h in history:
+                if h['script_text'] == script_text:
+                    update_script_version_result(
+                        int(question_id), h['version'],
+                        avg_error=avg_err,
+                        passed_count=passed_count,
+                        total_cases=len(valid_results)
+                    )
+                    break
+    except Exception as e:
+        logger.warning(f"保存验证结果到版本历史失败: {e}")
 
     return jsonify({
         'success': True,
