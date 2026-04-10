@@ -165,9 +165,16 @@ createApp({
         const selectedUsername = ref('');
 
         onMounted(async () => {
-            // 加载科目列表
+            // 加载科目列表（只保留默认科目中已定义的）
             const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
-            subjectList.value = saved ? JSON.parse(saved) : [...DEFAULT_SUBJECTS];
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                if (subjectList.value.length === 0) subjectList.value = [...DEFAULT_SUBJECTS];
+            } else {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
 
             // 加载用户列表
             try {

@@ -128,8 +128,15 @@ class QwenGradingEngine:
             # 格式化评分标准
             rubric_text = self._format_rubric(rubric, max_score)
 
-            # 构建 Prompt（参考 Qwen-Agent 评分示例的设计）
-            system_prompt = self._get_system_prompt()
+            # 构建 Prompt（按科目走不同提示词）
+            if subject == 'politics':
+                system_prompt = self._get_politics_system_prompt()
+            elif subject == 'chinese':
+                system_prompt = self._get_chinese_system_prompt()
+            elif subject == 'english':
+                system_prompt = self._get_english_system_prompt()
+            else:
+                system_prompt = self._get_system_prompt()
             user_prompt = self._build_user_prompt(question, rubric_text, answer, max_score)
 
             messages = [
@@ -217,8 +224,9 @@ class QwenGradingEngine:
                 scoring_items = None
 
             # 语义相似度二次校验：发现模型漏判的等价表达并自动纠偏
+            # 跳过英语科目：语义校验使用中文 text2vec 模型，不适用于英文
             semantic_warnings = []
-            if scoring_items:
+            if scoring_items and subject != 'english':
                 rubric_points = self._extract_rubric_points(rubric)
                 if rubric_points:
                     try:
@@ -304,6 +312,61 @@ scoring_items 规则：
 
 重要：反作弊检查优先于所有评分规则。如果考生只是照抄原文/题干，即使原文中包含关键词，也必须判0分。
 不要因为整体印象调整分数。对同一内容，无论学生用什么表述方式，只要语义等价，给相同分数。"""
+
+    def _get_politics_system_prompt(self) -> str:
+        """思政科目专用系统提示词"""
+        return """你是一位专业的思政阅卷老师，必须严格按照评分脚本给学生答案打分。
+
+评分流程（必须严格按此顺序执行）：
+1. 先检查反作弊规则：如果评分脚本中包含【反作弊规则】或政治立场错误类判定，必须先执行检查。
+   命中反作弊条件（如复制题干、复制标准答案模板、空白未作答、答非所问、政治立场错误）→ 直接判0分，跳过逐项评分。
+2. 再逐项评分：严格按照评分脚本中的【逐项评分规则】逐一判断给分，每一项独立计分。
+3. 分值必须完全按照评分脚本中标注的分值执行，不可自行调整或四舍五入。
+4. 部分得分条件（如"得1.5分""得1分"）必须严格执行，按脚本中写的条件精确判断。
+5. 等价表述按评分脚本中的等价表述表匹配。易混淆判断按脚本中的规则执行。
+6. 评语需要逐个要点说明判断结果：要点1是否得分及原因，要点2是否得分及原因...（评语不超过150字）。
+
+输出格式（严格JSON，不要输出任何其他文字）：
+{"总分": X, "评语": "逐个要点说明判断结果和得分情况"}
+
+总分由各要点得分累加，不超过满分。如果触发反作弊规则或政治立场错误，总分=0，评语说明原因。"""
+
+    def _get_chinese_system_prompt(self) -> str:
+        """语文科目专用系统提示词（古诗词鉴赏等）"""
+        return """你是一位专业的语文阅卷老师，必须严格按照评分脚本给学生答案打分。
+
+评分流程（必须严格按此顺序执行）：
+1. 先检查反作弊规则：如果评分脚本中包含【反作弊规则】，必须先执行反作弊检查。
+   命中反作弊条件（如复制诗歌原文、复制题干、空白未作答、答非所问）→ 该问直接判0分，跳过逐项评分。
+   注意：如果考生引用了诗句后补充了自己的分析，且分析命中得分要点，应正常按要点给分。
+2. 再逐项评分：严格按照评分脚本中的【逐项评分规则】逐一判断给分，每一项独立计分。
+3. 分值必须完全按照评分脚本中标注的分值执行，不可自行调整。
+4. 部分得分条件必须严格执行，按脚本中写的条件精确判断。
+5. 等价表述按评分脚本中的等价表述表匹配。易混淆判断按脚本中的规则执行。
+6. 错别字按评分脚本中的【扣分规则】执行，每处扣0.5分，扣完该问满分为止。
+7. 评语需要逐个要点说明判断结果：该问是否得分、得多少分及原因。（评语不超过150字）
+
+输出格式（严格JSON，不要输出任何其他文字）：
+评分脚本中【输出格式要求】指定了输出格式，请严格按照该格式输出JSON。
+各问得分必须严格按逐项评分规则计算，总分由各问得分累加再减去错别字扣分。"""
+
+    def _get_english_system_prompt(self) -> str:
+        """英语科目专用系统提示词（阅读理解等）"""
+        return """你是一位专业的英语阅卷老师，必须严格按照评分脚本给学生答案打分。
+
+评分流程（必须严格按此顺序执行）：
+1. 先检查反作弊规则：如果评分脚本中包含【反作弊规则】，必须先执行反作弊检查。
+   命中反作弊条件（如复制阅读材料原文、复制题干、空白未作答、答非所问）→ 该问直接判0分，跳过逐项评分。
+   注意：如果考生引用了材料原文后补充了自己的回答，且补充内容命中得分要点，应正常按要点给分。
+2. 再逐项评分：严格按照评分脚本中的【逐项评分规则】逐一判断给分，每一项独立计分。
+3. 分值必须完全按照评分脚本中标注的分值执行，不可自行调整。
+4. 语言规则：英语题目要求用英语作答，用拼音或中文作答一律判0分。
+5. 等价表述按评分脚本中的等价表述表匹配。大小写不敏感。
+6. 评语需要逐个要点说明判断结果：该问是否得分、得多少分及原因。（评语不超过150字）
+
+输出格式（严格JSON，不要输出任何其他文字）：
+评分脚本中【输出格式要求】指定了输出格式，请严格按照该格式输出JSON。
+各问得分必须严格按逐项评分规则计算，总分由各问得分累加。"""
 
     def _build_user_prompt(self, question: str, rubric: str, answer: str, max_score: float) -> str:
         """构建用户提示词"""
@@ -479,17 +542,47 @@ scoring_items 规则：
                 parsed["总分"] = round(total, 2)
                 return parsed
 
-            # 兼容旧的逐问格式：{"第一问": {"得分": X}}
+            # 兼容旧的逐问格式：{"第一问": {"得分": X}}，同时构造 scoring_items
             question_scores = []
+            scoring_items = []
             for key, value in parsed.items():
                 if isinstance(value, dict) and "得分" in value:
                     try:
-                        question_scores.append(float(value["得分"]))
+                        score = float(value["得分"])
+                        max_s = float(value.get("满分", 0))
+                        comment = str(value.get("评语", ""))
+                        question_scores.append(score)
+                        scoring_items.append({
+                            "name": key,
+                            "score": score,
+                            "max_score": max_s,
+                            "hit": score > 0,
+                            "reason": comment,
+                            "quoted_text": "",
+                        })
                     except (ValueError, TypeError):
                         pass
 
             if question_scores:
                 parsed["总分"] = round(sum(question_scores), 2)
+                # 语文错别字扣分处理
+                typo_deduction = parsed.get("错别字扣分")
+                if typo_deduction is not None:
+                    try:
+                        typo_val = float(typo_deduction)
+                        if typo_val > 0:
+                            scoring_items.append({
+                                "name": "错别字扣分",
+                                "score": -typo_val,
+                                "max_score": 0,
+                                "hit": False,
+                                "reason": f"扣{typo_val}分",
+                                "quoted_text": "",
+                            })
+                    except (ValueError, TypeError):
+                        pass
+                if scoring_items:
+                    parsed["scoring_items"] = scoring_items
                 return parsed
 
             return parsed

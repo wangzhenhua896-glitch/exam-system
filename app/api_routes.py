@@ -387,6 +387,107 @@ def export_rubric_scripts():
     )
 
 
+@api_bp.route('/import-questions', methods=['POST'])
+def import_questions():
+    """从 Excel 导入题目"""
+    import pandas as pd
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': '未上传文件'}), 400
+
+    file = request.files['file']
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        return jsonify({'success': False, 'error': '仅支持 .xlsx/.xls/.csv 文件'}), 400
+
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'读取文件失败：{str(e)}'}), 400
+
+    # 标准化列名（支持中英文）
+    col_map = {}
+    for col in df.columns:
+        cl = str(col).strip().lower()
+        if cl in ('科目', 'subject'):
+            col_map['subject'] = col
+        elif cl in ('标题', 'title', '题目标题'):
+            col_map['title'] = col
+        elif cl in ('题目', '题目内容', 'content', 'question'):
+            col_map['content'] = col
+        elif cl in ('标准答案', '答案', 'standard_answer', 'answer'):
+            col_map['standard_answer'] = col
+        elif cl in ('满分', 'max_score', 'score', '分值'):
+            col_map['max_score'] = col
+        elif cl in ('得分点', '评分要点', 'rubric_points', 'points'):
+            col_map['rubric_points'] = col
+        elif cl in ('评分规则', 'rubric_rules', 'rules'):
+            col_map['rubric_rules'] = col
+
+    if 'content' not in col_map:
+        return jsonify({'success': False, 'error': '未找到「题目/题目内容/content」列，请检查表头'}), 400
+
+    subject = request.form.get('subject', 'politics')
+    imported = 0
+    skipped = 0
+
+    for _, row in df.iterrows():
+        content = str(row.get(col_map['content'], '')).strip()
+        if not content or content == 'nan':
+            skipped += 1
+            continue
+
+        title = str(row.get(col_map.get('title', ''), '')).strip()
+        if title == 'nan':
+            title = ''
+        if not title:
+            title = content[:30]
+
+        standard_answer = str(row.get(col_map.get('standard_answer', ''), '')).strip()
+        if standard_answer == 'nan':
+            standard_answer = ''
+
+        max_score_val = row.get(col_map.get('max_score', ''), 10)
+        try:
+            max_score_val = float(max_score_val) if max_score_val and str(max_score_val) != 'nan' else 10.0
+        except:
+            max_score_val = 10.0
+
+        row_subject = str(row.get(col_map.get('subject', ''), subject)).strip()
+        if row_subject == 'nan' or not row_subject:
+            row_subject = subject
+
+        rubric_points = str(row.get(col_map.get('rubric_points', ''), '')).strip()
+        if rubric_points == 'nan':
+            rubric_points = ''
+        rubric_rules = str(row.get(col_map.get('rubric_rules', ''), '')).strip()
+        if rubric_rules == 'nan':
+            rubric_rules = ''
+
+        rubric = json.dumps({
+            'contentType': '简答题',
+            'points': [],
+        }, ensure_ascii=False)
+
+        add_question(
+            subject=row_subject,
+            title=title,
+            content=content,
+            original_text=content,
+            standard_answer=standard_answer,
+            rubric_rules=rubric_rules,
+            rubric_points=rubric_points,
+            rubric_script='',
+            rubric=rubric,
+            max_score=max_score_val
+        )
+        imported += 1
+
+    return jsonify({'success': True, 'data': {'imported': imported, 'skipped': skipped}})
+
+
 import asyncio
 
 @api_bp.route('/grade', methods=['POST'])
@@ -575,6 +676,32 @@ async def grade_answer():
                 if not result.warning:
                     result.warning = ""
                 result.warning += f"；评分点'{item.get('name', '')}'引用原文疑似编造"
+
+    # 判别Agent：短答案高分检测（P2）
+    if result.final_score is not None and result.final_score >= max_score * 0.8:
+        stripped_answer = _re.sub(r'[\s\W]+', '', student_answer)
+        if len(stripped_answer) < 10:
+            grading_flags.append({
+                "type": "short_answer_high_score",
+                "severity": "warning",
+                "desc": f"答案仅{len(stripped_answer)}个字，但得分{result.final_score}分（满分{max_score}），请人工复核"
+            })
+            result.needs_review = True
+
+    # 判别Agent：全满分检测（P3 缓存幻觉）
+    if result.final_score is not None and result.final_score >= max_score * 0.95:
+        if result.scoring_items and len(result.scoring_items) >= 3:
+            scoreable = [i for i in result.scoring_items if i.get("max_score", 0) > 0]
+            if scoreable and all(
+                i.get("hit") and i.get("score", 0) >= i.get("max_score", 0)
+                for i in scoreable
+            ):
+                grading_flags.append({
+                    "type": "all_perfect",
+                    "severity": "info",
+                    "desc": f"所有{len(scoreable)}个评分点全部满分，可能存在评分偏差，请人工复核"
+                })
+                result.needs_review = True
     if grading_flags:
         log_bug(
             bug_type='fake_quote',
@@ -1041,8 +1168,9 @@ def generate_rubric_script():
 def get_bugs():
     """获取 bug 日志列表"""
     import sqlite3
+    import os as _os
     from config.settings import GRADING_CONFIG
-    db_path = GRADING_CONFIG.get('db_path') or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'exam_system.db')
+    db_path = GRADING_CONFIG.get('db_path') or _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), 'data', 'exam_system.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()

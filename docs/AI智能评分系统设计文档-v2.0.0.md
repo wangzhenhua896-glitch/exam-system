@@ -1,8 +1,7 @@
 # AI 智能评分系统设计文档
 
-> **文档版本**: v2.0.0  
-> **最后更新**: 2026-04-09  
-> **Git Commit**: bf9c6d9  
+> **文档版本**: v2.2.0
+> **最后更新**: 2026-04-10
 > **维护者**: AI Grading System Team
 
 ---
@@ -19,10 +18,12 @@
 8. [核心业务流程](#8-核心业务流程)
 9. [核心算法设计](#9-核心算法设计)
 10. [配置系统](#10-配置系统)
-11. [部署与运维](#11-部署与运维)
-12. [扩展指南](#12-扩展指南)
-13. [版本历史](#13-版本历史)
-14. [附录](#14-附录)
+11. [评分一致性保障体系](#11-评分一致性保障体系)
+12. [科目专用评分流程](#12-科目专用评分流程)
+13. [部署与运维](#13-部署与运维)
+14. [扩展指南](#14-扩展指南)
+15. [版本历史](#15-版本历史)
+16. [附录](#16-附录)
 
 ---
 
@@ -43,6 +44,9 @@ AI 智能评分系统是一个基于国产大模型的**简答题自动评分平
 | **批量评分** | 支持批量题目评分和性能测试 |
 | **题库管理** | 题目 CRUD、评分标准配置、评分脚本管理 |
 | **角色权限** | 管理员（系统配置）+ 科目老师（评分业务） |
+| **用户管理** | 用户 CRUD、登录身份选择、科目绑定 |
+| **一致性保障** | student_id 追踪、同题多次评分一致性校验、判别 Agent |
+| **科目专用评分** | 思政/语文/英语各自独立的提示词和输出解析流程 |
 
 ### 1.3 设计原则
 
@@ -51,6 +55,7 @@ AI 智能评分系统是一个基于国产大模型的**简答题自动评分平
 - **异步并发**: 全链路异步设计，支持高并发评分
 - **可验证性**: 内置验证引擎和测试数据集，确保评分质量
 - **可观测性**: 完整日志记录、评分历史、统计监控
+- **一致性优先**: 同一答案多次评分必须给出相同分数（P0 原则）
 
 ---
 
@@ -97,6 +102,11 @@ AI 智能评分系统是一个基于国产大模型的**简答题自动评分平
 │  │  login.html  │  │  question-   │  │  dist/index  │  │
 │  │              │  │  bank.html   │  │  .html       │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  敏感词管理   │  │  用户管理     │  │  测试集管理   │  │
+│  │  sensitive-  │  │  user-       │  │  test-       │  │
+│  │  words.html  │  │  management  │  │  cases.html  │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
 └─────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -118,6 +128,10 @@ AI 智能评分系统是一个基于国产大模型的**简答题自动评分平
 │  ┌────────────────────┐  ┌────────────────────┐        │
 │  │  QwenGradingEngine │  │  AggregationEngine │        │
 │  │  (主评分引擎)       │  │  (聚合引擎)         │        │
+│  │  - 科目分支路由     │  │                    │        │
+│  │  - 思政专用提示词   │  │                    │        │
+│  │  - 判别Agent       │  │                    │        │
+│  │  - 一致性校验       │  │                    │        │
 │  └────────────────────┘  └────────────────────┘        │
 │  ┌────────────────────┐  ┌────────────────────┐        │
 │  │  ValidationEngine  │  │  AutoTuningEngine  │        │
@@ -166,6 +180,7 @@ ai-grading-system/
 │   ├── qwen_engine.py           # 主评分引擎（Qwen-Agent 风格）
 │   ├── validation.py            # 验证引擎
 │   ├── auto_tuning.py           # 自动调优引擎
+│   ├── semantic_checker.py      # 语义相似度校验
 │   ├── test_data.py             # 内置测试数据集
 │   └── models/                  # 模型客户端层
 │       ├── base.py              # 抽象基类 + 枚举 + 响应模型
@@ -183,9 +198,11 @@ ai-grading-system/
 │   └── exam_system.db           # SQLite 数据库
 │
 ├── templates/                   # 前端 HTML 页面
-│   ├── login.html               # 登录页（角色选择）
+│   ├── login.html               # 登录页（用户选择 + 角色选择）
 │   ├── question-bank.html       # 题库管理（Vue 3 + Element Plus）
-│   └── test-cases.html          # 测试用例管理页
+│   ├── test-cases.html          # 测试用例管理页
+│   ├── sensitive-words.html     # 敏感词管理页
+│   └── user-management.html     # 用户管理页（管理员专用）
 │
 ├── static/                      # 静态资源
 │   ├── css/style.css
@@ -213,20 +230,20 @@ ai-grading-system/
 ```python
 def create_app():
     """应用工厂函数"""
-    app = Flask(__name__, 
-                template_folder='templates', 
+    app = Flask(__name__,
+                template_folder='templates',
                 static_folder='static')
     app.config['SECRET_KEY'] = 'your-secret-key'
-    
+
     # 启用 CORS
     CORS(app)
-    
+
     # 注册路由
     register_routes(app)
-    
+
     # 注册错误处理
     register_error_handlers(app)
-    
+
     return app
 ```
 
@@ -238,7 +255,7 @@ def create_app():
 | `batch_bp` | `/api/batch` | `batch_routes.py` | 批量评分、性能测试 |
 | `validation_bp` | `/api/validation` | `validation_routes.py` | 评分验证 |
 | `tuning_bp` | `/api/tuning` | `tuning_routes.py` | 自动调优 |
-| `api_bp` | `/api` | `api_routes.py` | 题目 CRUD、评分、统计 |
+| `api_bp` | `/api` | `api_routes.py` | 题目 CRUD、评分、统计、用户、敏感词 |
 | `config_bp` | `/api/config` | `config_routes.py` | 模型配置管理 |
 
 **页面路由**:
@@ -246,10 +263,12 @@ def create_app():
 | 路由 | 页面 | 说明 |
 |------|------|------|
 | `/` | → `/login` | 根路径重定向 |
-| `/login` | `login.html` | 登录页（角色选择） |
+| `/login` | `login.html` | 登录页（用户选择 + 角色选择） |
 | `/management` | `question-bank.html` | 题库管理（管理员/科目老师） |
 | `/grading` | `dist/index.html` | 单题评分页 |
 | `/test-cases` | `test-cases.html` | 测试用例管理 |
+| `/sensitive-words` | `sensitive-words.html` | 敏感词管理 |
+| `/user-management` | `user-management.html` | 用户管理（管理员） |
 | `/code-viewer` | `code-viewer.html` | 评分引擎源码查看 |
 
 ### 4.2 主评分引擎 (`app/qwen_engine.py`)
@@ -260,35 +279,40 @@ def create_app():
 
 | 方法 | 职责 |
 |------|------|
-| `grade()` | 主入口，3 次指数退避重试（1s/2s/4s） |
+| `grade()` | 主入口，按科目分支路由，3 次指数退避重试（1s/2s/4s） |
 | `_init_client()` | 初始化 OpenAI 兼容客户端，DB 配置 → .env 降级 |
 | `set_provider()` | 运行时切换服务商和模型 |
 | `_format_rubric()` | 格式化评分标准（rubricScript → rules+points 降级） |
-| `_get_system_prompt()` | 系统提示词（角色 + 流程 + JSON + 反作弊） |
+| `_get_system_prompt()` | 通用系统提示词（角色 + 流程 + JSON + 反作弊） |
+| `_get_politics_system_prompt()` | 思政专用系统提示词（严格按 rubric_script 执行） |
 | `_build_user_prompt()` | 用户提示词（含 cache_buster 破缓存） |
 | `_parse_output()` | 解析 LLM JSON 输出，scoring_items 累加总分 |
 | `_calculate_confidence()` | 基于输出长度计算置信度 |
 | `boundary_check()` | 边界检查 + 分数截断 |
 
-**评分流程**:
+**评分结果模型** (`QwenGradingResult`):
 
+```python
+class QwenGradingResult(BaseModel):
+    final_score: Optional[float] = None    # 最终分数（None = 评分失败）
+    confidence: float = 0                  # 置信度 0~1
+    strategy: str = ""                     # 策略标识
+    total_score: float = 0                 # 满分
+    comment: str = ""                      # 评语
+    error: Optional[str] = None            # 错误信息
+    needs_review: bool = False             # 是否需要人工复核
+    warning: Optional[str] = None          # 警告信息
+    scoring_items: Optional[List[Dict]] = None  # 分项得分明细
 ```
-grade(question, answer, rubric, max_score)
-    ↓
-_format_rubric(rubric)  # 格式化评分标准
-    ↓
-_get_system_prompt()    # 系统提示词
-_build_user_prompt()    # 用户提示词
-    ↓
-调用 LLM API（temperature=0.0, max_tokens=4096）
-    ↓ 失败重试（指数退避 3 次）
-_parse_output(response) # 解析 JSON，累加 scoring_items
-    ↓
-_calculate_confidence() # 计算置信度
-    ↓
-boundary_check()        # 边界检测
-    ↓
-返回 QwenGradingResult(score, confidence, comment, details, needs_review)
+
+**科目分支路由** (v2.1.0 新增):
+
+```python
+# 在 grade() 方法中
+if subject == 'politics':
+    system_prompt = self._get_politics_system_prompt()
+else:
+    system_prompt = self._get_system_prompt()
 ```
 
 ### 4.3 聚合引擎 (`app/engine.py`)
@@ -349,20 +373,20 @@ boundary_check()        # 边界检测
 ```python
 class BaseModelClient(ABC):
     """基础模型客户端"""
-    
+
     provider: ModelProvider
     model_name: str
     enabled: bool = True
-    
+
     @abstractmethod
     async def generate(self, prompt: str, **kwargs) -> ModelResponse:
         """生成响应（子类实现）"""
         pass
-    
+
     async def grade_answer(self, question, answer, rubric, max_score):
         """评分学生答案（共用逻辑）"""
         pass
-    
+
     def get_info(self) -> Dict[str, Any]:
         """获取模型信息（子类可覆盖）"""
         pass
@@ -394,25 +418,6 @@ class BaseModelClient(ABC):
 | `clear()` | 清空注册表（用于测试） |
 | `init_models(config)` | 从配置初始化所有模型 |
 
-**多模型注册逻辑**:
-
-```python
-def init_models(config: Dict[str, Any]) -> None:
-    """
-    初始化所有模型
-    
-    逻辑:
-    1. 遍历每个服务商 (qwen, glm, doubao, ...)
-    2. 检查服务商是否启用 (config[provider].enabled)
-    3. 读取 available_models 列表
-    4. 读取 enabled_models 集合 (extra_config)
-    5. 为每个启用的子模型:
-       - 创建客户端实例
-       - 设置 display_name
-       - 注册到 model_registry
-    """
-```
-
 #### 各模型客户端
 
 | 类 | 文件 | SDK | 调用方式 |
@@ -427,7 +432,7 @@ def init_models(config: Dict[str, Any]) -> None:
 
 ## 5. 数据库设计
 
-**数据库**: SQLite 3  
+**数据库**: SQLite 3
 **数据库文件**: `data/exam_system.db`
 
 ### 5.1 表结构
@@ -458,11 +463,26 @@ def init_models(config: Dict[str, Any]) -> None:
 | id | INTEGER | PK, AUTOINCREMENT | 自增主键 |
 | question_id | INTEGER | FK → questions.id | 关联题目 |
 | student_answer | TEXT | | 学生答案 |
+| student_id | TEXT | DEFAULT NULL | 学生标识（用于一致性校验） |
 | score | REAL | | 得分 |
 | details | TEXT | | JSON 详情 |
 | model_used | TEXT | | 使用的模型 |
 | confidence | REAL | | 置信度 |
+| grading_flags | TEXT | DEFAULT NULL | JSON 评分标记（异常检测结果） |
 | graded_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 评分时间 |
+
+**grading_flags 字段结构**:
+
+```json
+[
+  {
+    "type": "fake_quote | short_answer_high_score | all_perfect | score_inconsistency | sensitive_word",
+    "severity": "warning | error | info",
+    "desc": "异常描述",
+    "point_name": "相关评分点名称（可选）"
+  }
+]
+```
 
 #### 5.1.3 test_cases (测试用例表)
 
@@ -504,55 +524,40 @@ def init_models(config: Dict[str, Any]) -> None:
 | extra_config | TEXT | DEFAULT '{}' | 扩展配置（JSON，含 enabled_models） |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 更新时间 |
 
-**extra_config 结构示例**:
-
-```json
-{
-    "enabled_models": [
-        "deepseek-v3-250324",
-        "deepseek-v3-2-251201",
-        "doubao-seed-2-0-pro-260215"
-    ]
-}
-```
-
-#### 5.1.6 batch_tasks (批量任务表)
+#### 5.1.6 users (用户表) — v2.1.0 新增
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PK, AUTOINCREMENT | 自增主键 |
-| status | TEXT | | 任务状态（pending/running/completed/failed） |
-| total_count | INTEGER | | 总题目数 |
-| processed_count | INTEGER | | 已处理数 |
-| created_at | TIMESTAMP | | 创建时间 |
-| completed_at | TIMESTAMP | | 完成时间 |
+| username | TEXT | NOT NULL, UNIQUE | 用户名（英文） |
+| display_name | TEXT | | 显示名 |
+| role | TEXT | DEFAULT 'teacher' | 角色（admin/teacher） |
+| subject | TEXT | DEFAULT NULL | 绑定科目 |
+| is_active | INTEGER | DEFAULT 1 | 是否启用 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-#### 5.1.7 syllabus (考试大纲表)
+**预置用户**: admin（管理员）+ 9 个科目老师（politics/chinese/english/math/history/geography/physics/chemistry/biology）
 
-| 字段 | 类型 | 约束 | 说明 |
-|------|------|------|------|
-| id | INTEGER | PK, AUTOINCREMENT | 自增主键 |
-| subject | TEXT | | 科目 |
-| content | TEXT | | 大纲内容 |
-| created_at | TIMESTAMP | | 创建时间 |
-
-#### 5.1.8 rubrics (评分规则表)
+#### 5.1.7 sensitive_words (敏感词表)
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PK, AUTOINCREMENT | 自增主键 |
-| name | TEXT | | 规则名称 |
-| content | TEXT | | 规则内容 |
-| created_at | TIMESTAMP | | 创建时间 |
+| word | TEXT | NOT NULL | 敏感词 |
+| subject | TEXT | DEFAULT 'all' | 适用科目（all = 全局） |
+| category | TEXT | DEFAULT 'politics' | 分类（politics/other） |
+| severity | TEXT | DEFAULT 'high' | 严重程度（high/medium/low） |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 更新时间 |
 
-#### 5.1.9 bug_log (Bug 日志表)
+#### 5.1.8 其他表
 
-| 字段 | 类型 | 约束 | 说明 |
-|------|------|------|------|
-| id | INTEGER | PK, AUTOINCREMENT | 自增主键 |
-| description | TEXT | | Bug 描述 |
-| status | TEXT | | 状态（open/fixed） |
-| created_at | TIMESTAMP | | 创建时间 |
+| 表名 | 说明 |
+|------|------|
+| `batch_tasks` | 批量评分任务 |
+| `syllabus` | 考试大纲/教材内容 |
+| `rubrics` | 评分规则（备用） |
+| `bug_log` | Bug 日志（评分异常记录） |
 
 ### 5.2 数据库操作模块 (`db_models.py`)
 
@@ -560,15 +565,15 @@ def init_models(config: Dict[str, Any]) -> None:
 
 | 函数 | 说明 |
 |------|------|
-| `init_database()` | 初始化数据库，创建所有表 |
+| `init_database()` | 初始化数据库，创建所有表 + 预置默认用户 |
 | `get_db_connection()` | 获取数据库连接 |
 | `get_effective_config(provider)` | 获取服务商有效配置（DB → .env 降级） |
-| `get_all_effective_configs()` | 获取所有服务商配置 |
-| `upsert_model_config(...)` | 新增或更新模型配置 |
-| `toggle_model_enabled(provider, enabled)` | 切换服务商启用状态 |
-| `add_question(...)` | 添加题目 |
-| `get_question(id)` | 获取题目详情 |
-| `add_grading_record(...)` | 添加评分记录 |
+| `add_grading_record(...)` | 添加评分记录（含 student_id, grading_flags） |
+| `get_previous_grade(student_id, question_id)` | 查询同学生同题最近一次评分 |
+| `get_users()` / `get_user()` | 用户查询 |
+| `add_user()` / `update_user()` / `delete_user()` | 用户 CRUD |
+| `get_sensitive_words(...)` | 敏感词查询（支持筛选） |
+| `check_sensitive_words(answer, subject)` | 扫描答案中的敏感词 |
 
 ---
 
@@ -576,64 +581,165 @@ def init_models(config: Dict[str, Any]) -> None:
 
 ### 6.1 评分 API (`/api/grading`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| POST | `/api/grading/single` | 单题评分 | `{question, answer, rubric, max_score, sample_count, strategy}` | `{success, result}` |
-| GET | `/api/grading/models` | 列出可用模型 | - | `{success, models}` |
-| GET | `/api/grading/strategies` | 列出可用策略 | - | `{success, strategies}` |
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/api/grading/single` | 单题评分（聚合引擎） |
+| GET | `/api/grading/models` | 列出可用模型 |
+| GET | `/api/grading/strategies` | 列出可用策略 |
 
 ### 6.2 批量 API (`/api/batch`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| POST | `/api/batch/grade` | 批量评分 | `{questions, rubric, max_score}` | `{success, results}` |
-| POST | `/api/batch/test` | 性能测试 | `{count, sample_count}` | `{success, stats}` |
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/api/batch/grade` | 批量评分 |
+| POST | `/api/batch/test` | 性能测试 |
 
-### 6.3 数据库 API (`/api`)
+### 6.3 核心 API (`/api`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| GET | `/api/providers` | 列出已启用的 provider 及子模型 | - | `{success, data}` |
-| GET | `/api/questions` | 获取题目列表 | `?subject=xxx` | `{success, questions}` |
-| GET | `/api/questions/:id` | 获取题目详情 | - | `{success, question}` |
-| POST | `/api/questions` | 创建题目 | `{subject, title, content, rubric, ...}` | `{success, id}` |
-| PUT | `/api/questions/:id` | 更新题目 | 同创建 | `{success}` |
-| DELETE | `/api/questions/:id` | 删除题目 | - | `{success}` |
-| POST | `/api/grade` | 评分答案（Qwen 引擎） | `{question_id, answer, provider, model, rubric, max_score}` | `{success, score, confidence, comment, details, needs_review, warning}` |
-| GET | `/api/history` | 获取评分历史 | `?question_id=xxx` | `{success, records}` |
-| POST | `/api/batch` | 创建批量评分任务 | `{question_ids, rubric}` | `{success, task_id}` |
-| GET | `/api/batch/:id` | 获取批量任务状态 | - | `{success, status, progress}` |
-| GET | `/api/stats` | 获取统计信息 | - | `{success, stats}` |
-| GET | `/api/dashboard` | 题库总览（含科目过滤） | `?subject=xxx` | `{success, data}` |
-| GET | `/api/export-rubric-scripts` | 导出评分脚本（Markdown） | - | Markdown 文件 |
-| GET | `/api/models/available` | 获取所有可用模型列表 | - | `{success, models}` |
+| 方法 | 路由 | 说明 | 请求体 |
+|------|------|------|--------|
+| GET | `/api/providers` | 列出已启用 provider 及子模型 | - |
+| GET | `/api/questions` | 获取题目列表 | `?subject=xxx` |
+| GET | `/api/questions/:id` | 获取题目详情 | - |
+| POST | `/api/questions` | 创建题目 | `{subject, title, content, ...}` |
+| PUT | `/api/questions/:id` | 更新题目 | 同创建 |
+| DELETE | `/api/questions/:id` | 删除题目 | - |
+| **POST** | **`/api/grade`** | **评分答案** | **`{question_id, answer, student_id, provider, model}`** |
+| GET | `/api/history` | 获取评分历史 | `?question_id=xxx` |
+| GET | `/api/stats` | 获取统计信息 | - |
+| GET | `/api/dashboard` | 题库总览 | `?subject=xxx` |
+| GET | `/api/export-rubric-scripts` | 导出评分脚本 | `?subject=xxx` |
+| GET | `/api/models/available` | 获取所有可用模型 | - |
+| POST | `/api/generate-rubric-script` | AI 生成评分脚本 | `{content, score, standardAnswer}` |
+| POST | `/api/evaluate-question` | AI 命题质量评估 | `{content, standardAnswer}` |
+| POST | `/api/verify-rubric` | 验证评分脚本 | `{question_id, tolerance}` |
+| POST | `/api/auto-generate` | AI 自动出题 | `{subject, count, testcase_count}` |
+| POST | `/api/generate-answer` | 生成模拟答案 | `{question_id}` |
+| GET | `/api/bugs` | 获取 bug 日志 | `?bug_type=xxx` |
+
+#### 6.3.1 POST /api/grade 请求/响应
+
+**请求体**:
+
+```json
+{
+  "question_id": 5,
+  "answer": "学生答案文本",
+  "student_id": "politics",
+  "provider": "qwen",
+  "model": "qwen-plus"
+}
+```
+
+**响应** (v2.1.0):
+
+```json
+{
+  "success": true,
+  "data": {
+    "record_id": 123,
+    "score": 7.5,
+    "confidence": 0.85,
+    "comment": "要点1命中...要点2部分命中...",
+    "details": { "final_score": 7.5, "scoring_items": [...], "..." },
+    "model_used": "qwen-agent",
+    "needs_review": false,
+    "warning": null,
+    "grading_flags": [
+      {
+        "type": "score_inconsistency",
+        "severity": "warning",
+        "desc": "与上次评分(8分)差异较大(0.5分)，可能评分不一致"
+      }
+    ]
+  }
+}
+```
+
+**评分流程（v2.1.0 完整流程）**:
+
+```
+1. 空答案预检 → len(stripped) < 2 → 0分（不调LLM）
+2. 敏感词扫描 → high 命中 → 0分（不调LLM）
+3. LLM 评分（科目分支） → 3次重试
+4. 证据真实性验证（quoted_text 是否存在于原文）
+5. 判别Agent：短答案高分检测
+6. 判别Agent：全满分检测
+7. 保存评分记录（含 student_id）
+8. 一致性校验（同学生同题历史对比）
+9. 返回结果
+```
+
+#### 6.3.2 用户管理 API (v2.1.0 新增)
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/users` | 获取用户列表 |
+| POST | `/api/users` | 新增用户 |
+| PUT | `/api/users/:id` | 更新用户 |
+| DELETE | `/api/users/:id` | 删除用户 |
+
+#### 6.3.3 敏感词 API
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/sensitive-words` | 获取敏感词列表（支持筛选） |
+| POST | `/api/sensitive-words` | 添加敏感词 |
+| PUT | `/api/sensitive-words/:id` | 更新敏感词 |
+| DELETE | `/api/sensitive-words/:id` | 删除敏感词 |
+| POST | `/api/sensitive-words/batch` | 批量导入敏感词 |
 
 ### 6.4 验证 API (`/api/validation`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| POST | `/api/validation/run` | 运行评分规则验证 | `{strategy, sample_count}` | `{success, validation_result}` |
-| GET | `/api/validation/dataset` | 获取测试数据集信息 | - | `{success, dataset}` |
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/api/validation/run` | 运行评分规则验证 |
+| GET | `/api/validation/dataset` | 获取测试数据集信息 |
 
 ### 6.5 调优 API (`/api/tuning`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| POST | `/api/tuning/start` | 启动自动调优 | `{max_iterations, target_accuracy, target_correlation}` | `{success, tuning_result}` |
-| GET | `/api/tuning/status` | 获取调优状态 | - | `{success, status, progress}` |
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/api/tuning/start` | 启动自动调优 |
+| GET | `/api/tuning/status` | 获取调优状态 |
 
 ### 6.6 配置管理 API (`/api/config`)
 
-| 方法 | 路由 | 说明 | 请求体 | 响应 |
-|------|------|------|--------|------|
-| GET | `/api/config/models` | 列出所有 provider 配置 | - | `{success, providers}` |
-| GET | `/api/config/models/:provider` | 获取单个 provider 配置 | - | `{success, config}` |
-| PUT | `/api/config/models/:provider` | 更新 provider 配置 | `{api_key, base_url, model, enabled}` | `{success}` |
-| POST | `/api/config/models/:provider/toggle` | 启用/禁用 provider | `{enabled}` | `{success}` |
-| POST | `/api/config/models/toggle-all` | 批量启用/禁用全部 | `{enabled}` | `{success}` |
-| POST | `/api/config/models/:provider/toggle-model` | 启用/禁用单个子模型 | `{model_id, enabled}` | `{success}` |
-| POST | `/api/config/models/:provider/test` | 测试单个 provider 连通性 | - | `{success, provider, latency_ms, error}` |
-| POST | `/api/config/models/test-all` | 测试所有已启用 provider | - | `{success, results}` |
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/config/models` | 列出所有 provider 配置 |
+| GET | `/api/config/models/:provider` | 获取单个 provider 配置 |
+| PUT | `/api/config/models/:provider` | 更新 provider 配置 |
+| POST | `/api/config/models/:provider/toggle` | 启用/禁用 provider |
+| POST | `/api/config/models/:provider/toggle-model` | 启用/禁用单个子模型 |
+| POST | `/api/config/models/:provider/test` | 测试 provider 连通性 |
+
+### 6.7 测试用例 API
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/test-cases/overview` | 测试用例统计概览 |
+| GET | `/api/test-cases/all` | 所有测试用例（含题目信息） |
+| GET | `/api/questions/:id/test-cases` | 某题的测试用例 |
+| POST | `/api/questions/:id/test-cases` | 添加测试用例 |
+| PUT | `/api/questions/:id/test-cases/:tc_id` | 更新测试用例 |
+| DELETE | `/api/questions/:id/test-cases/:tc_id` | 删除测试用例 |
+| POST | `/api/questions/:id/generate-test-cases` | AI 自动生成测试用例 |
+
+### 6.8 评分脚本版本管理 API
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/questions/:id/script-history` | 获取脚本版本历史 |
+| POST | `/api/questions/:id/script-rollback` | 回退到指定版本 |
+
+### 6.9 大纲/教材 API
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/syllabus` | 获取大纲/教材列表 |
+| POST | `/api/syllabus` | 保存大纲/教材 |
+| DELETE | `/api/syllabus/:subject/:type` | 删除大纲/教材 |
 
 ---
 
@@ -643,113 +749,136 @@ def init_models(config: Dict[str, Any]) -> None:
 
 | 页面 | 文件 | 技术 | 说明 |
 |------|------|------|------|
-| 登录页 | `templates/login.html` | Vue 3 + Element Plus | 角色选择（管理员/科目老师） |
-| 题库管理 | `templates/question-bank.html` | Vue 3 + Element Plus | 题目 CRUD、评分标准配置、模型配置管理 |
-| 测试用例 | `templates/test-cases.html` | Vue 3 + Element Plus | 测试用例管理、验证结果展示 |
+| 登录页 | `templates/login.html` | Vue 3 + Element Plus | 用户选择 + 角色选择 + 科目选择 |
+| 题库管理 | `templates/question-bank.html` | Vue 3 + Element Plus | 题目 CRUD、评分标准、模型配置 |
+| 测试用例 | `templates/test-cases.html` | Vue 3 + Element Plus | 测试用例管理、验证结果 |
 | 评分页 | `dist/index.html` | Vue 3 + Element Plus | 单题评分、模型选择、结果展示 |
+| 敏感词管理 | `templates/sensitive-words.html` | Vue 3 + Element Plus | 敏感词 CRUD + 批量导入 |
+| 用户管理 | `templates/user-management.html` | Vue 3 + Element Plus | 用户 CRUD（管理员专用） |
 | 源码查看 | `static/code-viewer.html` | 原生 HTML/JS | 评分引擎源码查看器 |
 
-### 7.2 前端技术栈
+### 7.2 登录流程 (v2.1.0)
 
-- **框架**: Vue 3 (Composition API)
-- **UI 库**: Element Plus
-- **HTTP 客户端**: Axios
-- **状态管理**: Vue 3 `reactive` + `ref` + `computed`
-- **构建**: 无构建工具，直接加载 `vue.global.prod.js`
+**登录页** `login.html`:
 
-### 7.3 核心前端组件
+1. 用户从下拉框选择用户（加载 `GET /api/users`）
+2. 选择用户后自动填充角色和科目
+3. 选择角色（管理员/科目老师）
+4. 科目老师需选择科目
+5. 点击进入系统 → localStorage 存储：
+   - `ai_grading_role`: admin/teacher
+   - `ai_grading_current_subject`: 科目标识
+   - `ai_grading_username`: 用户名（用于 student_id 传递）
 
-#### 题库管理页面 (`question-bank.html`)
+**评分页** `dist/index.html`:
 
-**功能模块**:
-- 题目列表（分页、搜索、科目过滤）
-- 题目编辑（表单、评分标准配置）
-- 模型配置管理（服务商开关、子模型开关、连通性测试）
-- 评分脚本管理（版本历史、导出）
-
-**关键数据**:
 ```javascript
-const questions = ref([])
-const modelConfigs = ref([])
-const editingModelConfig = ref(null)
+// 提交评分时传递 student_id
+const studentId = localStorage.getItem('ai_grading_username') || '';
+requestBody = {
+    question_id: selectedQuestionId.value,
+    answer: studentAnswer.value.trim(),
+    student_id: studentId,
+    provider: prov,
+    model: mdl
+};
 ```
 
-#### 评分页面 (`dist/index.html`)
+### 7.3 前端页面链接关系
 
-**功能模块**:
-- 模型选择（按服务商分组下拉框）
-- 评分表单（题目、答案、评分标准）
-- 评分结果展示（分数、置信度、评分理由）
-- 系统配置（采样次数、温度、置信度阈值）
+所有页面 Footer 包含统一导航：
 
-**模型分组逻辑**:
-```javascript
-const modelGroups = computed(() => {
-    const providerLabels = { 
-        qwen: '通义千问', 
-        glm: '智谱 GLM', 
-        doubao: '火山引擎 ARK',
-        // ...
-    };
-    const groups = {};
-    // 只显示 enabled=true 的模型
-    availableModels.value.filter(m => m.enabled).forEach(m => {
-        const p = m.provider || 'other';
-        if (!groups[p]) groups[p] = { provider: p, label: providerLabels[p], models: [] };
-        groups[p].models.push(m);
-    });
-    return Object.values(groups);
-});
 ```
-
-### 7.4 前端路由逻辑
-
-无前端路由，使用菜单切换：
-
-```javascript
-const handleMenuSelect = (index) => { currentPage.value = index; }
+单题评分 | 题库管理 | 测试集管理 | 敏感词管理 | 用户管理
 ```
 
 ---
 
 ## 8. 核心业务流程
 
-### 8.1 评分流程（主流程 - QwenGradingEngine）
+### 8.1 评分流程（v2.1.0 完整流程）
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  用户提交评分请求 (POST /api/grade)                       │
+│  含 question_id, answer, student_id, provider, model     │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  api_routes.grade_answer()                               │
-│  - 解析请求参数（question_id/answer/provider/model/...）  │
-│  - 如有 question_id → 从数据库加载题目信息                │
+│  1. 空答案预检                                            │
+│  stripped = re.sub(r'[\s\W]+', '', answer)               │
+│  if len(stripped) < 2 → 0分，model_used='precheck'       │
+│  （不记录 student_id 到一致性校验范围）                     │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  grading_engine.set_provider(provider, model)            │
-│  （如前端指定，否则使用默认配置）                          │
+│  2. 敏感词扫描                                            │
+│  check_sensitive_words(answer, subject)                  │
+│  high severity 命中 → 0分，model_used='sensitive_filter'  │
+│  记录到 bug_log + grading_flags                          │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  grading_engine.grade(question, answer, rubric, max_score)│
-│  ├─ _format_rubric()                                     │
-│  ├─ _get_system_prompt()                                 │
-│  ├─ _build_user_prompt()                                 │
-│  ├─ 调用 LLM（3次指数退避重试: 1s/2s/4s）                 │
-│  ├─ _parse_output()                                      │
-│  ├─ _calculate_confidence()                              │
-│  └─ boundary_check()                                     │
+│  3. 加载题目信息 + 构建 rubric 字典                        │
+│  从 DB 加载 question, rubric_script, rubric_rules 等     │
+│  合并到 rubric 字典                                       │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  add_grading_record()  # 保存评分记录到数据库              │
+│  4. LLM 评分（科目分支）                                  │
+│  if subject == 'politics':                               │
+│      system_prompt = _get_politics_system_prompt()       │
+│  else:                                                   │
+│      system_prompt = _get_system_prompt()                │
+│  3次指数退避重试 (1s/2s/4s)                               │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  5. 输出解析 + 语义校验                                   │
+│  _parse_output() → scoring_items 累加总分                │
+│  semantic_checker → 语义相似度纠偏                        │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  6. 证据真实性验证                                        │
+│  检查 scoring_items 中 quoted_text 是否存在于原始答案     │
+│  不存在 → grading_flags + needs_review=True              │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  7. 判别Agent（纯 Python，不调 LLM）                      │
+│  - 短答案高分检测：字数<10 且 得分≥80%满分                 │
+│  - 全满分检测：所有评分点 hit=true 且 score=max_score     │
+│  命中 → grading_flags + needs_review=True                │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  8. 边界检查                                              │
+│  - final_score >= 95% max → needs_review                 │
+│  - final_score <= 5% max → needs_review                  │
+│  - confidence < 0.6 → needs_review                       │
+│  - final_score is None → needs_review                    │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  9. 保存评分记录                                          │
+│  add_grading_record(question_id, answer, score, ...      │
+│      grading_flags=..., student_id=...)                  │
+└────────────────────┬────────────────────────────────────┘
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│  10. 一致性校验（student_id + question_id 有效时）         │
+│  get_previous_grade(student_id, question_id)             │
+│  if diff > max_score * 0.2:                              │
+│      grading_flags += score_inconsistency                │
+│      needs_review = True                                 │
+│      UPDATE grading_records SET grading_flags            │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │  返回 JSON 结果                                           │
-│  {score, confidence, comment, details, needs_review}     │
+│  {score, confidence, comment, details, needs_review,     │
+│   warning, grading_flags}                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -761,8 +890,8 @@ const handleMenuSelect = (index) => { currentPage.value = index; }
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  engine.aggregate(question, answer, rubric, max_score,    │
-│                   sample_count, strategy)                 │
+│  engine.aggregate(question, answer, rubric, max_score,   │
+│                   sample_count, strategy)                │
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -779,10 +908,6 @@ const handleMenuSelect = (index) => { currentPage.value = index; }
 └────────────────────┬────────────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  _boundary_check()  # 边界检测                            │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
 │  返回 GradingResult                                       │
 │  {score, confidence, consistency, needs_review}          │
 └─────────────────────────────────────────────────────────┘
@@ -791,99 +916,10 @@ const handleMenuSelect = (index) => { currentPage.value = index; }
 ### 8.3 配置管理流程
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  .env 文件（默认配置）                                     │
-└────────────────────┬────────────────────────────────────┘
-                     ▼ 系统启动时
-┌─────────────────────────────────────────────────────────┐
-│  config/settings.py 读取环境变量                           │
-│  → QWEN_CONFIG/GLM_CONFIG/...                            │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  db_models._get_env_defaults() 缓存 .env 默认值           │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  数据库 model_configs 表                                  │
-│  （管理员通过 Web UI 修改的覆盖配置）                       │
-└────────────────────┬────────────────────────────────────┘
-                     ▼ 查询时
-┌─────────────────────────────────────────────────────────┐
-│  db_models.get_effective_config(provider)                │
-│  优先: 数据库配置 (if exists and enabled)                 │
-│  降级: .env 默认值                                        │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  registry.py init_models() 注册模型到 ModelRegistry       │
-└─────────────────────────────────────────────────────────┘
+.env 文件（默认配置）→ config/settings.py → DB model_configs 表 → get_effective_config()
 ```
 
-### 8.4 模型注册流程
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  应用启动 (app/routes.py)                                 │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  get_all_effective_configs()                             │
-│  - 从 DB 读取有效配置                                     │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  init_models(_model_config)  # registry.py               │
-│  - 遍历每个 provider                                     │
-│  - 检查 enabled 和 api_key                               │
-│  - 如有 available_models:                                │
-│      为每个启用的子模型创建独立实例                        │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  model_registry.register(client)                         │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  engine = AggregationEngine(GRADING_CONFIG)              │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 8.5 验证与调优流程
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  用户启动验证 (POST /api/validation/run)                  │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  ValidationEngine.validate()                             │
-│  - 加载测试数据集（test_data.py）                         │
-│  - 并行评分所有测试项                                     │
-│  - 计算统计指标（准确率、误差、相关系数）                   │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  返回验证结果                                              │
-│  {accuracy, avg_error, std_error, max_error, correlation} │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│  用户启动调优 (POST /api/tuning/start)                    │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  AutoTuningEngine.tune()                                 │
-│  - 迭代调优循环（最大 10 次）                              │
-│  - 运行验证 → 计算综合得分 → 检查目标                      │
-│  - 参数调整（温度、提示词模板）                            │
-└────────────────────┬────────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  返回调优结果                                              │
-│  {best_params, final_accuracy, final_correlation, ...}   │
-└─────────────────────────────────────────────────────────┘
-```
+**配置优先级**: `数据库配置` > `.env 配置` > `settings.py 默认值`
 
 ---
 
@@ -891,13 +927,11 @@ const handleMenuSelect = (index) => { currentPage.value = index; }
 
 ### 9.1 置信度加权算法（默认聚合策略）
 
-**算法步骤**:
-
 ```python
 def _confidence_weighted(self, results, max_score):
     """
     置信度加权聚合算法
-    
+
     步骤:
     1. 收集所有模型的评分结果（含多次采样）
     2. 过滤错误响应（confidence=0）
@@ -912,95 +946,76 @@ def _confidence_weighted(self, results, max_score):
     """
 ```
 
-**MAD 异常值过滤**:
+### 9.2 边界检测算法
 
 ```python
-# 中位数绝对偏差 (Median Absolute Deviation)
-median = np.median(scores)
-mad = np.median(np.abs(scores - median))
-
-# 保留离中位数在 2*MAD 范围内的结果
-threshold = 2 * mad
-filtered = [(s, c) for s, c in zip(scores, confidences) 
-            if abs(s - median) <= threshold]
-```
-
-### 9.2 多数投票算法
-
-```python
-def _majority_vote(self, results, max_score):
+def boundary_check(self, result: QwenGradingResult) -> QwenGradingResult:
     """
-    多数投票算法
-    
-    步骤:
-    1. 分数离散化为整数
-    2. Counter 统计投票
-    3. 取最高票作为最终分数
-    4. 置信度 = 最高票比例
-    """
-    from collections import Counter
-    
-    # 离散化分数
-    int_scores = [int(round(r.score)) for r in results]
-    
-    # 统计投票
-    vote_counts = Counter(int_scores)
-    final_score, vote_count = vote_counts.most_common(1)[0]
-    
-    # 计算置信度
-    confidence = vote_count / len(int_scores)
-    
-    return final_score, confidence
-```
+    边界检查 + 分数截断
 
-### 9.3 边界检测算法
-
-```python
-def _boundary_check(self, final_score, max_score, confidence):
-    """
-    边界检测算法
-    
     规则:
-    - final_score >= max_score * 0.95 → "接近满分，建议复核"
-    - final_score <= max_score * 0.05 → "接近零分，建议复核"
-    - confidence < 0.6 → "置信度过低，必须复核"
+    - final_score is None → needs_review=True（跳过其他检查）
+    - final_score >= max_score * 0.95 → needs_review
+    - final_score <= max_score * 0.05 → needs_review
+    - confidence < threshold_low → needs_review
+    - 分数截断到 [0, max_score] 范围
     """
-    warnings = []
-    needs_review = False
-    
-    if final_score >= max_score * 0.95:
-        warnings.append("接近满分，建议复核")
-        needs_review = True
-    
-    if final_score <= max_score * 0.05:
-        warnings.append("接近零分，建议复核")
-        needs_review = True
-    
-    if confidence < 0.6:
-        warnings.append("置信度过低，必须复核")
-        needs_review = True
-    
-    return needs_review, warnings
 ```
 
-### 9.4 自动调优算法
+### 9.3 判别Agent (v2.1.0)
+
+**纯 Python 检查，不调用 LLM**，在 LLM 评分之后执行：
+
+#### 短答案高分检测 (short_answer_high_score)
 
 ```python
-def tune(self, max_iterations=10, target_accuracy=0.8, target_correlation=0.85):
-    """
-    自动调优算法
-    
-    迭代调优循环:
-    1. 运行验证（ValidationEngine.validate）
-    2. 计算综合得分 = accuracy * 0.6 + correlation * 0.4
-    3. 检查目标：accuracy >= 0.8 AND correlation >= 0.85
-    4. 参数调整：
-       - 误差 > 3.0 → 降低温度（-0.05，最低 0.1）
-       - 误差 < 1.5 AND correlation > 0.9 → 提高温度（+0.02，最高 0.5）
-       - 每 3 次迭代且 accuracy < 0.7 → 切换提示词模板
-         模板序列：default → detailed → strict → flexible
-    """
+if final_score >= max_score * 0.8:
+    stripped_answer = re.sub(r'[\s\W]+', '', student_answer)
+    if len(stripped_answer) < 10:
+        # 触发警告：答案仅N个字但得分X分
 ```
+
+**目的**: 防止模型给极短答案打高分（P2 缓存幻觉）。
+
+#### 全满分检测 (all_perfect)
+
+```python
+if final_score >= max_score * 0.95:
+    if scoring_items and len(scoring_items) >= 3:
+        scoreable = [i for i in scoring_items if i.get("max_score", 0) > 0]
+        if scoreable and all(i.get("hit") and i.get("score") >= i.get("max_score") for i in scoreable):
+            # 触发警告：所有N个评分点全部满分
+```
+
+**目的**: 防止模型给所有要点判满分（P3 缓存幻觉）。
+
+### 9.4 一致性校验算法 (v2.1.0)
+
+```python
+# 在 grade_answer() 中，评分记录保存之后
+if student_id and question_id and final_score is not None:
+    prev = get_previous_grade(student_id, question_id, exclude_record_id=record_id)
+    if prev and prev.get('score') is not None:
+        diff = abs(final_score - prev['score'])
+        if diff > max_score * 0.2:
+            # 触发评分不一致警告
+            # 更新 DB grading_flags
+```
+
+**核心原则**: 同一学生同一题目，多次评分的分数差异不应超过满分的 20%。
+
+### 9.5 证据真实性验证
+
+```python
+if result.scoring_items:
+    for item in result.scoring_items:
+        quoted = item.get("quoted_text", "")
+        if quoted and quoted not in student_answer:
+            # 触发 fake_quote 警告
+            # 该评分点的引用原文不存在于学生答案中
+```
+
+**目的**: 防止 LLM 编造不存在的引用文本（P1 幻觉）。
 
 ---
 
@@ -1008,84 +1023,188 @@ def tune(self, max_iterations=10, target_accuracy=0.8, target_correlation=0.85):
 
 ### 10.1 配置分层
 
-系统使用**四层配置**架构:
-
 ```
 第1层：.env 文件（默认配置）
     ↓ load_dotenv()
 第2层：config/settings.py（Python 配置对象）
-    - QWEN_CONFIG, GLM_CONFIG, ... 从 os.getenv() 读取
-    - GRADING_CONFIG 定义评分参数
-    - SERVER_CONFIG 定义 Web 服务参数
-    ↓ 系统启动时
 第3层：数据库 model_configs 表（运行时覆盖配置）
-    - 管理员通过 Web UI (/api/config/models/:provider PUT) 修改
-    - get_effective_config() 优先 DB → 降级 .env
-    ↓ 模型注册
 第4层：ModelRegistry 中的模型实例
-    - 使用最终合并的配置初始化客户端
 ```
 
 **配置优先级**: `数据库配置` > `.env 配置` > `settings.py 默认值`
 
 ### 10.2 关键配置项
 
-#### 模型开关
-
-| 环境变量 | 说明 | 默认值 |
-|---------|------|--------|
-| `QWEN_ENABLED` | 通义千问开关 | `true` |
-| `GLM_ENABLED` | 智谱 GLM 开关 | `false` |
-| `MINIMAX_ENABLED` | MiniMax 开关 | `false` |
-| `ERNIE_ENABLED` | 百度文心开关 | `false` |
-| `DOUBAO_ENABLED` | 字节豆包开关 | `false` |
-
-#### 评分参数
-
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
 | `DEFAULT_SAMPLE_COUNT` | 默认采样次数 | `3` |
 | `DEFAULT_STRATEGY` | 默认聚合策略 | `confidence_weighted` |
 | `CONFIDENCE_LOW` | 低置信度阈值 | `0.6` |
-| `CONFIDENCE_MEDIUM` | 中置信度阈值 | `0.7` |
-| `CONFIDENCE_HIGH` | 高置信度阈值 | `0.8` |
-
-#### Web 服务
-
-| 环境变量 | 说明 | 默认值 |
-|---------|------|--------|
 | `SERVER_HOST` | 监听地址 | `0.0.0.0` |
 | `SERVER_PORT` | 监听端口 | `5001` |
-| `FLASK_DEBUG` | 调试模式 | `false` |
 
-### 10.3 服务商配置示例
+---
 
-```python
-# config/settings.py
+## 11. 评分一致性保障体系
 
-DOUBAO_CONFIG = {
-    "api_key": os.getenv("DOUBAO_API_KEY", ""),
-    "base_url": os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding/v3"),
-    "model": os.getenv("DOUBAO_MODEL", "deepseek-v3-250324"),
-    "enabled": os.getenv("DOUBAO_ENABLED", "false").lower() == "true",
-    
-    # 可用模型列表（关键！）
-    "available_models": [
-        {"id": "deepseek-v3-250324", "name": "DeepSeek-V3"},
-        {"id": "deepseek-v3-2-251201", "name": "DeepSeek-V3.2"},
-        {"id": "doubao-seed-2-0-pro-260215", "name": "豆包 Seed 2.0 Pro"},
-        {"id": "doubao-seed-2-0-lite-260215", "name": "豆包 Seed 2.0 Lite"},
-        {"id": "doubao-seed-2-0-mini-260215", "name": "豆包 Seed 2.0 Mini"},
-        # ... 更多模型
-    ],
-}
+> **P0 原则**: 任何场景下，同一答案的评分必须一致。任何不一致都需要记录、查因、修复。
+
+### 11.1 问题来源
+
+| 问题编号 | 问题 | 影响 |
+|---------|------|------|
+| P1 | LLM 引用不存在的原文 (fake_quote) | 评分依据不真实 |
+| P2 | 极短答案得高分 (short_answer_high_score) | 评分标准执行不严 |
+| P3 | 全部评分点判满分 (all_perfect) | 缓存/偷懒幻觉 |
+| P4 | 同题多次评分分数不一致 (score_inconsistency) | 评分不可信 |
+
+### 11.2 保障机制
+
+| 机制 | 层级 | 检测问题 | 实现 |
+|------|------|---------|------|
+| `temperature=0.0` | LLM 调用 | 输出随机性 | `qwen_engine.py` |
+| `cache_buster` | Prompt | API 服务端缓存 | `_build_user_prompt()` |
+| 证据真实性验证 | 后处理 | P1 | `api_routes.py:grade_answer()` |
+| 短答案高分检测 | 后处理 | P2 | 判别Agent |
+| 全满分检测 | 后处理 | P3 | 判别Agent |
+| 一致性校验 | 后处理 | P4 | `get_previous_grade()` |
+| 边界检查 | 后处理 | 异常分数 | `boundary_check()` |
+| 敏感词过滤 | 前置 | 违规内容 | `check_sensitive_words()` |
+
+### 11.3 student_id 数据流
+
+```
+前端 localStorage('ai_grading_username')
+    ↓ HTTP POST
+api_routes.grade_answer() → student_id = data.get('student_id')
+    ↓
+add_grading_record(..., student_id=student_id)
+    ↓
+get_previous_grade(student_id, question_id) → 一致性校验
 ```
 
 ---
 
-## 11. 部署与运维
+## 12. 科目专用评分流程
 
-### 11.1 启动流程
+> 三个科目的 rubric_script 格式差异巨大，需要不同的系统提示词和输出解析策略。
+
+### 12.1 科目差异
+
+| 科目 | rubric_script 输出格式 | 特点 |
+|------|----------------------|------|
+| **思政** | `{"总分":X, "评语":"..."}` | 扁平输出，逐要素判断，有反作弊规则，部分得分（1.5分等） |
+| **语文** | `{"第一问":{"得分":X,"满分":2,"评语":"..."},...,"错别字扣分":X,"总分":X}` | 按子问题拆分，有错别字扣分 |
+| **英语** | `{"第1问":{"得分":X,"满分":2,"评语":"..."},...,"总分":X}` | 按子问题拆分，子采分点1分1分拆 |
+
+### 12.2 思政专用流程
+
+**系统提示词** (`_get_politics_system_prompt()`):
+
+- 严格按 rubric_script 的【逐项评分规则】执行
+- 分值完全按脚本标注，不可自行调整
+- 部分得分条件严格执行（如1.5分）
+- 等价表述按脚本中的等价表述表匹配
+- 输出格式：`{"总分": X, "评语": "..."}`
+
+**解析方式**: 直接从 `{"总分": X}` 取分，评语字段直接使用。
+
+### 12.3 语文专用流程
+
+**系统提示词** (`_get_chinese_system_prompt()`):
+
+- 反作弊优先：复制诗歌原文/题干 → 该问0分（但引用诗句+自己的分析应正常给分）
+- 逐项按 rubric_script 的【逐项评分规则】判断
+- 错别字扣分：按【扣分规则】执行，每处扣0.5分，扣完该问满分为止
+- 部分得分条件严格执行
+- 等价表述按脚本中的等价表述表匹配
+- 输出格式：**不硬编码 JSON schema**，要求"严格按照评分脚本中【输出格式要求】输出"
+
+**输出格式示例**（由 rubric_script 定义）:
+
+```json
+{
+  "第一问": {"得分": 2, "满分": 2, "评语": "准确识别边塞诗体裁"},
+  "第二问": {"得分": 1, "满分": 4, "评语": "提及环境艰苦但未分析表现手法"},
+  "第三问": {"得分": 2, "满分": 4, "评语": "答出爱国情感但未提及建功立业"},
+  "错别字扣分": 0.5,
+  "总分": 4.5,
+  "评语": "整体..."
+}
+```
+
+**关键差异**:
+- `错别字扣分` 字段为语文独有
+- 总分 = 各问得分之和 - 错别字扣分
+- `_parse_output()` 已有逐问格式兼容逻辑，无需改动
+
+### 12.4 英语专用流程
+
+**系统提示词** (`_get_english_system_prompt()`):
+
+- 反作弊优先：复制阅读材料原文/题干 → 该问0分
+- 逐项按 rubric_script 的【逐项评分规则】判断
+- **语言规则**：用拼音或中文作答一律判0分（英语 rubric_script 关键规则）
+- 等价表述匹配，大小写不敏感
+- 输出格式：按 rubric_script 的【输出格式要求】执行
+
+**输出格式示例**（由 rubric_script 定义）:
+
+```json
+{
+  "第1问": {"得分": 2, "满分": 2, "评语": "正确回答 Spring Festival"},
+  "第2问": {"得分": 2, "满分": 2, "评语": "正确回答鱼与余的谐音寓意"},
+  "第3问": {"得分": 1, "满分": 2, "评语": "答出烟花但未提及守岁"},
+  "总分": 5,
+  "评语": "整体..."
+}
+```
+
+**关键差异**:
+- 中文/拼音作答 → 全题0分（语义校验也跳过英语科目）
+- 无错别字扣分
+- 语义校验跳过：`semantic_checker` 使用中文 text2vec 模型，不适用于英文
+
+### 12.5 分支路由
+
+```python
+if subject == 'politics':
+    system_prompt = self._get_politics_system_prompt()
+elif subject == 'chinese':
+    system_prompt = self._get_chinese_system_prompt()
+elif subject == 'english':
+    system_prompt = self._get_english_system_prompt()
+else:
+    system_prompt = self._get_system_prompt()
+```
+
+### 12.6 通用系统提示词 (`_get_system_prompt()`)
+
+未匹配到专用流程的科目使用通用提示词，输出 `scoring_items` 格式：
+
+```json
+{
+  "评语": "评语内容",
+  "scoring_items": [
+    {
+      "name": "要点名称",
+      "score": 得分,
+      "max_score": 该要点满分,
+      "hit": true/false,
+      "reason": "原因",
+      "quoted_text": "从学生答案中摘录的原文"
+    }
+  ]
+}
+```
+
+总分由系统从 `scoring_items` 累加得出，不由模型直接给出。
+
+---
+
+## 13. 部署与运维
+
+### 13.1 启动流程
 
 ```bash
 # start.sh
@@ -1097,345 +1216,111 @@ DOUBAO_CONFIG = {
 1. sys.path.insert(0, 项目根目录)
 2. from app.app import create_app
 3. logger.add("logs/grading_{time}.log", rotation="1 day", retention="7 days")
-4. create_app():
-   - 创建 Flask 实例
-   - 配置 SECRET_KEY
-   - 启用 CORS
-   - register_routes(app)
-   - register_error_handlers(app)
-5. app.run(host="0.0.0.0", port=5001, debug=True)
+4. create_app() → app.run(host="0.0.0.0", port=5001, debug=True)
 ```
 
-### 11.2 日志管理
+### 13.2 数据库备份
 
-**日志配置** (`main.py`):
-
-```python
-from loguru import logger
-
-logger.add(
-    "logs/grading_{time}.log",
-    rotation="1 day",      # 每天轮转
-    retention="7 days",    # 保留 7 天
-    level="INFO"
-)
-```
-
-**日志目录**: `logs/`
-
-### 11.3 数据库备份
-
-**数据库文件**: `data/exam_system.db`
-
-**备份建议**:
 ```bash
-# 备份数据库
+# 备份
 cp data/exam_system.db data/exam_system.db.bak.$(date +%Y%m%d)
 
-# 恢复数据库
-cp data/exam_system.db.bak.20260409 data/exam_system.db
-```
-
-### 11.4 监控指标
-
-**关键指标**:
-- 评分响应时间（目标：< 5s）
-- 评分准确率（目标：≥ 80%）
-- 系统可用性（目标：≥ 99%）
-- 数据库大小（定期清理历史记录）
-
----
-
-## 12. 扩展指南
-
-### 12.1 新增服务商
-
-**步骤 1**: 在 `.env` 添加配置
-
-```bash
-NEWPROVIDER_API_KEY=xxx
-NEWPROVIDER_BASE_URL=https://api.example.com
-NEWPROVIDER_MODEL=model-v1
-NEWPROVIDER_ENABLED=false
-```
-
-**步骤 2**: 在 `config/settings.py` 添加配置
-
-```python
-NEWPROVIDER_CONFIG = {
-    "api_key": os.getenv("NEWPROVIDER_API_KEY", ""),
-    "base_url": os.getenv("NEWPROVIDER_BASE_URL", "..."),
-    "model": os.getenv("NEWPROVIDER_MODEL", "model-v1"),
-    "enabled": os.getenv("NEWPROVIDER_ENABLED", "false").lower() == "true",
-    "available_models": [
-        {"id": "model-v1", "name": "Model V1"},
-        {"id": "model-v2", "name": "Model V2"},
-    ],
-}
-```
-
-**步骤 3**: 在 `db_models.py` 注册默认配置
-
-```python
-def _get_env_defaults():
-    global _PROVIDER_DEFAULTS
-    if not _PROVIDER_DEFAULTS:
-        from config.settings import (
-            QWEN_CONFIG, GLM_CONFIG, ..., NEWPROVIDER_CONFIG
-        )
-        _PROVIDER_DEFAULTS = {
-            'qwen': QWEN_CONFIG,
-            # ...
-            'newprovider': NEWPROVIDER_CONFIG,  # 添加这里
-        }
-    return _PROVIDER_DEFAULTS
-```
-
-**步骤 4**: 创建客户端类 `app/models/newprovider.py`
-
-```python
-from .base import BaseModelClient, ModelResponse, ModelProvider
-
-class NewProviderClient(BaseModelClient):
-    provider = ModelProvider.NEWPROVIDER  # 需要在 ModelProvider 枚举中添加
-    
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        self.model_name = config.get("model", "model-v1")
-        self.display_name = config.get("display_name", self.model_name)
-        # 初始化客户端...
-    
-    async def generate(self, prompt: str, **kwargs) -> ModelResponse:
-        # 实现 API 调用逻辑
-        pass
-    
-    def get_info(self) -> Dict[str, Any]:
-        return {
-            "provider": self.provider.value,
-            "model_name": self.model_name,
-            "display_name": self.display_name,
-            "enabled": self.enabled,
-        }
-```
-
-**步骤 5**: 在 `ModelProvider` 枚举中添加
-
-```python
-# app/models/base.py
-class ModelProvider(Enum):
-    QWEN = "qwen"
-    GLM = "glm"
-    # ...
-    NEWPROVIDER = "newprovider"  # 添加这里
-```
-
-**步骤 6**: 在 `registry.py` 注册
-
-```python
-def init_models(config: Dict[str, Any]) -> None:
-    # ... 其他服务商
-    
-    # 新增服务商
-    newprovider_cfg = config.get("newprovider", {})
-    if newprovider_cfg.get("enabled", False):
-        try:
-            from .newprovider import NewProviderClient
-            enabled_models = set(newprovider_cfg.get("extra_config", {}).get("enabled_models", []))
-            available_models = newprovider_cfg.get("available_models", [])
-            
-            if available_models:
-                for model_info in available_models:
-                    model_id = model_info["id"]
-                    if not enabled_models or model_id in enabled_models:
-                        model_cfg = {
-                            **newprovider_cfg,
-                            "model": model_id,
-                            "display_name": model_info.get("name", model_id),
-                        }
-                        client = NewProviderClient(model_cfg)
-                        model_registry.register(client)
-            else:
-                client = NewProviderClient(newprovider_cfg)
-                model_registry.register(client)
-        except ImportError as e:
-            print(f"⚠️  新服务商需要安装 SDK: {e}")
-```
-
-**步骤 7**: 在 `config_routes.py` 添加元数据
-
-```python
-PROVIDER_META = {
-    'qwen': {...},
-    # ...
-    'newprovider': {
-        'name': '新服务商 (NewProvider)',
-        'defaults': NEWPROVIDER_CONFIG,
-        'available_models': NEWPROVIDER_CONFIG.get('available_models', []),
-    },
-}
-```
-
-### 12.2 新增聚合策略
-
-**步骤 1**: 在 `engine.py` 添加策略方法
-
-```python
-def _new_strategy(self, results, max_score):
-    """
-    新聚合策略
-    
-    Args:
-        results: 评分结果列表
-        max_score: 满分
-    
-    Returns:
-        (final_score, confidence)
-    """
-    # 实现算法
-    pass
-```
-
-**步骤 2**: 在 `aggregate()` 方法中添加策略选择
-
-```python
-if strategy == 'new_strategy':
-    final_score, confidence = self._new_strategy(results, max_score)
-```
-
-**步骤 3**: 在 `routes.py` 添加策略到列表
-
-```python
-@grading_bp.route("/strategies", methods=["GET"])
-def list_strategies():
-    return jsonify({
-        "success": True,
-        "strategies": [
-            {"id": "majority_vote", "name": "多数投票"},
-            {"id": "weighted_average", "name": "加权平均"},
-            {"id": "confidence_weighted", "name": "置信度加权"},
-            {"id": "new_strategy", "name": "新策略"},  # 添加这里
-        ]
-    })
+# 恢复
+cp data/exam_system.db.bak.20260410 data/exam_system.db
 ```
 
 ---
 
-## 13. 版本历史
+## 14. 扩展指南
 
-| 版本 | 日期 | Git Commit | 变更内容 |
-|------|------|------------|---------|
-| v2.0.0 | 2026-04-09 | bf9c6d9 | 反作弊测试页面 + 多模型子模型选择修复 |
-| v2.0.0-beta | 2026-04-08 | 9d5497d | 评分页面 Vue 3 + Element Plus 浅色主题重构 |
-| v1.5.0 | 2026-04-07 | 3fcd546 | 侧边栏收起/展开 + config_routes 统一 |
-| v1.4.0 | 2026-04-06 | 6842a3d | 管理员/科目老师角色分离 + 模型配置管理 |
-| v1.3.0 | 2026-04-05 | 29297b0 | 评分引擎反作弊优先 + 逐问累加 |
-| v1.2.0 | 2026-04-04 | e2f67c | 评分引擎重构 + 科目登录 + 测试用例体系 |
-| v1.1.0 | 2026-04-03 | b450ee4 | AI 批量出题独立页面 |
-| v1.0.1 | 2026-04-02 | 34511b3 | 修复评分规则传递和 JS 函数定义 |
-| v1.0.0 | 2026-04-01 | a569234 | AI 智能评分系统 v1.0（初始提交） |
+### 14.1 新增服务商
+
+1. `.env` 添加配置
+2. `config/settings.py` 添加 `XXX_CONFIG`
+3. `db_models.py` 注册到 `_PROVIDER_DEFAULTS`
+4. `app/models/xxx.py` 创建客户端类
+5. `ModelProvider` 枚举中添加
+6. `registry.py` 注册
+7. `config_routes.py` 添加元数据
+
+### 14.2 新增科目专用评分流程
+
+1. 在 `qwen_engine.py` 添加 `_{subject}_system_prompt()` 方法
+2. 在 `grade()` 方法的 subject 分支中添加路由
+3. 在 `_parse_output()` 中添加该科目的输出格式解析
+4. 更新本文档第 12 章
+
+### 14.3 新增判别Agent
+
+1. 在 `api_routes.py:grade_answer()` 的判别Agent 区域添加检测逻辑
+2. 定义 `grading_flags` 的 type 和 severity
+3. 触发时设置 `result.needs_review = True`
 
 ---
 
-## 14. 附录
+## 15. 版本历史
 
-### 14.1 关键文件清单
+| 版本 | 日期 | 变更内容 |
+|------|------|---------|
+| v2.2.0 | 2026-04-10 | 语文/英语专用评分流程 + 英语语义校验跳过 |
+| v2.1.0 | 2026-04-10 | 用户管理系统 + student_id 追踪 + 一致性校验 + 判别Agent(P2/P3) + 思政专用评分流程 |
+| v2.0.0 | 2026-04-09 | 反作弊测试页面 + 多模型子模型选择修复 |
+| v2.0.0-beta | 2026-04-08 | 评分页面 Vue 3 + Element Plus 浅色主题重构 |
+| v1.5.0 | 2026-04-07 | 侧边栏收起/展开 + config_routes 统一 |
+| v1.4.0 | 2026-04-06 | 管理员/科目老师角色分离 + 模型配置管理 |
+| v1.3.0 | 2026-04-05 | 评分引擎反作弊优先 + 逐问累加 |
+| v1.2.0 | 2026-04-04 | 评分引擎重构 + 科目登录 + 测试用例体系 |
+| v1.1.0 | 2026-04-03 | AI 批量出题独立页面 |
+| v1.0.1 | 2026-04-02 | 修复评分规则传递和 JS 函数定义 |
+| v1.0.0 | 2026-04-01 | AI 智能评分系统 v1.0（初始提交） |
+
+---
+
+## 16. 附录
+
+### 16.1 关键文件清单
 
 | 文件 | 职责 | 关键函数/类 |
 |------|------|------------|
 | `main.py` | 应用入口 | `create_app()` |
 | `app/app.py` | Flask 应用工厂 | `create_app()`, `register_routes()` |
-| `app/routes.py` | 评分 API | `grade_single()`, `list_models()` |
-| `app/api_routes.py` | 数据库 API | `grade_answer()`, `list_questions()` |
+| `app/api_routes.py` | 数据库 API | `grade_answer()`, 判别Agent, 用户/敏感词 API |
+| `app/qwen_engine.py` | 主评分引擎 | `grade()`, `_get_politics_system_prompt()`, `_get_chinese_system_prompt()`, `_get_english_system_prompt()` |
 | `app/engine.py` | 聚合引擎 | `AggregationEngine.aggregate()` |
-| `app/qwen_engine.py` | 主评分引擎 | `QwenGradingEngine.grade()` |
-| `app/validation.py` | 验证引擎 | `ValidationEngine.validate()` |
-| `app/auto_tuning.py` | 调优引擎 | `AutoTuningEngine.tune()` |
-| `app/models/base.py` | 基础客户端类 | `BaseModelClient`, `ModelProvider` |
-| `app/models/registry.py` | 模型注册表 | `ModelRegistry`, `init_models()` |
-| `app/models/db_models.py` | 数据库操作 | `get_effective_config()`, `init_database()` |
-| `config/settings.py` | 全局配置 | `QWEN_CONFIG`, `GRADING_CONFIG` |
-| `templates/question-bank.html` | 题库管理页面 | Vue 3 组件 |
-| `dist/index.html` | 评分页面 | Vue 3 组件 |
+| `app/models/db_models.py` | 数据库操作 | `get_effective_config()`, `get_previous_grade()`, 用户 CRUD |
+| `templates/login.html` | 登录页 | 用户选择 + 角色/科目选择 |
+| `templates/user-management.html` | 用户管理页 | 用户 CRUD |
+| `dist/index.html` | 评分页 | student_id 传递 + 结果展示 |
 
-### 14.2 依赖清单
-
-**Python 依赖** (`requirements.txt`):
+### 16.2 数据库表关系图
 
 ```
-Flask==3.0.2
-flask-cors==4.0.0
-openai==1.12.0
-zhipuai==2.0.1
-qianfan==0.3.0
-httpx==0.27.0
-pydantic==2.6.3
-pydantic-settings==2.1.0
-numpy==1.26.4
-pandas==2.2.1
-loguru==0.7.2
-aiohttp==3.9.3
-python-dotenv==1.0.1
-```
+users (用户表) [独立表]
 
-### 14.3 数据库表关系图
-
-```
 questions (题目表)
     │
-    ├─→ grading_records (评分记录表) [FK: question_id]
+    ├─→ grading_records (评分记录表) [FK: question_id, 含 student_id → users.username]
     ├─→ test_cases (测试用例表) [FK: question_id]
     ├─→ rubric_script_history (评分脚本历史表) [FK: question_id]
     └─→ batch_tasks (批量任务表) [间接关联]
 
 model_configs (模型配置表) [独立表]
 
-syllabus (考试大纲表) [独立表]
-
-rubrics (评分规则表) [独立表]
+sensitive_words (敏感词表) [独立表]
 
 bug_log (Bug 日志表) [独立表]
 ```
 
-### 14.4 错误码说明
+### 16.3 grading_flags 类型一览
 
-| HTTP 状态码 | 说明 |
-|------------|------|
-| 200 | 成功 |
-| 400 | 请求参数错误 |
-| 404 | 资源不存在 |
-| 500 | 服务器内部错误 |
-
-### 14.5 常见问题
-
-**Q1: 模型评分失败怎么办？**
-
-A: 检查以下几点：
-1. 模型是否启用（`enabled=true`）
-2. API Key 是否配置正确
-3. 网络连接是否正常
-4. 查看日志 `logs/grading_*.log`
-
-**Q2: 如何切换评分模型？**
-
-A: 在评分页面的"模型配置"下拉框选择即可。
-
-**Q3: 如何提高评分准确率？**
-
-A: 使用"验证与调优"功能：
-1. 运行验证，查看当前准确率
-2. 启动自动调优，迭代优化参数
-3. 调整评分标准（rubric_script）
-
-**Q4: 数据库如何备份？**
-
-A: 直接复制 `data/exam_system.db` 文件即可。
+| type | severity | 触发条件 | 说明 |
+|------|----------|---------|------|
+| `fake_quote` | warning | quoted_text 不在原始答案中 | LLM 编造引用 |
+| `short_answer_high_score` | warning | 字数 < 10 且得分 ≥ 80% | 短答案高分异常 |
+| `all_perfect` | info | 所有评分点满分 | 全满分异常 |
+| `score_inconsistency` | warning | 与历史评分差异 > 20% | 评分不一致 |
+| `sensitive_word` | error | 命中高危敏感词 | 直接 0 分 |
 
 ---
 
 **文档结束**
-
-如有问题或建议，请联系维护团队。
-
-**文档版本**: v2.0.0  
-**最后更新**: 2026-04-09  
-**Git Commit**: bf9c6d9

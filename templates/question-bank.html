@@ -24,8 +24,8 @@
         .main-container { display: flex; flex: 1; overflow: hidden; }
         .sidebar { width: 220px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; }
         .menu-group-title { padding: 12px 20px 8px; font-size: 12px; color: #909399; font-weight: 500; }
-        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
-        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; min-width: 0; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); overflow: hidden; }
         .page-header { margin-bottom: 20px; }
         .page-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
         .page-desc { font-size: 14px; color: #909399; }
@@ -38,7 +38,8 @@
         .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
         .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
         .progress-text { text-align: center; margin-top: 10px; font-size: 14px; color: #606266; }
-        .question-table { margin-top: 20px; }
+        .question-table { margin-top: 0; }
+        .el-table .cell { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -477,43 +478,48 @@
                             <div class="page-desc">浏览所有题目，点击「开始评分」进入聚焦评分模式（题目自动预填）</div>
                         </div>
                         <!-- 搜索/筛选栏 -->
-                        <el-row :gutter="12" style="margin-bottom: 16px;">
-                            <el-col :span="5">
-                                <el-select v-model="filterSubject" placeholder="全部科目" clearable style="width: 100%;">
-                                    <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
-                                </el-select>
-                            </el-col>
-                            <el-col :span="10">
-                                <el-input v-model="searchKeyword" placeholder="搜索标题或题干内容..." clearable>
-                                    <template #prefix><el-icon><Search /></el-icon></template>
-                                </el-input>
-                            </el-col>
-                            <el-col :span="5">
-                                <el-select v-model="filterQuality" placeholder="全部质量" clearable style="width: 100%;">
-                                    <el-option label="合格 (≥80)" value="pass"></el-option>
-                                    <el-option label="待改 (60-79)" value="warning"></el-option>
-                                    <el-option label="差题 (<60)" value="fail"></el-option>
-                                    <el-option label="未评估" value="unrated"></el-option>
-                                </el-select>
-                            </el-col>
-                            <el-col :span="4" style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
-                                <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
-                                    <el-icon><Download /></el-icon> 导出评分脚本
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <el-select v-model="filterSubject" placeholder="全部科目" clearable style="width: 140px;">
+                                <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                            </el-select>
+                            <el-input v-model="searchKeyword" placeholder="搜索标题或题干内容..." clearable style="width: 280px;">
+                                <template #prefix><el-icon><Search /></el-icon></template>
+                            </el-input>
+                            <el-select v-model="filterQuality" placeholder="全部质量" clearable style="width: 120px;">
+                                <el-option label="合格 (≥80)" value="pass"></el-option>
+                                <el-option label="待改 (60-79)" value="warning"></el-option>
+                                <el-option label="差题 (<60)" value="fail"></el-option>
+                                <el-option label="未评估" value="unrated"></el-option>
+                            </el-select>
+                            <span style="color: #909399; font-size: 13px; margin-left: auto;">共 {{ filteredQuestions.length }} 题</span>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 16px;">
+                            <el-upload
+                                :auto-upload="false"
+                                :show-file-list="false"
+                                accept=".xlsx,.xls,.csv"
+                                :on-change="handleImportFile"
+                                style="display: inline-block;"
+                            >
+                                <el-button size="small" type="primary" plain :loading="importLoading">
+                                    <el-icon><Upload /></el-icon> 导入Excel
                                 </el-button>
-                                <span style="color: #909399; font-size: 13px;">共 {{ filteredQuestions.length }} 题</span>
-                            </el-col>
-                        </el-row>
+                            </el-upload>
+                            <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
+                                <el-icon><Download /></el-icon> 导出评分脚本
+                            </el-button>
+                        </div>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
                             <el-table-column prop="id" label="ID" width="60"></el-table-column>
-                            <el-table-column prop="subject" label="学科" width="100">
+                            <el-table-column prop="subject" label="学科" width="80">
                                 <template #default="scope">
                                     {{ getSubjectLabel(scope.row.subject) }}
                                 </template>
                             </el-table-column>
-                            <el-table-column prop="title" label="标题" width="150"></el-table-column>
-                            <el-table-column prop="content" label="题干" show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="content" label="题干" min-width="200" show-overflow-tooltip></el-table-column>
                             <el-table-column prop="max_score" label="分值" width="60"></el-table-column>
-                            <el-table-column label="质量" width="90">
+                            <el-table-column label="质量" width="80">
                                 <template #default="scope">
                                     <el-tag v-if="scope.row.quality_score !== null && scope.row.quality_score !== undefined"
                                             :type="scope.row.quality_score >= 80 ? 'success' : scope.row.quality_score >= 60 ? 'warning' : 'danger'"
@@ -523,7 +529,7 @@
                                     <el-tag v-else type="info" size="small">未评</el-tag>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="操作" width="280" fixed="right">
+                            <el-table-column label="操作" width="230" fixed="right">
                                 <template #default="scope">
                                     <el-button type="info" size="small" plain @click="viewQuestion(scope.row.id)">查看</el-button>
                                     <el-button type="warning" size="small" plain @click="editQuestion(scope.row.id)">编辑</el-button>
@@ -1062,7 +1068,15 @@ const app = createApp({
             try {
                 const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
                 if (saved) {
-                    subjectList.value = JSON.parse(saved);
+                    const parsed = JSON.parse(saved);
+                    // 只保留默认科目中已定义的，过滤掉旧的废弃科目
+                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                    // 如果过滤后为空，重置为默认
+                    if (subjectList.value.length === 0) {
+                        subjectList.value = [...DEFAULT_SUBJECTS];
+                    }
+                    saveSubjects();
                 } else {
                     subjectList.value = [...DEFAULT_SUBJECTS];
                     saveSubjects();
@@ -1322,7 +1336,7 @@ const app = createApp({
                 return;
             }
             exportLoading.value = true;
-            const url = API_BASE + '/api/export-rubric-scripts?subject=' + subject;
+            const url = '/api/export-rubric-scripts?subject=' + subject;
             const a = document.createElement('a');
             a.href = url;
             a.download = '';
@@ -1331,6 +1345,32 @@ const app = createApp({
             document.body.removeChild(a);
             setTimeout(() => { exportLoading.value = false; }, 1500);
             ElMessage.success('正在导出「' + getSubjectLabel(subject) + '」评分脚本...');
+        }
+
+        // 导入 Excel
+        const importLoading = ref(false);
+
+        async function handleImportFile(file) {
+            const subject = filterSubject.value || 'politics';
+            const formData = new FormData();
+            formData.append('file', file.raw);
+            formData.append('subject', subject);
+
+            importLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-questions', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (data.success) {
+                    ElMessage.success('导入成功：' + data.data.imported + ' 题' + (data.data.skipped > 0 ? '，跳过 ' + data.data.skipped + ' 行' : ''));
+                    loadQuestions();
+                } else {
+                    ElMessage.error('导入失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('导入失败：' + (e.response?.data?.error || e.message));
+            }
+            importLoading.value = false;
         }
 
         // 测试用例验证
@@ -2355,6 +2395,7 @@ const app = createApp({
             currentPage, questions, stats, dashboard, qualityDistTable, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
             evaluatingQuality, qualityScore, viewMode, editingQuestionId, currentSubject, currentSubjectLabel, switchSubject,
             filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions, exportLoading, exportRubricScripts,
+            importLoading, handleImportFile,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
             showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
             verifyRunning, verifyProgress, verifyResults, testCaseForm, editingTestCaseId, tolerance,
