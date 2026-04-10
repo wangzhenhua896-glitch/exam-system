@@ -66,6 +66,13 @@
                         <el-menu-item index="anticheat"><el-icon><WarningFilled /></el-icon><span>反作弊测试</span></el-menu-item>
                         <el-menu-item index="history"><el-icon><Clock /></el-icon><span>历史记录</span></el-menu-item>
                     </el-menu>
+                    <div style="padding: 12px 16px;">
+                        <div style="font-size: 12px; color: #909399; margin-bottom: 6px;">当前题目</div>
+                        <el-select v-model="selectedQuestionId" filterable clearable placeholder="-- 手动输入 --" size="small" style="width: 100%;" :loading="loadingQuestions" @change="onQuestionSelect">
+                            <el-option v-for="q in questionList" :key="q.id" :label="'#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
+                        </el-select>
+                        <div v-if="selectedQuestion" style="font-size: 12px; color: #409EFF; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedQuestion.title || selectedQuestion.content.substring(0, 40) }}</div>
+                    </div>
                 </div>
                 <div class="sidebar-footer">
                     <div style="margin-bottom: 8px;">
@@ -88,79 +95,99 @@
                 <template v-if="currentPage === 'single'">
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
                         <!-- 左侧输入区 -->
-                        <div :style="{ width: inputCollapsed ? '0' : '400px', overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
+                        <div :style="{ width: inputCollapsed ? '0' : (grading || gradeResult ? '400px' : '100%'), overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
                             <div class="page-card" style="margin-bottom: 0;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                                    <span style="font-size: 16px; font-weight: 600; color: #303133;">题目与答案</span>
-                                    <el-button size="small" text @click="inputCollapsed = true">
-                                        <el-icon><DArrowLeft /></el-icon> 折叠
-                                    </el-button>
-                                </div>
-
-                                <!-- 题库选择 -->
-                                <div style="margin-bottom: 16px;">
-                                    <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">从题库选择题目</div>
-                                    <div style="display: flex; gap: 8px;">
-                                        <el-select v-model="selectedQuestionId" filterable clearable placeholder="-- 手动输入 --" style="flex: 1;" @change="onQuestionSelect">
-                                            <el-option v-for="q in questionList" :key="q.id" :label="'#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
-                                        </el-select>
-                                        <el-button size="default" @click="loadQuestionList" :loading="loadingQuestions">
-                                            <el-icon><Refresh /></el-icon>
-                                        </el-button>
-                                    </div>
-                                    <div style="font-size: 12px; color: #909399; margin-top: 4px;">选择题目后自动加载题目信息，仅需输入学生答案</div>
-                                </div>
-
-                                <!-- 题目信息卡片（选题后显示） -->
+                                <!-- 选题后：评分脚本 + 题目/答案折叠 -->
                                 <template v-if="selectedQuestion">
-                                    <div style="background: #f5f7fa; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                            <span style="flex: 1; font-weight: 600; font-size: 14px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedQuestion.title || '(无标题)' }}</span>
-                                            <el-tag type="primary" size="small">{{ selectedQuestion.max_score || 10 }} 分</el-tag>
+                                    <div style="margin-bottom: 20px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <span style="font-size: 14px; font-weight: 600; color: #303133;">
+                                                评分脚本
+                                                <el-tag v-if="scriptVersion > 0" size="small" type="info" style="margin-left: 6px; cursor: pointer; font-size: 11px;" @click="openScriptHistory">
+                                                    v{{ scriptVersion }}
+                                                </el-tag>
+                                                <el-tag v-else-if="selectedQuestion.rubric_script" size="small" type="info" style="margin-left: 6px; font-size: 11px;">
+                                                    v1
+                                                </el-tag>
+                                            </span>
+                                            <div style="display: flex; gap: 4px; align-items: center;">
+                                                <el-button v-if="!rubricEditing" size="small" text type="primary" style="font-size: 12px;" @click="startRubricEdit">
+                                                    <el-icon><Edit /></el-icon> 编辑
+                                                </el-button>
+                                                <el-button size="small" text style="font-size: 12px; color: #909399;" @click="openScriptHistory">
+                                                    <el-icon><Clock /></el-icon> 历史
+                                                </el-button>
+                                                <el-button size="small" text style="font-size: 12px; color: #909399;" @click="copyRubricScript">
+                                                    <el-icon><CopyDocument /></el-icon> 复制
+                                                </el-button>
+                                                <el-button size="small" text style="font-size: 12px; color: #909399;" @click="toggleRubricFullscreen">
+                                                    <el-icon v-if="!rubricFullscreen"><FullScreen /></el-icon>
+                                                    <el-icon v-else><CloseBold /></el-icon>
+                                                    {{ rubricFullscreen ? '还原' : '铺满' }}
+                                                </el-button>
+                                                <el-button size="small" text @click="inputCollapsed = true" style="font-size: 12px; color: #909399;">
+                                                    <el-icon><DArrowLeft /></el-icon> 折叠
+                                                </el-button>
+                                            </div>
                                         </div>
-                                        <el-collapse>
-                                            <el-collapse-item title="题目 / 答案 / 评分脚本">
-                                                <div style="margin-bottom: 8px;">
-                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">题目内容</div>
-                                                    <div style="padding: 8px; background: #fff; border-radius: 4px; font-size: 13px; color: #606266; white-space: pre-wrap; max-height: 100px; overflow-y: auto; border: 1px solid #ebeef5;">{{ selectedQuestion.content }}</div>
-                                                </div>
-                                                <div style="margin-bottom: 8px;">
-                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">标准答案</div>
-                                                    <div style="padding: 8px; background: #fff; border-radius: 4px; font-size: 13px; color: #67c23a; white-space: pre-wrap; max-height: 80px; overflow-y: auto; border: 1px solid #ebeef5;">{{ selectedQuestion.standard_answer || '(无标准答案)' }}</div>
-                                                </div>
-                                                <div>
-                                                    <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">评分脚本</div>
-                                                    <el-input type="textarea" :model-value="selectedQuestion.rubric_script || '(未生成评分脚本)'" :rows="3" readonly size="small"></el-input>
-                                                    <el-button size="small" text type="primary" style="margin-top: 4px;" @click="copyRubricScript">
-                                                        <el-icon><CopyDocument /></el-icon> 复制评分脚本
-                                                    </el-button>
-                                                </div>
-                                            </el-collapse-item>
-                                        </el-collapse>
+                                        <!-- 只读模式 -->
+                                        <el-input v-if="!rubricEditing" type="textarea" :model-value="selectedQuestion.rubric_script || '(未生成评分脚本)'"
+                                            :readonly="true"
+                                            :rows="rubricFullscreen ? 25 : 10" size="small"
+                                            :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '120px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: '12.5px', lineHeight: '1.7', color: '#303133' }">
+                                        </el-input>
+                                        <!-- 编辑模式 -->
+                                        <template v-if="rubricEditing">
+                                            <el-input v-model="rubricEditValue" type="textarea"
+                                                :rows="rubricFullscreen ? 25 : 12" size="small"
+                                                :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '160px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: '12.5px', lineHeight: '1.7', color: '#303133' }">
+                                            </el-input>
+                                            <div style="margin-top: 8px; display: flex; gap: 8px;">
+                                                <el-button size="small" type="primary" @click="saveRubricEdit">保存</el-button>
+                                                <el-button size="small" @click="cancelRubricEdit">取消</el-button>
+                                            </div>
+                                        </template>
                                     </div>
+                                    <el-collapse style="margin-bottom: 20px;">
+                                        <el-collapse-item title="题目 / 答案">
+                                            <div style="margin-bottom: 10px;">
+                                                <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">题目内容</div>
+                                                <div style="padding: 8px 10px; background: #fafafa; border-radius: 4px; font-size: 13px; color: #606266; line-height: 1.6; white-space: pre-wrap; max-height: 100px; overflow-y: auto;">{{ selectedQuestion.content }}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">标准答案</div>
+                                                <div style="padding: 8px 10px; background: #fafafa; border-radius: 4px; font-size: 13px; color: #67c23a; line-height: 1.6; white-space: pre-wrap; max-height: 80px; overflow-y: auto;">{{ selectedQuestion.standard_answer || '(无标准答案)' }}</div>
+                                            </div>
+                                        </el-collapse-item>
+                                    </el-collapse>
                                 </template>
 
                                 <!-- 手动输入（未选题时显示） -->
                                 <template v-if="!selectedQuestionId">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                        <span style="font-size: 14px; font-weight: 600; color: #303133;">手动输入</span>
+                                        <el-button size="small" text @click="inputCollapsed = true" style="font-size: 12px; color: #909399;">
+                                            <el-icon><DArrowLeft /></el-icon> 折叠
+                                        </el-button>
+                                    </div>
                                     <div style="margin-bottom: 16px;">
-                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">题目</div>
+                                        <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">题目</div>
                                         <el-input v-model="manualQuestion" type="textarea" :rows="3" placeholder="请输入简答题题目..."></el-input>
                                     </div>
                                     <div style="margin-bottom: 16px;">
-                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">评分规则 (JSON格式)</div>
+                                        <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">评分规则 <span style="color: #c0c4cc; font-weight: 400;">(JSON格式)</span></div>
                                         <el-input v-model="manualRubric" type="textarea" :rows="3" placeholder='{"points": [{"description": "要点1", "score": 5}]}'></el-input>
-                                        <div style="font-size: 12px; color: #909399; margin-top: 4px;">支持JSON格式，包含得分要点和关键词</div>
                                     </div>
                                     <div style="margin-bottom: 16px;">
-                                        <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">满分</div>
+                                        <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">满分</div>
                                         <el-input-number v-model="manualMaxScore" :min="1" :max="100" style="width: 100%;"></el-input-number>
                                     </div>
                                 </template>
 
                                 <!-- 学生答案 -->
-                                <div style="margin-bottom: 16px;">
+                                <div style="margin-bottom: 20px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                        <div style="font-size: 13px; color: #606266;">学生答案</div>
+                                        <div style="font-size: 12px; font-weight: 500; color: #909399; letter-spacing: 0.5px;">学生答案</div>
                                         <el-button v-if="selectedQuestionId" size="small" text type="primary" :loading="genAnswerLoading" @click="generateAnswer">
                                             <el-icon><MagicStick /></el-icon> AI 生成答案
                                         </el-button>
@@ -169,9 +196,23 @@
                                     <div class="answer-count">{{ studentAnswer.length }} 字</div>
                                 </div>
 
-                                <el-button type="primary" style="width: 100%;" :loading="grading" @click="gradeAnswer">
-                                    <el-icon><Promotion /></el-icon> 开始评分
-                                </el-button>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <el-select v-model="gradeModelIds" multiple collapse-tags collapse-tags-tooltip placeholder="全部模型" size="default" style="width: 280px; flex-shrink: 0;">
+                                        <template #header>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                                                <span style="font-size: 12px; color: #909399;">选择模型（{{ gradeModelIds.length }}/{{ providers.length }}）</span>
+                                                <el-button size="small" text type="primary" @click="gradeModelIds = gradeModelIds.length === providers.length ? [] : providers.map(p => p.id)">
+                                                    {{ gradeModelIds.length === providers.length ? '取消全选' : '全选' }}
+                                                </el-button>
+                                            </div>
+                                        </template>
+                                        <el-option v-for="p in providers" :key="p.id" :label="p.name + ' · ' + p.display_name" :value="p.id"></el-option>
+                                    </el-select>
+                                    <el-button type="primary" style="flex: 1;" :loading="grading" @click="gradeAnswer">
+                                        <el-icon><Promotion /></el-icon> 开始评分
+                                        <span style="font-size: 12px; opacity: 0.8; margin-left: 4px;">(Ctrl+Enter)</span>
+                                    </el-button>
+                                </div>
                             </div>
                         </div>
 
@@ -181,86 +222,180 @@
                         </el-button>
 
                         <!-- 右侧结果区 -->
-                        <div style="flex: 1; min-width: 0;">
+                        <div v-if="grading || gradeResult" style="flex: 1; min-width: 0;">
                             <div class="page-card" style="margin-bottom: 0;">
-                                <div style="font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 16px;">评分结果</div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <span style="font-size: 16px; font-weight: 600; color: #303133;">评分结果</span>
+                                    <el-button size="small" text @click="resultCollapsed = !resultCollapsed">
+                                        <el-icon v-if="resultCollapsed"><DArrowRight /></el-icon>
+                                        <el-icon v-else><DArrowLeft /></el-icon>
+                                        {{ resultCollapsed ? '展开' : '折叠' }}
+                                    </el-button>
+                                </div>
+                                <div v-show="!resultCollapsed">
 
-                                <!-- 空状态 -->
-                                <div v-if="!gradeResult" style="text-align: center; padding: 60px 20px; color: #909399;">
-                                    <el-icon size="64" color="#c0c4cc"><Document /></el-icon>
-                                    <p style="margin-top: 12px;">提交评分后将在此显示结果</p>
+                                <!-- 正在评分 -->
+                                <div v-if="grading" style="padding: 20px 0;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                                        <el-icon class="is-loading" :size="20" color="#409EFF"><Loading /></el-icon>
+                                        <span style="font-size: 15px; font-weight: 600; color: #409EFF;">正在处理考生答案...</span>
+                                    </div>
+                                    <div style="background: #f5f7fa; border-radius: 8px; padding: 12px;">
+                                        <div style="font-size: 12px; color: #909399; margin-bottom: 6px;">考生答案：</div>
+                                        <div style="font-size: 13px; color: #606266; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ studentAnswer }}</div>
+                                    </div>
                                 </div>
 
                                 <!-- 评分结果 -->
-                                <template v-if="gradeResult">
-                                    <!-- 分数 -->
-                                    <div style="text-align: center; padding: 20px 0;">
-                                        <template v-if="gradeResult.score === null || gradeResult.score === undefined">
-                                            <div class="result-score" style="color: #f56c6c;">评分异常 <span style="font-size: 20px;">需人工处理</span></div>
+                                <template v-if="!grading && gradeResult">
+                                    <!-- ========== 单模型结果 ========== -->
+                                    <template v-if="!gradeResult.multi">
+                                        <!-- 分数 + 置信度 + 进度条 一行 -->
+                                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; margin-bottom: 8px;">
+                                            <template v-if="gradeResult.score === null || gradeResult.score === undefined">
+                                                <el-icon color="#f56c6c" :size="20"><CircleCloseFilled /></el-icon>
+                                                <div>
+                                                    <div style="color: #f56c6c; font-weight: 600; font-size: 15px;">评分异常</div>
+                                                    <div style="font-size: 12px; color: #f56c6c; margin-top: 2px;">需人工处理，请点击"重新评分"重试</div>
+                                                </div>
+                                            </template>
+                                            <template v-else>
+                                                <span style="font-size: 28px; font-weight: 700; color: #409EFF;">{{ gradeResult.score }}</span>
+                                                <span style="font-size: 13px; color: #909399;">/ {{ currentMaxScore }} 分</span>
+                                                <div style="flex: 1; max-width: 160px;">
+                                                    <el-progress :percentage="Math.round(gradeResult.score / currentMaxScore * 100)" :stroke-width="6" :color="scoreColor" :show-text="false"></el-progress>
+                                                </div>
+                                                <el-tag :type="gradeResult.confidence >= 0.8 ? 'success' : gradeResult.confidence >= 0.6 ? 'warning' : 'danger'" size="small">
+                                                    {{ (gradeResult.confidence * 100).toFixed(0) }}%
+                                                </el-tag>
+                                            </template>
+                                        </div>
+
+                                        <!-- 预警 -->
+                                        <el-alert v-if="gradeResult.warning" :title="gradeResult.warning" type="warning" show-icon :closable="false" style="margin-bottom: 8px;"></el-alert>
+                                        <el-alert v-if="gradeResult.needs_review && !gradeResult.warning" title="建议人工复核" type="warning" show-icon :closable="false" style="margin-bottom: 8px;"></el-alert>
+
+                                        <!-- 验证标记 -->
+                                        <template v-if="gradeResult.grading_flags && gradeResult.grading_flags.length > 0">
+                                            <el-alert v-for="(flag, fi) in gradeResult.grading_flags" :key="fi"
+                                                      :title="flag.desc"
+                                                      :type="flag.severity === 'error' ? 'error' : 'warning'"
+                                                      show-icon :closable="false" style="margin-bottom: 4px;">
+                                            </el-alert>
                                         </template>
-                                        <template v-else>
-                                            <div class="result-score">{{ gradeResult.score }} <span class="unit">/ {{ currentMaxScore }} 分</span></div>
-                                            <div class="score-bar-wrap">
-                                                <el-progress :percentage="Math.round(gradeResult.score / currentMaxScore * 100)" :stroke-width="10" :color="scoreColor"></el-progress>
-                                            </div>
-                                        </template>
-                                    </div>
 
-                                    <!-- 置信度 -->
-                                    <div style="text-align: center; margin-bottom: 16px;">
-                                        <el-tag :type="gradeResult.confidence >= 0.8 ? 'success' : gradeResult.confidence >= 0.6 ? 'warning' : 'danger'" size="large">
-                                            置信度 {{ (gradeResult.confidence * 100).toFixed(1) }}%
-                                        </el-tag>
-                                    </div>
-
-                                    <!-- 预警 -->
-                                    <el-alert v-if="gradeResult.warning" :title="gradeResult.warning" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
-                                    <el-alert v-if="gradeResult.needs_review && !gradeResult.warning" title="建议人工复核" type="warning" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
-
-                                    <!-- 分项得分 -->
-                                    <div v-if="gradeResult.details && gradeResult.details.scoring_items && gradeResult.details.scoring_items.length > 0" style="margin-bottom: 16px;">
-                                        <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📋 评分明细</div>
-                                        <div v-for="(item, idx) in gradeResult.details.scoring_items" :key="idx"
-                                             style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 6px; margin-bottom: 6px;"
-                                             :style="{ background: item.hit ? '#f0f9eb' : '#fef0f0', border: '1px solid ' + (item.hit ? '#e1f3d8' : '#fde2e2') }">
-                                            <el-icon v-if="item.hit" color="#67c23a" :size="18" style="flex-shrink: 0; margin-top: 2px;">
-                                                <CircleCheckFilled />
-                                            </el-icon>
-                                            <el-icon v-else color="#f56c6c" :size="18" style="flex-shrink: 0; margin-top: 2px;">
-                                                <CircleCloseFilled />
-                                            </el-icon>
-                                            <div style="flex: 1; min-width: 0;">
-                                                <div style="font-size: 13px; color: #303133; font-weight: 500;">{{ item.name }}</div>
-                                                <div v-if="item.reason" style="font-size: 12px; color: #909399; margin-top: 2px;">{{ item.reason }}</div>
-                                            </div>
-                                            <div style="flex-shrink: 0; text-align: right;">
-                                                <span style="font-weight: 600;" :style="{ color: item.hit ? '#67c23a' : '#f56c6c' }">{{ item.score }}</span>
-                                                <span style="font-size: 12px; color: #909399;"> / {{ item.max_score }}</span>
+                                        <!-- 分项得分 -->
+                                        <div v-if="gradeResult.details && gradeResult.details.scoring_items && gradeResult.details.scoring_items.length > 0" style="margin-bottom: 16px;">
+                                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📋 评分明细</div>
+                                            <div v-for="(item, idx) in gradeResult.details.scoring_items" :key="idx" style="margin-bottom: 8px;">
+                                                <!-- 得分点卡片 -->
+                                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 6px;"
+                                                     :style="{ background: item.hit ? '#f0f9eb' : '#fef0f0', border: '1px solid ' + (item.hit ? '#e1f3d8' : '#fde2e2') }">
+                                                    <el-icon v-if="item.hit" color="#67c23a" :size="18" style="flex-shrink: 0; margin-top: 2px;">
+                                                        <CircleCheckFilled />
+                                                    </el-icon>
+                                                    <el-icon v-else color="#f56c6c" :size="18" style="flex-shrink: 0; margin-top: 2px;">
+                                                        <CircleCloseFilled />
+                                                    </el-icon>
+                                                    <div style="flex: 1; min-width: 0;">
+                                                        <div style="font-size: 13px; color: #303133; font-weight: 500;">{{ item.name }}</div>
+                                                        <div v-if="item.reason" style="font-size: 12px; color: #909399; margin-top: 2px;">{{ item.reason }}</div>
+                                                        <div v-if="item.quoted_text" style="font-size: 12px; color: #409EFF; margin-top: 2px; padding: 4px 8px; background: #ecf5ff; border-radius: 4px; border-left: 3px solid #409EFF;">
+                                                            <span style="color: #909399;">引用：</span>{{ item.quoted_text }}
+                                                        </div>
+                                                    </div>
+                                                    <div style="flex-shrink: 0; display: flex; align-items: center; gap: 8px;">
+                                                        <span style="font-weight: 600;" :style="{ color: item.hit ? '#67c23a' : '#f56c6c' }">{{ item.score }}</span>
+                                                        <span style="font-size: 12px; color: #909399;"> / {{ item.max_score }}</span>
+                                                        <el-button v-if="rubricParsedItems.length > 0 && rubricParsedItems[idx]"
+                                                                   size="small" text type="primary"
+                                                                   style="font-size: 11px; padding: 0 4px;"
+                                                                   @click="toggleRubricExpand(idx)">
+                                                            评分标准 {{ rubricExpanded[idx] ? '▲' : '▼' }}
+                                                        </el-button>
+                                                    </div>
+                                                </div>
+                                                <!-- 折叠的评分脚本对照 -->
+                                                <div v-if="rubricExpanded[idx] && rubricParsedItems[idx]"
+                                                     style="margin-top: 2px; padding: 10px 12px 10px 16px; background: #f5f7fa; border-left: 3px solid #409EFF; border-radius: 0 6px 6px 0; font-size: 12px; color: #606266; line-height: 1.8; white-space: pre-wrap;">
+                                                    {{ rubricParsedItems[idx].content }}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <!-- 评语 -->
-                                    <div v-if="gradeResult.comment" style="margin-bottom: 16px;">
-                                        <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📝 评语</div>
-                                        <div style="background: #f5f7fa; border-radius: 8px; padding: 12px; color: #606266; line-height: 1.6; white-space: pre-wrap;">{{ gradeResult.comment }}</div>
-                                    </div>
+                                        <!-- 评语 -->
+                                        <div v-if="gradeResult.comment" style="margin-bottom: 16px;">
+                                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">📝 评语</div>
+                                            <div style="background: #f5f7fa; border-radius: 8px; padding: 12px; color: #606266; line-height: 1.6; white-space: pre-wrap;">{{ gradeResult.comment }}</div>
+                                        </div>
+                                    </template>
 
-                                    <!-- 原始详情 -->
-                                    <el-collapse v-if="gradeResult.details" style="margin-bottom: 16px;">
+                                    <!-- ========== 多模型对比结果 ========== -->
+                                    <template v-else>
+                                        <div style="margin-bottom: 16px;">
+                                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px;">多模型评分对比</div>
+
+                                            <!-- 汇总表格 -->
+                                            <el-table :data="gradeResult.results" stripe size="small" style="width: 100%;">
+                                        <el-table-column prop="model_name" label="模型" width="120"></el-table-column>
+                                        <el-table-column label="得分" width="100">
+                                            <template #default="{ row }">
+                                                <span v-if="row.score !== null && row.score !== undefined" style="font-weight: 600; font-size: 16px; color: #409EFF;">{{ row.score }}</span>
+                                                <span v-else style="color: #f56c6c;">失败</span>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="置信度" width="90">
+                                            <template #default="{ row }">
+                                                <el-tag v-if="row.score !== null" :type="row.confidence >= 0.8 ? 'success' : row.confidence >= 0.6 ? 'warning' : 'danger'" size="small">
+                                                    {{ (row.confidence * 100).toFixed(0) }}%
+                                                </el-tag>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="评语">
+                                            <template #default="{ row }">
+                                                <div style="font-size: 12px; color: #606266; line-height: 1.4; max-height: 60px; overflow: hidden;">{{ row.comment || row.error || '-' }}</div>
+                                            </template>
+                                        </el-table-column>
+                                                <el-table-column label="操作" width="70">
+                                                    <template #default="{ row }">
+                                                        <el-button size="small" text type="primary" @click="viewModelDetail(row)">详情</el-button>
+                                                    </template>
+                                                </el-table-column>
+                                            </el-table>
+
+                                            <!-- 分数分布 -->
+                                            <div v-if="gradeResult.results.filter(r => r.score !== null).length > 1" style="margin-top: 16px; text-align: center;">
+                                                <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">分数分布</div>
+                                                <div style="display: flex; justify-content: center; gap: 16px; font-size: 13px;">
+                                                    <span>最低 <strong style="color: #f56c6c;">{{ Math.min(...gradeResult.results.filter(r=>r.score!==null).map(r=>r.score)) }}</strong></span>
+                                                    <span>最高 <strong style="color: #67c23a;">{{ Math.max(...gradeResult.results.filter(r=>r.score!==null).map(r=>r.score)) }}</strong></span>
+                                                    <span>平均 <strong style="color: #409EFF;">{{ (gradeResult.results.filter(r=>r.score!==null).reduce((s,r)=>s+r.score,0) / gradeResult.results.filter(r=>r.score!==null).length).toFixed(1) }}</strong></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- 原始详情（仅单模型） -->
+                                    <el-collapse v-if="!gradeResult.multi && gradeResult.details" style="margin-bottom: 16px;">
                                         <el-collapse-item title="查看原始评分详情">
                                             <pre style="background: #f5f7fa; padding: 12px; border-radius: 4px; font-size: 12px; color: #909399; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">{{ JSON.stringify(gradeResult.details, null, 2) }}</pre>
                                         </el-collapse-item>
                                     </el-collapse>
 
-                                    <!-- 底部信息 + 操作 -->
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <!-- 底部信息 + 操作（仅单模型） -->
+                                    <div v-if="!gradeResult.multi" style="display: flex; justify-content: space-between; align-items: center;">
                                         <span style="font-size: 12px; color: #c0c4cc;">引擎: {{ gradeResult.model_used || 'qwen-agent' }} · 记录ID: {{ gradeResult.record_id }}</span>
                                         <el-button v-if="selectedQuestionId" type="success" size="small" @click="saveAsTestCase">
                                             <el-icon><FolderAdd /></el-icon> 保存为测试用例
                                         </el-button>
                                     </div>
+
+                                    <!-- 返回对比（多模型详情页） -->
+                                    <div v-if="gradeResult.multi === false && gradeResult._fromMulti" style="text-align: center; margin-top: 12px;">
+                                        <el-button size="small" text @click="gradeResult = lastMultiResult">← 返回对比</el-button>
+                                    </div>
                                 </template>
+                                </div><!-- end v-show -->
                             </div>
                         </div>
                     </div>
@@ -385,6 +520,50 @@
                             <el-button type="primary" :loading="genRunning" @click="autoGenerateTestCases">开始生成</el-button>
                         </template>
                     </el-dialog>
+
+                    <!-- 评分脚本版本历史对话框 -->
+                    <el-dialog v-model="historyDialogVisible" title="评分脚本版本历史" width="720px" :close-on-click-modal="false">
+                        <el-table :data="scriptHistoryList" stripe size="small" max-height="400" style="width: 100%;">
+                            <el-table-column prop="version" label="版本" width="70" align="center">
+                                <template #default="{ row }">
+                                    <el-tag size="small" :type="row.version === scriptVersion ? 'primary' : 'info'">
+                                        v{{ row.version }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="note" label="备注" width="140" show-overflow-tooltip />
+                            <el-table-column prop="created_at" label="创建时间" width="160" />
+                            <el-table-column label="验证结果" width="140">
+                                <template #default="{ row }">
+                                    <template v-if="row.total_cases > 0">
+                                        <el-tag size="small" :type="row.passed_count === row.total_cases ? 'success' : 'warning'">
+                                            {{ row.passed_count }}/{{ row.total_cases }} 通过
+                                        </el-tag>
+                                        <span v-if="row.avg_error != null" style="font-size: 11px; color: #909399; margin-left: 4px;">
+                                            偏差 {{ row.avg_error.toFixed(2) }}
+                                        </span>
+                                    </template>
+                                    <span v-else style="font-size: 12px; color: #c0c4cc;">未验证</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="120" align="center">
+                                <template #default="{ row }">
+                                    <el-button size="small" text type="primary" @click="historyPreviewText = row.script_text">预览</el-button>
+                                    <el-button size="small" text type="warning" @click="rollbackScriptVersion(row.version)">回滚</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div v-if="historyPreviewText" style="margin-top: 12px;">
+                            <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">脚本内容预览</div>
+                            <el-input type="textarea" :model-value="historyPreviewText" :readonly="true"
+                                :rows="8"
+                                :input-style="{ fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: '12px', lineHeight: '1.6', background: '#f5f7fa' }">
+                            </el-input>
+                            <div style="margin-top: 6px; text-align: right;">
+                                <el-button size="small" text @click="historyPreviewText = ''">关闭预览</el-button>
+                            </div>
+                        </div>
+                    </el-dialog>
                 </template>
 
                 <!-- ========== 反作弊测试 ========== -->
@@ -501,7 +680,18 @@ const app = createApp({
         // ========== 页面状态 ==========
         const currentPage = ref('single');
         const inputCollapsed = ref(false);
-        const sidebarCollapsed = ref(false);
+        const sidebarCollapsed = ref(true);
+        const resultCollapsed = ref(false);
+
+        // Ctrl+Enter 快捷评分
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (currentPage.value === 'single' && !grading.value) {
+                    gradeAnswer();
+                }
+            }
+        });
 
         // ========== 模型选择 ==========
         const providers = ref([]);
@@ -570,15 +760,29 @@ const app = createApp({
                 selectedQuestion.value = null;
                 return;
             }
+            loadingQuestions.value = true;
             try {
                 const { data } = await axios.get(API_BASE + '/api/questions/' + qid);
                 if (data.success && data.data) {
                     selectedQuestion.value = data.data;
+                    scriptVersion.value = data.data.script_version || 0;
+                    scriptVersionCount.value = data.data.script_version_count || 0;
+                    // 填入标准满分答案并全选
+                    const stdAnswer = data.data.standard_answer || '';
+                    if (stdAnswer) {
+                        studentAnswer.value = stdAnswer;
+                        // 延迟全选，等 textarea 渲染完成
+                        setTimeout(() => {
+                            const textarea = document.querySelector('.content textarea');
+                            if (textarea) { textarea.focus(); textarea.select(); }
+                        }, 100);
+                    }
                     ElMessage.success('题目已加载: ' + (data.data.title || data.data.content.substring(0, 20)));
                 }
             } catch (e) {
                 ElMessage.error('加载题目失败');
             }
+            loadingQuestions.value = false;
         }
 
         // ========== 手动输入 ==========
@@ -598,6 +802,13 @@ const app = createApp({
         // ========== 评分 ==========
         const grading = ref(false);
         const gradeResult = ref(null);
+        const gradeModelIds = ref([]); // 多选模型，空=用当前模型
+        const lastMultiResult = ref(null);
+
+        function viewModelDetail(row) {
+            lastMultiResult.value = gradeResult.value;
+            gradeResult.value = { ...row, multi: false, _fromMulti: true };
+        }
 
         async function gradeAnswer() {
             if (!studentAnswer.value.trim()) {
@@ -606,50 +817,69 @@ const app = createApp({
             }
 
             grading.value = true;
-            let requestBody;
+            gradeResult.value = null;
 
-            if (selectedQuestionId.value) {
-                const { provider, model } = splitModelId();
-                requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), provider, model };
-            } else {
-                if (!manualQuestion.value.trim()) {
-                    ElMessage.warning('请填写题目');
-                    grading.value = false;
-                    return;
-                }
-                let rubric = {};
-                if (manualRubric.value.trim()) {
-                    try { rubric = JSON.parse(manualRubric.value); }
-                    catch (e) { ElMessage.error('评分规则JSON格式错误'); grading.value = false; return; }
-                }
-                const { provider: prov2, model: mdl2 } = splitModelId();
-                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), rubric, max_score: manualMaxScore.value, provider: prov2, model: mdl2 };
-            }
+            // 确定要评的模型列表
+            const modelIds = gradeModelIds.value.length > 0
+                ? gradeModelIds.value
+                : [currentModelId.value];
 
-            try {
-                const { data: result } = await axios.post(API_BASE + '/api/grade', requestBody);
-                if (result.success) {
-                    const d = result.data;
-                    if (d.score === null || d.score === undefined) {
-                        try {
-                            await ElMessageBox.confirm(d.comment || '评分系统暂时无法评分', '评分异常', { confirmButtonText: '重新评分', cancelButtonText: '联系监考老师', type: 'warning' });
-                            grading.value = false;
-                            gradeAnswer();
-                            return;
-                        } catch {
-                            ElMessage.warning('请通知监考老师进行人工评分');
-                        }
-                    } else {
-                        ElMessage.success('评分完成');
-                    }
-                    gradeResult.value = d;
-                    addToHistory(requestBody, d);
+            const results = [];
+
+            for (let i = 0; i < modelIds.length; i++) {
+                const mid = modelIds[i];
+                const p = providers.value.find(x => x.id === mid) || {};
+                const prov = (mid.indexOf('/') > 0) ? mid.substring(0, mid.indexOf('/')) : mid;
+                const mdl = (mid.indexOf('/') > 0) ? mid.substring(mid.indexOf('/') + 1) : (p.model || '');
+
+                let requestBody;
+                const studentId = localStorage.getItem('ai_grading_username') || '';
+                if (selectedQuestionId.value) {
+                    requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), student_id: studentId, provider: prov, model: mdl };
                 } else {
-                    ElMessage.error(result.error || '评分失败');
+                    if (!manualQuestion.value.trim()) {
+                        ElMessage.warning('请填写题目');
+                        grading.value = false;
+                        return;
+                    }
+                    let rubric = {};
+                    if (manualRubric.value.trim()) {
+                        try { rubric = JSON.parse(manualRubric.value); }
+                        catch (e) { ElMessage.error('评分规则JSON格式错误'); grading.value = false; return; }
+                    }
+                    requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), student_id: studentId, rubric, max_score: manualMaxScore.value, provider: prov, model: mdl };
                 }
-            } catch (e) {
-                ElMessage.error('评分失败：后端服务未启动');
+
+                try {
+                    const { data: result } = await axios.post(API_BASE + '/api/grade', requestBody);
+                    if (result.success) {
+                        results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, ...result.data });
+                    } else {
+                        results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: result.error || '评分失败', comment: '' });
+                    }
+                } catch (e) {
+                    results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: '后端服务未启动', comment: '' });
+                }
             }
+
+            // 单模型 → 直接显示结果，多模型 → 显示对比
+            if (results.length === 1) {
+                gradeResult.value = results[0];
+                if (results[0].score === null || results[0].score === undefined) {
+                    ElMessage.warning(results[0].comment || '评分系统暂时无法评分');
+                } else {
+                    ElMessage.success('评分完成');
+                }
+            } else {
+                gradeResult.value = { multi: true, results: results };
+                const scores = results.filter(r => r.score !== null).map(r => r.score);
+                if (scores.length > 0) {
+                    ElMessage.success('多模型评分完成 (' + scores.length + '/' + results.length + ')');
+                } else {
+                    ElMessage.warning('所有模型评分均失败');
+                }
+            }
+
             grading.value = false;
         }
 
@@ -662,6 +892,75 @@ const app = createApp({
             return '#f56c6c';
         });
 
+        // 解析评分脚本为逐条得分点，用于与 scoring_items 对照展示
+        const rubricParsedItems = computed(() => {
+            if (!selectedQuestion.value || !selectedQuestion.value.rubric_script) return [];
+            const script = selectedQuestion.value.rubric_script;
+            // 匹配 "得分点N（X分）：" 或 "第N问（X分）：" 开头的段落
+            const byIndex = {};
+            const parts = script.split(/(?=得分点\d+|第\d+问)/);
+            for (const part of parts) {
+                const match = part.match(/^(得分点|第)\s*(\d+)[^：:]*[：:]/);
+                if (match) {
+                    const idx = parseInt(match[2]);
+                    const content = part.trim();
+                    // 同编号取最长段落（主体评分规则通常最长）
+                    if (!byIndex[idx] || content.length > byIndex[idx].length) {
+                        byIndex[idx] = content;
+                    }
+                }
+            }
+            return Object.keys(byIndex).sort((a, b) => a - b).map(k => ({ index: parseInt(k), content: byIndex[k] }));
+        });
+
+        // 控制每个得分点的评分脚本折叠展开状态
+        const rubricExpanded = ref({});
+
+        function toggleRubricExpand(idx) {
+            rubricExpanded.value = { ...rubricExpanded.value, [idx]: !rubricExpanded.value[idx] };
+        }
+
+        // 评分脚本铺满/编辑状态
+        const rubricFullscreen = ref(false);
+        const rubricEditing = ref(false);
+        const rubricEditValue = ref('');
+
+        // 评分脚本版本历史
+        const scriptVersion = ref(0);
+        const scriptVersionCount = ref(0);
+        const historyDialogVisible = ref(false);
+        const scriptHistoryList = ref([]);
+        const historyPreviewText = ref('');
+
+        function toggleRubricFullscreen() {
+            rubricFullscreen.value = !rubricFullscreen.value;
+        }
+
+        function startRubricEdit() {
+            rubricEditValue.value = selectedQuestion.value?.rubric_script || '';
+            rubricEditing.value = true;
+        }
+
+        function cancelRubricEdit() {
+            rubricEditing.value = false;
+        }
+
+        async function saveRubricEdit() {
+            if (!selectedQuestion.value) return;
+            try {
+                const { data } = await axios.put(API_BASE + '/api/questions/' + selectedQuestion.value.id, {
+                    rubric_script: rubricEditValue.value
+                });
+                if (data.success) {
+                    selectedQuestion.value = { ...selectedQuestion.value, rubric_script: rubricEditValue.value };
+                    rubricEditing.value = false;
+                    ElMessage.success('评分脚本已保存');
+                }
+            } catch (e) {
+                ElMessage.error('保存失败');
+            }
+        }
+
         function copyRubricScript() {
             if (!selectedQuestion.value || !selectedQuestion.value.rubric_script) {
                 ElMessage.warning('没有可复制的评分脚本');
@@ -672,6 +971,47 @@ const app = createApp({
             }).catch(() => {
                 ElMessage.error('复制失败，请手动选择复制');
             });
+        }
+
+        async function openScriptHistory() {
+            if (!selectedQuestion.value) return;
+            try {
+                const { data } = await axios.get(API_BASE + '/api/questions/' + selectedQuestion.value.id + '/script-history');
+                if (data.success) {
+                    scriptHistoryList.value = data.data || [];
+                    historyPreviewText.value = '';
+                    historyDialogVisible.value = true;
+                }
+            } catch (e) {
+                ElMessage.error('获取版本历史失败');
+            }
+        }
+
+        async function rollbackScriptVersion(version) {
+            if (!selectedQuestion.value) return;
+            try {
+                const { data } = await axios.post(API_BASE + '/api/questions/' + selectedQuestion.value.id + '/script-rollback', {
+                    version: version
+                });
+                if (data.success) {
+                    // 重新加载题目
+                    const res = await axios.get(API_BASE + '/api/questions/' + selectedQuestion.value.id);
+                    if (res.data.success) {
+                        selectedQuestion.value = res.data.data;
+                        scriptVersion.value = res.data.data.script_version || 0;
+                        scriptVersionCount.value = res.data.data.script_version_count || 0;
+                    }
+                    // 刷新历史列表
+                    const histRes = await axios.get(API_BASE + '/api/questions/' + selectedQuestion.value.id + '/script-history');
+                    if (histRes.data.success) {
+                        scriptHistoryList.value = histRes.data.data || [];
+                    }
+                    historyPreviewText.value = '';
+                    ElMessage.success('已回滚到版本 v' + version);
+                }
+            } catch (e) {
+                ElMessage.error('回滚失败');
+            }
         }
 
         async function saveAsTestCase() {
@@ -985,7 +1325,7 @@ const app = createApp({
         });
 
         return {
-            currentPage, inputCollapsed, sidebarCollapsed,
+            currentPage, inputCollapsed, sidebarCollapsed, resultCollapsed,
             providers, currentModelId, currentModelLabel, modelGroups, onModelChange,
             questionList, selectedQuestionId, selectedQuestion, loadingQuestions,
             loadQuestionList, onQuestionSelect,
@@ -994,6 +1334,10 @@ const app = createApp({
             grading, gradeResult, gradeAnswer, scoreColor,
             genAnswerLoading, generateAnswer,
             copyRubricScript, saveAsTestCase,
+            rubricFullscreen, rubricEditing, rubricEditValue, toggleRubricFullscreen, startRubricEdit, cancelRubricEdit, saveRubricEdit,
+            scriptVersion, scriptVersionCount, historyDialogVisible, scriptHistoryList, historyPreviewText,
+            openScriptHistory, rollbackScriptVersion,
+            rubricParsedItems, rubricExpanded, toggleRubricExpand,
             testCases, selectedCaseIds, testSetRunning, testSetProgress, testSetText,
             loadTestCases, onCaseSelectionChange, gradeTestCase, runSingleCase, runSelectedCases, runAllCases, deleteTestCase,
             showGenDialog, genCount, genDist, genStyles, genExtra, genRunning, autoGenerateTestCases,

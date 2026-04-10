@@ -1,8 +1,8 @@
 # 双Agent评分系统重构方案
 
-> **文档版本**: v1.0.0
+> **文档版本**: v1.1.0
 > **最后更新**: 2026-04-10
-> **状态**: 设计完成，待实施
+> **状态**: 部分实施中
 > **维护者**: AI Grading System Team
 
 ---
@@ -427,6 +427,20 @@ ALTER TABLE grading_records ADD COLUMN evidence_data TEXT DEFAULT NULL;
 
 ## 13. 实施步骤
 
+### 已完成（2026-04-10）
+
+| 改动 | 文件 | 状态 |
+|------|------|------|
+| 修复静默0分bug：`final_score=0` → `final_score=None` | `qwen_engine.py:265` | ✅ 已上线 |
+| subject 透传：`grade()` 加 `subject` 参数，`grade_answer()` 从数据库取值 | `qwen_engine.py:112`, `api_routes.py:399,407` | ✅ 已上线 |
+| 空答案前置拦截：去除空格+标点后长度<2 → 直接0分，不调LLM | `api_routes.py:389-430` | ✅ 已上线 |
+| 引用原文提取：提示词加 `quoted_text`，解析透传 | `qwen_engine.py:259,213` | ✅ 已上线 |
+| 证据真实性验证：`quoted_text not in answer` → fake_quote 标记 | `api_routes.py:486-500` | ✅ 已上线 |
+| `grading_flags` 持久化：数据库新增列 + `add_grading_record()` 接收 | `db_models.py:85,602` | ✅ 已上线 |
+| 前端展示验证标记 + 引用原文 | `dist/index.html:267-274,292-294` | ✅ 已上线 |
+
+### 待做
+
 ### Phase 1: 预处理模块（低风险，独立）
 
 **文件**: `app/preprocessor.py`, `app/strategies/`
@@ -498,6 +512,25 @@ ALTER TABLE grading_records ADD COLUMN evidence_data TEXT DEFAULT NULL;
 | **A/B对比** | 新旧流水线对同一批测试用例的评分结果对比 |
 | **端到端** | 通过 `/test-cases` 页面的验证功能跑完整流程 |
 | **压力测试** | 批量评分，验证延迟和并发表现 |
+
+---
+
+## 16. 暂缓事项
+
+### 一致性校验（需学生标识字段）
+
+**原因**：当前 `grading_records` 表无学生标识，无法区分"同一学生重评"和"不同学生评分"。直接查"该题最近一次评分"会误判。
+
+**需要的改动**（6处）：
+
+1. `db_models.py` — `grading_records` 加 `student_id TEXT` 列 + ALTER TABLE 兼容
+2. `db_models.py` — `add_grading_record()` 接收 `student_id` 参数
+3. `api_routes.py` — `grade_answer()` 从请求取出 `student_id`，传入存储
+4. `dist/index.html` — 评分表单加学生标识输入框
+5. `dist/index.html` — `requestBody` 加 `student_id`
+6. `api_routes.py` — 一致性校验逻辑：同 student_id + 同 question_id + 不同 record → 对比分数差值
+
+**重启条件**：确定需要区分学生身份时，或前端开始支持批量导入答卷（此时每份答卷天然有学生标识）。
 
 ---
 

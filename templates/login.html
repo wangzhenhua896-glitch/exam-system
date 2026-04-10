@@ -8,6 +8,7 @@
     <script src="/static/vendor/vue.global.prod.js"></script>
     <script src="/static/vendor/element-plus.js"></script>
     <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -98,6 +99,14 @@
         <div class="login-title">AI 评分系统</div>
         <div class="login-desc">{{ role === 'admin' ? '管理员模式' : '选择您的科目，进入题库管理' }}</div>
 
+        <el-form class="login-form" label-position="top">
+            <el-form-item label="选择用户">
+                <el-select v-model="selectedUsername" style="width: 100%;" placeholder="请选择登录用户" size="large" filterable @change="onUserChange">
+                    <el-option v-for="u in userList" :key="u.username" :label="u.display_name + ' (' + u.username + ')'" :value="u.username" />
+                </el-select>
+            </el-form-item>
+        </el-form>
+
         <div class="role-cards">
             <div class="role-card" :class="{ active: role === 'teacher' }" @click="role = 'teacher'">
                 <div class="role-icon">&#128218;</div>
@@ -145,17 +154,28 @@ const DEFAULT_SUBJECTS = [
 const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
 const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
 const ROLE_KEY = 'ai_grading_role';
+const USERNAME_KEY = 'ai_grading_username';
 
 createApp({
     setup() {
         const role = ref('teacher');
         const selectedSubject = ref('');
         const subjectList = ref([]);
+        const userList = ref([]);
+        const selectedUsername = ref('');
 
-        onMounted(() => {
+        onMounted(async () => {
             // 加载科目列表
             const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
             subjectList.value = saved ? JSON.parse(saved) : [...DEFAULT_SUBJECTS];
+
+            // 加载用户列表
+            try {
+                const { data } = await axios.get('/api/users');
+                if (data.success) userList.value = data.data;
+            } catch (e) {
+                console.error('加载用户列表失败', e);
+            }
 
             // 恢复上次的角色
             const lastRole = localStorage.getItem(ROLE_KEY);
@@ -163,15 +183,37 @@ createApp({
                 role.value = lastRole;
             }
 
-            // 如果已有上次选择的科目，预选
+            // 恢复上次选择的科目
             const last = localStorage.getItem(CURRENT_SUBJECT_KEY);
             if (last && subjectList.value.find(s => s.value === last)) {
                 selectedSubject.value = last;
             }
+
+            // 恢复上次的用户名
+            const lastUser = localStorage.getItem(USERNAME_KEY);
+            if (lastUser) {
+                selectedUsername.value = lastUser;
+            }
         });
+
+        const onUserChange = (username) => {
+            const user = userList.value.find(u => u.username === username);
+            if (!user) return;
+            // 自动填充角色
+            role.value = user.role;
+            // 自动填充科目
+            if (user.role === 'teacher' && user.subject) {
+                selectedSubject.value = user.subject;
+            } else {
+                selectedSubject.value = '';
+            }
+        };
 
         const enterSystem = () => {
             localStorage.setItem(ROLE_KEY, role.value);
+            if (selectedUsername.value) {
+                localStorage.setItem(USERNAME_KEY, selectedUsername.value);
+            }
             if (role.value === 'admin') {
                 localStorage.removeItem(CURRENT_SUBJECT_KEY);
             } else {
@@ -181,7 +223,7 @@ createApp({
             window.location.href = '/management';
         };
 
-        return { role, selectedSubject, subjectList, enterSystem };
+        return { role, selectedSubject, subjectList, userList, selectedUsername, onUserChange, enterSystem };
     }
 }).use(ElementPlus).mount('#app');
 </script>

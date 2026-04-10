@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能评分系统 - 敏感词管理</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
+        .subtitle { font-size: 12px; color: #909399; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .toolbar-right { display: flex; gap: 10px; align-items: center; }
+        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
+        .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <div class="layout">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-left">
+                    <span class="logo">AI 智能评分系统</span>
+                    <span class="subtitle">敏感词管理</span>
+                </div>
+                <div class="header-right">
+                    <div class="status-badge" v-if="currentSubject">
+                        <span style="width:6px;height:6px;border-radius:50%;background:#67c23a;"></span>
+                        {{ subjectLabels[currentSubject] || currentSubject }} · 科目老师
+                    </div>
+                    <el-button text type="primary" @click="window.location.href='/login'">切换角色</el-button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="page-card">
+                    <!-- 工具栏 -->
+                    <div class="toolbar">
+                        <div class="toolbar-right">
+                            <el-select v-model="filterSeverity" placeholder="严重程度" clearable @change="loadWords" style="width: 120px;">
+                                <el-option label="高危" value="high" />
+                                <el-option label="中危" value="medium" />
+                                <el-option label="低危" value="low" />
+                            </el-select>
+                            <el-input v-model="searchKeyword" placeholder="搜索敏感词" clearable @input="loadWords" style="width: 200px;" :prefix-icon="Search" />
+                            <el-button type="primary" @click="showAddDialog">添加敏感词</el-button>
+                            <el-button @click="showBatchDialog">批量导入</el-button>
+                        </div>
+                    </div>
+
+                    <!-- 统计 -->
+                    <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                        <el-tag type="danger" size="large">高危: {{ highCount }}</el-tag>
+                        <el-tag type="warning" size="large">中危: {{ mediumCount }}</el-tag>
+                        <el-tag type="info" size="large">低危: {{ lowCount }}</el-tag>
+                        <el-tag size="large">总计: {{ words.length }}</el-tag>
+                    </div>
+
+                    <!-- 表格 -->
+                    <el-table :data="filteredWords" stripe style="width: 100%;" v-loading="loading">
+                        <el-table-column prop="word" label="敏感词" min-width="200" />
+                        <el-table-column prop="category" label="分类" width="100">
+                            <template #default="{ row }">
+                                <el-tag :type="row.category === 'politics' ? 'danger' : 'info'" size="small">
+                                    {{ categoryLabels[row.category] || row.category }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="severity" label="严重程度" width="100">
+                            <template #default="{ row }">
+                                <el-tag :type="row.severity === 'high' ? 'danger' : row.severity === 'medium' ? 'warning' : 'info'" size="small">
+                                    {{ severityLabels[row.severity] || row.severity }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="created_at" label="添加时间" width="180" />
+                        <el-table-column label="操作" width="150" fixed="right">
+                            <template #default="{ row }">
+                                <el-button size="small" text type="primary" @click="editWord(row)">编辑</el-button>
+                                <el-popconfirm title="确定删除此敏感词？" @confirm="deleteWord(row.id)">
+                                    <template #reference>
+                                        <el-button size="small" text type="danger">删除</el-button>
+                                    </template>
+                                </el-popconfirm>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <a href="/grading">单题评分</a> | <a href="/management">题库管理</a> | <a href="/test-cases">测试集管理</a> | <a href="/sensitive-words" style="font-weight:bold;">敏感词管理</a> | <a href="/user-management">用户管理</a>
+            </div>
+        </div>
+
+        <!-- 添加/编辑弹窗 -->
+        <el-dialog v-model="dialogVisible" :title="editingId ? '编辑敏感词' : '添加敏感词'" width="480px" :close-on-click-modal="false">
+            <el-form :model="form" label-width="80px">
+                <el-form-item label="敏感词" required>
+                    <el-input v-model="form.word" placeholder="输入敏感词" />
+                </el-form-item>
+                <el-form-item label="分类">
+                    <el-select v-model="form.category" style="width: 100%;">
+                        <el-option label="政治敏感" value="politics" />
+                        <el-option label="其他" value="other" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="严重程度">
+                    <el-select v-model="form.severity" style="width: 100%;">
+                        <el-option label="高危（命中直接0分）" value="high" />
+                        <el-option label="中危（加warning）" value="medium" />
+                        <el-option label="低危（仅标记）" value="low" />
+                    </el-select>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="dialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveWord">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 批量导入弹窗 -->
+        <el-dialog v-model="batchDialogVisible" title="批量导入敏感词" width="560px" :close-on-click-modal="false">
+            <el-alert title="每行一个敏感词，自动归为当前设置的分类和严重程度" type="info" :closable="false" style="margin-bottom: 15px;" />
+            <el-form label-width="80px">
+                <el-form-item label="分类">
+                    <el-select v-model="batchForm.category" style="width: 200px;">
+                        <el-option label="政治敏感" value="politics" />
+                        <el-option label="其他" value="other" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="严重程度">
+                    <el-select v-model="batchForm.severity" style="width: 200px;">
+                        <el-option label="高危" value="high" />
+                        <el-option label="中危" value="medium" />
+                        <el-option label="低危" value="low" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="敏感词列表">
+                    <el-input v-model="batchForm.text" type="textarea" :rows="10" placeholder="每行一个敏感词，例如：&#10;法轮功&#10;台独&#10;藏独" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="batchDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="batchImport">导入</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+        const { Search } = ElementPlusIconsVue;
+
+        const API_BASE = '';
+
+        createApp({
+            setup() {
+                const words = ref([]);
+                const loading = ref(false);
+                const searchKeyword = ref('');
+                const filterSeverity = ref('');
+                const dialogVisible = ref(false);
+                const batchDialogVisible = ref(false);
+                const editingId = ref(null);
+
+                const form = ref({ word: '', category: 'politics', severity: 'high' });
+                const batchForm = ref({ text: '', category: 'politics', severity: 'high' });
+
+                const currentSubject = ref(localStorage.getItem('ai_grading_current_subject') || '');
+                const isAdmin = ref(localStorage.getItem('ai_grading_role') === 'admin');
+
+                const subjectLabels = {
+                    politics: '思想政治', chinese: '语文', english: '英语',
+                    math: '数学', history: '历史', geography: '地理',
+                    physics: '物理', chemistry: '化学', biology: '生物',
+                };
+                const categoryLabels = { politics: '政治敏感', other: '其他' };
+                const severityLabels = { high: '高危', medium: '中危', low: '低危' };
+
+                const filteredWords = computed(() => {
+                    return words.value;
+                });
+
+                const highCount = computed(() => words.value.filter(w => w.severity === 'high').length);
+                const mediumCount = computed(() => words.value.filter(w => w.severity === 'medium').length);
+                const lowCount = computed(() => words.value.filter(w => w.severity === 'low').length);
+
+                async function loadWords() {
+                    loading.value = true;
+                    try {
+                        const params = {};
+                        if (!isAdmin.value && currentSubject.value) {
+                            params.subject = currentSubject.value;
+                        }
+                        if (filterSeverity.value) params.severity = filterSeverity.value;
+                        if (searchKeyword.value) params.keyword = searchKeyword.value;
+                        const { data } = await axios.get(API_BASE + '/api/sensitive-words', { params });
+                        if (data.success) words.value = data.data;
+                    } catch (e) {
+                        ElMessage.error('加载敏感词失败');
+                    }
+                    loading.value = false;
+                }
+
+                function showAddDialog() {
+                    editingId.value = null;
+                    form.value = { word: '', category: 'politics', severity: 'high' };
+                    dialogVisible.value = true;
+                }
+
+                function editWord(row) {
+                    editingId.value = row.id;
+                    form.value = { word: row.word, category: row.category, severity: row.severity };
+                    dialogVisible.value = true;
+                }
+
+                async function saveWord() {
+                    if (!form.value.word.trim()) {
+                        ElMessage.warning('请输入敏感词');
+                        return;
+                    }
+                    try {
+                        if (editingId.value) {
+                            await axios.put(API_BASE + '/api/sensitive-words/' + editingId.value, form.value);
+                        } else {
+                            const payload = { ...form.value };
+                            if (!isAdmin.value && currentSubject.value) {
+                                payload.subject = currentSubject.value;
+                            }
+                            await axios.post(API_BASE + '/api/sensitive-words', payload);
+                        }
+                        ElMessage.success(editingId.value ? '更新成功' : '添加成功');
+                        dialogVisible.value = false;
+                        loadWords();
+                    } catch (e) {
+                        ElMessage.error('操作失败');
+                    }
+                }
+
+                async function deleteWord(id) {
+                    try {
+                        await axios.delete(API_BASE + '/api/sensitive-words/' + id);
+                        ElMessage.success('删除成功');
+                        loadWords();
+                    } catch (e) {
+                        ElMessage.error('删除失败');
+                    }
+                }
+
+                function showBatchDialog() {
+                    batchForm.value = { text: '', category: 'politics', severity: 'high' };
+                    batchDialogVisible.value = true;
+                }
+
+                async function batchImport() {
+                    const lines = batchForm.value.text.trim().split('\n').filter(l => l.trim());
+                    if (lines.length === 0) {
+                        ElMessage.warning('请输入至少一个敏感词');
+                        return;
+                    }
+                    try {
+                        const payload = {
+                            words: lines.map(l => ({
+                                word: l.trim(),
+                                subject: (!isAdmin.value && currentSubject.value) ? currentSubject.value : 'all',
+                                category: batchForm.value.category,
+                                severity: batchForm.value.severity,
+                            }))
+                        };
+                        const { data } = await axios.post(API_BASE + '/api/sensitive-words/batch', payload);
+                        if (data.success) {
+                            ElMessage.success(`成功导入 ${data.data.imported} 个敏感词`);
+                            batchDialogVisible.value = false;
+                            loadWords();
+                        }
+                    } catch (e) {
+                        ElMessage.error('批量导入失败');
+                    }
+                }
+
+                onMounted(() => {
+                    if (!isAdmin.value && !currentSubject.value) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    loadWords();
+                });
+
+                return {
+                    words, loading, searchKeyword, filterSeverity,
+                    dialogVisible, batchDialogVisible, editingId,
+                    form, batchForm,
+                    currentSubject, isAdmin,
+                    subjectLabels, categoryLabels, severityLabels,
+                    filteredWords, highCount, mediumCount, lowCount,
+                    loadWords, showAddDialog, editWord, saveWord,
+                    deleteWord, showBatchDialog, batchImport,
+                    Search,
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

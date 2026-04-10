@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+<title>/Users/peikingdog/allexam.sys/question-bank/ai-grading-system/docs/语义校验测试用例说明</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="generator" content="pdftohtml 0.36"/>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body bgcolor="#A0A0A0" vlink="blue" link="blue">
+<!-- Page 1 -->
+<a name="1"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}	.ft10{font-size:27px;font-family:NXYACE+苹方-简-Semi;color:#333333;}
+	.ft11{font-size:16px;font-family:TELXQP+苹方-简;color:#2c3e50;}
+	.ft12{font-size:15px;font-family:LKFSVD+Menlo;color:#2c3e50;}
+	.ft13{font-size:21px;font-family:NXYACE+苹方-简-Semi;color:#1a5276;}
+	.ft14{font-size:16px;font-family:NXYACE+苹方-简-Semi;color:#333333;}
+	.ft15{font-size:16px;font-family:TELXQP+苹方-简;color:#333333;}
+	.ft16{font-size:15px;font-family:NXYACE+苹方-简-Semi;color:#333333;}
+	.ft17{font-size:15px;font-family:TELXQP+苹方-简;color:#333333;}
+	.ft18{font-size:18px;font-family:NXYACE+苹方-简-Semi;color:#2c3e50;}
+	.ft19{font-size:15px;font-family:EABYOG+手札体-简;color:#333333;}
+	.ft110{font-size:15px;line-height:23px;font-family:TELXQP+苹方-简;color:#333333;}
+	.ft111{font-size:15px;line-height:24px;font-family:TELXQP+苹方-简;color:#333333;}
+	.ft112{font-size:15px;line-height:21px;font-family:EABYOG+手札体-简;color:#333333;}
+	.ft113{font-size:16px;line-height:26px;font-family:TELXQP+苹方-简;color:#333333;}
+-->
+</style>
+<div id="page1-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明001.png" alt="background image"/>
+<p style="position:absolute;top:122px;left:94px;white-space:nowrap" class="ft10"><b>AI&#160;语义校验模块&#160;-&#160;测试用例说明</b></p>
+<p style="position:absolute;top:219px;left:117px;white-space:nowrap" class="ft11">文档版本:&#160;v1.0.0&#160;日期:&#160;2026-04-10&#160;模块:&#160;</p>
+<p style="position:absolute;top:222px;left:433px;white-space:nowrap" class="ft12">app/semantic_checker.py</p>
+<p style="position:absolute;top:219px;left:645px;white-space:nowrap" class="ft11">&#160;+&#160;</p>
+<p style="position:absolute;top:222px;left:670px;white-space:nowrap" class="ft12">app/</p>
+<p style="position:absolute;top:248px;left:117px;white-space:nowrap" class="ft12">qwen_engine.py</p>
+<p style="position:absolute;top:349px;left:94px;white-space:nowrap" class="ft13"><b>一、测试题目</b></p>
+<p style="position:absolute;top:406px;left:139px;white-space:nowrap" class="ft14"><b>题目ID</b></p>
+<p style="position:absolute;top:406px;left:188px;white-space:nowrap" class="ft15">:&#160;5（思政简答题）</p>
+<p style="position:absolute;top:433px;left:139px;white-space:nowrap" class="ft14"><b>题目内容</b></p>
+<p style="position:absolute;top:433px;left:205px;white-space:nowrap" class="ft15">:&#160;社会主义初级阶段的生产资料所有制</p>
+<p style="position:absolute;top:459px;left:139px;white-space:nowrap" class="ft14"><b>满分</b></p>
+<p style="position:absolute;top:459px;left:172px;white-space:nowrap" class="ft15">:&#160;8&#160;分</p>
+<p style="position:absolute;top:538px;left:94px;white-space:nowrap" class="ft13"><b>二、评分标准（4&#160;个要点，每个&#160;2&#160;分）</b></p>
+<p style="position:absolute;top:603px;left:106px;white-space:nowrap" class="ft16"><b>编号</b></p>
+<p style="position:absolute;top:603px;left:165px;white-space:nowrap" class="ft16"><b>标准答案要点</b></p>
+<p style="position:absolute;top:603px;left:512px;white-space:nowrap" class="ft16"><b>必含关键词</b></p>
+<p style="position:absolute;top:642px;left:106px;white-space:nowrap" class="ft110">要点<br/>1</p>
+<p style="position:absolute;top:642px;left:165px;white-space:nowrap" class="ft110">公有制为主体、多种所有制经济共同发展的生产<br/>资料所有制</p>
+<p style="position:absolute;top:654px;left:512px;white-space:nowrap" class="ft17">公有制为主体、多种所有制经济共同发展</p>
+<p style="position:absolute;top:704px;left:106px;white-space:nowrap" class="ft111">要点<br/>2</p>
+<p style="position:absolute;top:716px;left:165px;white-space:nowrap" class="ft17">公有制为主体是经济制度的根本特征</p>
+<p style="position:absolute;top:716px;left:512px;white-space:nowrap" class="ft17">公有制为主体、根本特征</p>
+<p style="position:absolute;top:767px;left:106px;white-space:nowrap" class="ft110">要点<br/>3</p>
+<p style="position:absolute;top:767px;left:165px;white-space:nowrap" class="ft110">非公有制经济是社会主义市场经济的重要组成部<br/>分</p>
+<p style="position:absolute;top:767px;left:512px;white-space:nowrap" class="ft110">非公有制经济、社会主义市场经济、重要<br/>组成部分</p>
+<p style="position:absolute;top:829px;left:106px;white-space:nowrap" class="ft110">要点<br/>4</p>
+<p style="position:absolute;top:841px;left:165px;white-space:nowrap" class="ft17">公有制经济和非公有制经济相辅相成</p>
+<p style="position:absolute;top:829px;left:512px;white-space:nowrap" class="ft110">公有制经济、非公有制经济、相辅相成、<br/>共同发展</p>
+<p style="position:absolute;top:938px;left:94px;white-space:nowrap" class="ft13"><b>三、答案版本定义（8&#160;个版本）</b></p>
+<p style="position:absolute;top:1000px;left:94px;white-space:nowrap" class="ft18"><b>V0&#160;—&#160;完整答案（预期&#160;8&#160;分）</b></p>
+<p style="position:absolute;top:1060px;left:109px;white-space:nowrap" class="ft112">在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。<br/>以公有制为主体是社会主义初级阶段经济制度的根本特征。<br/>非公有制经济是我国社会主义市场经济的重要组成部分。<br/>公有制经济和非公有制经济，两者相辅相成、相得益彰。</p>
+<p style="position:absolute;top:406px;left:125px;white-space:nowrap" class="ft113">•&#160;<br/>•&#160;<br/>•&#160;</p>
+</div>
+<!-- Page 2 -->
+<a name="2"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}-->
+</style>
+<div id="page2-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明002.png" alt="background image"/>
+<p style="position:absolute;top:87px;left:94px;white-space:nowrap" class="ft25">覆盖全部&#160;4&#160;个要点。</p>
+<p style="position:absolute;top:136px;left:94px;white-space:nowrap" class="ft28"><b>V1&#160;—&#160;删除要点4（预期&#160;6&#160;分）</b></p>
+<p style="position:absolute;top:196px;left:109px;white-space:nowrap" class="ft212">在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。<br/>以公有制为主体是社会主义初级阶段经济制度的根本特征。<br/>非公有制经济是我国社会主义市场经济的重要组成部分。</p>
+<p style="position:absolute;top:292px;left:94px;white-space:nowrap" class="ft25">去掉最后一句&#34;两者相辅相成、相得益彰&#34;。</p>
+<p style="position:absolute;top:341px;left:94px;white-space:nowrap" class="ft28"><b>V2&#160;—&#160;删除要点3和4（预期&#160;4&#160;分）</b></p>
+<p style="position:absolute;top:401px;left:109px;white-space:nowrap" class="ft212">在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。<br/>以公有制为主体是社会主义初级阶段经济制度的根本特征。</p>
+<p style="position:absolute;top:482px;left:94px;white-space:nowrap" class="ft28"><b>V3&#160;—&#160;只保留要点1（预期&#160;2&#160;分）</b></p>
+<p style="position:absolute;top:542px;left:109px;white-space:nowrap" class="ft29">在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。</p>
+<p style="position:absolute;top:602px;left:94px;white-space:nowrap" class="ft28"><b>V4&#160;—&#160;空白答案（预期&#160;0&#160;分）</b></p>
+<p style="position:absolute;top:661px;left:109px;white-space:nowrap" class="ft29">（空字符串）</p>
+<p style="position:absolute;top:721px;left:94px;white-space:nowrap" class="ft28"><b>V5&#160;—&#160;只保留要点3（预期&#160;2&#160;分）</b></p>
+<p style="position:absolute;top:781px;left:109px;white-space:nowrap" class="ft29">非公有制经济是我国社会主义市场经济的重要组成部分。</p>
+<p style="position:absolute;top:841px;left:94px;white-space:nowrap" class="ft28"><b>V6&#160;—&#160;保留要点1+4（预期&#160;4&#160;分）</b></p>
+<p style="position:absolute;top:901px;left:109px;white-space:nowrap" class="ft212">在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。<br/>公有制经济和非公有制经济，两者相辅相成、相得益彰。</p>
+<p style="position:absolute;top:976px;left:94px;white-space:nowrap" class="ft25">跳过要点2和要点3。</p>
+<p style="position:absolute;top:1025px;left:94px;white-space:nowrap" class="ft28"><b>V7&#160;—&#160;完整答案近义改写（预期&#160;8&#160;分）</b></p>
+<p style="position:absolute;top:1088px;left:109px;white-space:nowrap" class="ft212">我国当前阶段的所有制结构是公有制占主体地位，同时多种所有制一起发展。<br/>公有制的主体地位是我国经济制度最根本的特点。</p>
+</div>
+<!-- Page 3 -->
+<a name="3"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}	.ft314{font-size:15px;font-family:LKFSVD+Menlo;color:#333333;}
+	.ft315{font-size:15px;line-height:21px;font-family:LKFSVD+Menlo;color:#333333;}
+	.ft316{font-size:15px;line-height:23px;font-family:LKFSVD+Menlo;color:#333333;}
+-->
+</style>
+<div id="page3-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明003.png" alt="background image"/>
+<p style="position:absolute;top:85px;left:109px;white-space:nowrap" class="ft312">民营经济和私营经济是市场经济不可缺少的重要部分。<br/>国有经济和民营经济互相促进、共同发展。</p>
+<p style="position:absolute;top:160px;left:94px;white-space:nowrap" class="ft34"><b>V7&#160;改写对照表</b></p>
+<p style="position:absolute;top:160px;left:202px;white-space:nowrap" class="ft35">:</p>
+<p style="position:absolute;top:211px;left:106px;white-space:nowrap" class="ft36"><b>要点</b></p>
+<p style="position:absolute;top:211px;left:166px;white-space:nowrap" class="ft36"><b>原文关键词</b></p>
+<p style="position:absolute;top:211px;left:482px;white-space:nowrap" class="ft36"><b>V7&#160;改写用词</b></p>
+<p style="position:absolute;top:250px;left:106px;white-space:nowrap" class="ft311">要点<br/>1</p>
+<p style="position:absolute;top:262px;left:166px;white-space:nowrap" class="ft37">公有制为主体、多种所有制经济共同发展</p>
+<p style="position:absolute;top:262px;left:482px;white-space:nowrap" class="ft37">公有制占主体地位、多种所有制一起发展</p>
+<p style="position:absolute;top:312px;left:106px;white-space:nowrap" class="ft310">要点<br/>2</p>
+<p style="position:absolute;top:324px;left:166px;white-space:nowrap" class="ft37">根本特征</p>
+<p style="position:absolute;top:324px;left:482px;white-space:nowrap" class="ft37">最根本的特点</p>
+<p style="position:absolute;top:375px;left:106px;white-space:nowrap" class="ft310">要点<br/>3</p>
+<p style="position:absolute;top:375px;left:166px;white-space:nowrap" class="ft310">非公有制经济、社会主义市场经济、重要组<br/>成部分</p>
+<p style="position:absolute;top:375px;left:482px;white-space:nowrap" class="ft310">民营经济、私营经济、市场经济不可缺少的重<br/>要部分</p>
+<p style="position:absolute;top:438px;left:106px;white-space:nowrap" class="ft311">要点<br/>4</p>
+<p style="position:absolute;top:450px;left:166px;white-space:nowrap" class="ft37">公有制经济、非公有制经济、相辅相成</p>
+<p style="position:absolute;top:450px;left:482px;white-space:nowrap" class="ft37">国有经济、民营经济、互相促进、共同发展</p>
+<p style="position:absolute;top:546px;left:94px;white-space:nowrap" class="ft33"><b>四、语义校验核心逻辑</b></p>
+<p style="position:absolute;top:608px;left:94px;white-space:nowrap" class="ft38"><b>工作流程</b></p>
+<p style="position:absolute;top:668px;left:109px;white-space:nowrap" class="ft39">大模型&#160;</p>
+<p style="position:absolute;top:670px;left:159px;white-space:nowrap" class="ft314">API&#160;</p>
+<p style="position:absolute;top:668px;left:195px;white-space:nowrap" class="ft39">返回&#160;</p>
+<p style="position:absolute;top:670px;left:230px;white-space:nowrap" class="ft314">scoring_items</p>
+<p style="position:absolute;top:691px;left:109px;white-space:nowrap" class="ft315">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;▼</p>
+<p style="position:absolute;top:731px;left:109px;white-space:nowrap" class="ft39">&#160;&#160;提取&#160;</p>
+<p style="position:absolute;top:733px;left:154px;white-space:nowrap" class="ft314">rubric&#160;</p>
+<p style="position:absolute;top:731px;left:217px;white-space:nowrap" class="ft39">中的关键词（</p>
+<p style="position:absolute;top:733px;left:307px;white-space:nowrap" class="ft314">_extract_rubric_points</p>
+<p style="position:absolute;top:731px;left:506px;white-space:nowrap" class="ft39">）</p>
+<p style="position:absolute;top:754px;left:109px;white-space:nowrap" class="ft315">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;▼</p>
+<p style="position:absolute;top:794px;left:109px;white-space:nowrap" class="ft39">&#160;&#160;遍历&#160;</p>
+<p style="position:absolute;top:796px;left:154px;white-space:nowrap" class="ft314">hit=False&#160;</p>
+<p style="position:absolute;top:794px;left:244px;white-space:nowrap" class="ft39">的要点</p>
+<p style="position:absolute;top:817px;left:109px;white-space:nowrap" class="ft316">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;├──&#160;</p>
+<p style="position:absolute;top:838px;left:217px;white-space:nowrap" class="ft39">精确匹配：关键词是否出现在学生答案中？</p>
+<p style="position:absolute;top:863px;left:109px;white-space:nowrap" class="ft314">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;│&#160;&#160;&#160;&#160;&#160;&#160;&#160;</p>
+<p style="position:absolute;top:861px;left:253px;white-space:nowrap" class="ft39">是</p>
+<p style="position:absolute;top:863px;left:268px;white-space:nowrap" class="ft314">&#160;→&#160;</p>
+<p style="position:absolute;top:861px;left:295px;white-space:nowrap" class="ft39">纠偏，标记&#160;</p>
+<p style="position:absolute;top:863px;left:375px;white-space:nowrap" class="ft314">hit=True</p>
+<p style="position:absolute;top:884px;left:109px;white-space:nowrap" class="ft316">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;└──&#160;</p>
+<p style="position:absolute;top:905px;left:217px;white-space:nowrap" class="ft39">语义相似度：提取答案片段，与关键词计算余弦相似度</p>
+<p style="position:absolute;top:930px;left:109px;white-space:nowrap" class="ft314">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;≥&#160;0.72&#160;→&#160;</p>
+<p style="position:absolute;top:928px;left:334px;white-space:nowrap" class="ft39">纠偏，标记&#160;</p>
+<p style="position:absolute;top:930px;left:414px;white-space:nowrap" class="ft314">hit=True</p>
+<p style="position:absolute;top:953px;left:109px;white-space:nowrap" class="ft314">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&lt;&#160;0.72&#160;→&#160;</p>
+<p style="position:absolute;top:952px;left:334px;white-space:nowrap" class="ft39">保持原判</p>
+<p style="position:absolute;top:1012px;left:94px;white-space:nowrap" class="ft38"><b>防误判机制</b></p>
+<p style="position:absolute;top:1058px;left:139px;white-space:nowrap" class="ft34"><b>已命中要点排除</b></p>
+<p style="position:absolute;top:1058px;left:255px;white-space:nowrap" class="ft35">：如果关键词是已命中要点文本的子串（如&#34;共同发展&#34;出现在要点1中），</p>
+<p style="position:absolute;top:1085px;left:139px;white-space:nowrap" class="ft35">跳过精确匹配，避免把要点1的内容误判为要点4</p>
+<p style="position:absolute;top:1111px;left:139px;white-space:nowrap" class="ft34"><b>异常容错</b></p>
+<p style="position:absolute;top:1111px;left:205px;white-space:nowrap" class="ft35">：语义校验模块抛出任何异常都不影响原始评分结果，仅记录日志</p>
+<p style="position:absolute;top:1058px;left:125px;white-space:nowrap" class="ft35">•&#160;</p>
+<p style="position:absolute;top:1111px;left:125px;white-space:nowrap" class="ft35">•&#160;</p>
+</div>
+<!-- Page 4 -->
+<a name="4"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}-->
+</style>
+<div id="page4-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明004.png" alt="background image"/>
+<p style="position:absolute;top:87px;left:94px;white-space:nowrap" class="ft43"><b>五、语义校验测试场景</b></p>
+<p style="position:absolute;top:150px;left:94px;white-space:nowrap" class="ft48"><b>场景&#160;A&#160;—&#160;V7&#160;近义改写（应纠偏）</b></p>
+<p style="position:absolute;top:197px;left:94px;white-space:nowrap" class="ft44"><b>目标</b></p>
+<p style="position:absolute;top:197px;left:127px;white-space:nowrap" class="ft45">：验证语义校验能发现模型漏判的等价表达。</p>
+<p style="position:absolute;top:239px;left:94px;white-space:nowrap" class="ft44"><b>模拟输入</b></p>
+<p style="position:absolute;top:239px;left:160px;white-space:nowrap" class="ft45">：</p>
+<p style="position:absolute;top:297px;left:109px;white-space:nowrap" class="ft414">scoring_items:</p>
+<p style="position:absolute;top:316px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:318px;left:149px;white-space:nowrap" class="ft414">1:&#160;hit=True,&#160;&#160;score=2.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:316px;left:392px;white-space:nowrap" class="ft49">正确</p>
+<p style="position:absolute;top:337px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:339px;left:149px;white-space:nowrap" class="ft414">2:&#160;hit=True,&#160;&#160;score=2.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:337px;left:392px;white-space:nowrap" class="ft49">正确</p>
+<p style="position:absolute;top:358px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:360px;left:149px;white-space:nowrap" class="ft414">3:&#160;hit=False,&#160;score=0.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:358px;left:392px;white-space:nowrap" class="ft49">模型漏判（学生用了</p>
+<p style="position:absolute;top:360px;left:527px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:358px;left:536px;white-space:nowrap" class="ft49">民营经济</p>
+<p style="position:absolute;top:360px;left:596px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:358px;left:606px;white-space:nowrap" class="ft49">代替</p>
+<p style="position:absolute;top:360px;left:636px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:358px;left:645px;white-space:nowrap" class="ft49">非公有制经济</p>
+<p style="position:absolute;top:360px;left:735px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:358px;left:744px;white-space:nowrap" class="ft49">）</p>
+<p style="position:absolute;top:379px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:381px;left:149px;white-space:nowrap" class="ft414">4:&#160;hit=False,&#160;score=0.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:379px;left:392px;white-space:nowrap" class="ft49">模型漏判（学生用了</p>
+<p style="position:absolute;top:381px;left:527px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:379px;left:536px;white-space:nowrap" class="ft49">互相促进</p>
+<p style="position:absolute;top:381px;left:596px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:379px;left:606px;white-space:nowrap" class="ft49">代替</p>
+<p style="position:absolute;top:381px;left:636px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:379px;left:645px;white-space:nowrap" class="ft49">相辅相成</p>
+<p style="position:absolute;top:381px;left:705px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:379px;left:714px;white-space:nowrap" class="ft49">）</p>
+<p style="position:absolute;top:434px;left:94px;white-space:nowrap" class="ft44"><b>预期校验结果</b></p>
+<p style="position:absolute;top:434px;left:193px;white-space:nowrap" class="ft45">：</p>
+<p style="position:absolute;top:489px;left:109px;white-space:nowrap" class="ft49">要点</p>
+<p style="position:absolute;top:491px;left:139px;white-space:nowrap" class="ft414">3&#160;→&#160;</p>
+<p style="position:absolute;top:489px;left:175px;white-space:nowrap" class="ft49">纠偏</p>
+<p style="position:absolute;top:511px;left:109px;white-space:nowrap" class="ft412">&#160;&#160;原因：语义相似度检查<br/>&#160;&#160;关键词</p>
+<p style="position:absolute;top:533px;left:164px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:532px;left:173px;white-space:nowrap" class="ft49">非公有制经济</p>
+<p style="position:absolute;top:533px;left:263px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:532px;left:272px;white-space:nowrap" class="ft49">与答案片段</p>
+<p style="position:absolute;top:533px;left:347px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:532px;left:356px;white-space:nowrap" class="ft49">私营经济</p>
+<p style="position:absolute;top:533px;left:416px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:532px;left:425px;white-space:nowrap" class="ft49">相似度</p>
+<p style="position:absolute;top:533px;left:470px;white-space:nowrap" class="ft414">&#160;=&#160;0.724&#160;≥&#160;</p>
+<p style="position:absolute;top:532px;left:569px;white-space:nowrap" class="ft49">阈值</p>
+<p style="position:absolute;top:533px;left:599px;white-space:nowrap" class="ft414">&#160;0.72</p>
+<p style="position:absolute;top:554px;left:109px;white-space:nowrap" class="ft414">&#160;&#160;→&#160;hit=True,&#160;score=2.0</p>
+<p style="position:absolute;top:595px;left:109px;white-space:nowrap" class="ft49">要点</p>
+<p style="position:absolute;top:596px;left:139px;white-space:nowrap" class="ft414">4&#160;→&#160;</p>
+<p style="position:absolute;top:595px;left:175px;white-space:nowrap" class="ft49">纠偏</p>
+<p style="position:absolute;top:616px;left:109px;white-space:nowrap" class="ft412">&#160;&#160;原因：精确关键词匹配<br/>&#160;&#160;发现关键词</p>
+<p style="position:absolute;top:639px;left:194px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:637px;left:203px;white-space:nowrap" class="ft49">共同发展</p>
+<p style="position:absolute;top:639px;left:263px;white-space:nowrap" class="ft414">&#34;</p>
+<p style="position:absolute;top:637px;left:272px;white-space:nowrap" class="ft49">出现在学生答案中</p>
+<p style="position:absolute;top:660px;left:109px;white-space:nowrap" class="ft414">&#160;&#160;→&#160;hit=True,&#160;score=2.0</p>
+<p style="position:absolute;top:700px;left:109px;white-space:nowrap" class="ft49">总分</p>
+<p style="position:absolute;top:702px;left:139px;white-space:nowrap" class="ft414">:&#160;4.0&#160;→&#160;8.0</p>
+<p style="position:absolute;top:760px;left:94px;white-space:nowrap" class="ft48"><b>场景&#160;B&#160;—&#160;V2&#160;确实缺少要点（不应纠偏）</b></p>
+<p style="position:absolute;top:807px;left:94px;white-space:nowrap" class="ft44"><b>目标</b></p>
+<p style="position:absolute;top:807px;left:127px;white-space:nowrap" class="ft45">：验证语义校验不会对真正缺失的内容误纠偏。</p>
+<p style="position:absolute;top:850px;left:94px;white-space:nowrap" class="ft44"><b>模拟输入</b></p>
+<p style="position:absolute;top:850px;left:160px;white-space:nowrap" class="ft45">：</p>
+<p style="position:absolute;top:906px;left:109px;white-space:nowrap" class="ft49">学生答案中确实没有要点</p>
+<p style="position:absolute;top:907px;left:274px;white-space:nowrap" class="ft414">3</p>
+<p style="position:absolute;top:906px;left:283px;white-space:nowrap" class="ft49">（非公有制经济）和要点</p>
+<p style="position:absolute;top:907px;left:448px;white-space:nowrap" class="ft414">4</p>
+<p style="position:absolute;top:906px;left:457px;white-space:nowrap" class="ft49">（相辅相成）的内容。</p>
+<p style="position:absolute;top:949px;left:109px;white-space:nowrap" class="ft414">scoring_items:</p>
+<p style="position:absolute;top:969px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:970px;left:149px;white-space:nowrap" class="ft414">1:&#160;hit=True,&#160;&#160;score=2.0</p>
+<p style="position:absolute;top:990px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:992px;left:149px;white-space:nowrap" class="ft414">2:&#160;hit=True,&#160;&#160;score=2.0</p>
+<p style="position:absolute;top:1011px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:1013px;left:149px;white-space:nowrap" class="ft414">3:&#160;hit=False,&#160;score=0.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:1011px;left:392px;white-space:nowrap" class="ft49">真的没有</p>
+<p style="position:absolute;top:1032px;left:109px;white-space:nowrap" class="ft49">&#160;&#160;要点</p>
+<p style="position:absolute;top:1034px;left:149px;white-space:nowrap" class="ft414">4:&#160;hit=False,&#160;score=0.0&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:1032px;left:392px;white-space:nowrap" class="ft49">真的没有</p>
+<p style="position:absolute;top:1086px;left:94px;white-space:nowrap" class="ft44"><b>预期校验结果</b></p>
+<p style="position:absolute;top:1086px;left:193px;white-space:nowrap" class="ft45">：</p>
+</div>
+<!-- Page 5 -->
+<a name="5"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}-->
+</style>
+<div id="page5-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明005.png" alt="background image"/>
+<p style="position:absolute;top:100px;left:109px;white-space:nowrap" class="ft59">要点</p>
+<p style="position:absolute;top:101px;left:139px;white-space:nowrap" class="ft514">3&#160;→&#160;</p>
+<p style="position:absolute;top:100px;left:175px;white-space:nowrap" class="ft59">不纠偏</p>
+<p style="position:absolute;top:121px;left:109px;white-space:nowrap" class="ft59">&#160;&#160;关键词</p>
+<p style="position:absolute;top:123px;left:164px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:121px;left:173px;white-space:nowrap" class="ft59">非公有制经济</p>
+<p style="position:absolute;top:123px;left:263px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:121px;left:272px;white-space:nowrap" class="ft59">不在答案中</p>
+<p style="position:absolute;top:142px;left:109px;white-space:nowrap" class="ft59">&#160;&#160;语义相似度最高</p>
+<p style="position:absolute;top:144px;left:224px;white-space:nowrap" class="ft514">&#160;0.592&#160;&lt;&#160;0.72</p>
+<p style="position:absolute;top:167px;left:109px;white-space:nowrap" class="ft514">&#160;&#160;→&#160;</p>
+<p style="position:absolute;top:165px;left:145px;white-space:nowrap" class="ft59">保持&#160;</p>
+<p style="position:absolute;top:167px;left:180px;white-space:nowrap" class="ft514">hit=False</p>
+<p style="position:absolute;top:207px;left:109px;white-space:nowrap" class="ft59">要点</p>
+<p style="position:absolute;top:209px;left:139px;white-space:nowrap" class="ft514">4&#160;→&#160;</p>
+<p style="position:absolute;top:207px;left:175px;white-space:nowrap" class="ft59">不纠偏</p>
+<p style="position:absolute;top:228px;left:109px;white-space:nowrap" class="ft59">&#160;&#160;关键词</p>
+<p style="position:absolute;top:230px;left:164px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:228px;left:173px;white-space:nowrap" class="ft59">共同发展</p>
+<p style="position:absolute;top:230px;left:233px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:228px;left:242px;white-space:nowrap" class="ft59">虽在答案中出现，但它是要点</p>
+<p style="position:absolute;top:230px;left:437px;white-space:nowrap" class="ft514">1</p>
+<p style="position:absolute;top:228px;left:446px;white-space:nowrap" class="ft59">文本</p>
+<p style="position:absolute;top:230px;left:476px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:228px;left:485px;white-space:nowrap" class="ft59">多种所有制经济共同发展</p>
+<p style="position:absolute;top:230px;left:650px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:228px;left:659px;white-space:nowrap" class="ft59">的子串</p>
+<p style="position:absolute;top:249px;left:109px;white-space:nowrap" class="ft59">&#160;&#160;触发</p>
+<p style="position:absolute;top:251px;left:149px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:249px;left:158px;white-space:nowrap" class="ft59">已命中要点排除</p>
+<p style="position:absolute;top:251px;left:263px;white-space:nowrap" class="ft514">&#34;</p>
+<p style="position:absolute;top:249px;left:272px;white-space:nowrap" class="ft59">规则</p>
+<p style="position:absolute;top:251px;left:302px;white-space:nowrap" class="ft514">&#160;→&#160;</p>
+<p style="position:absolute;top:249px;left:329px;white-space:nowrap" class="ft59">跳过</p>
+<p style="position:absolute;top:270px;left:109px;white-space:nowrap" class="ft59">&#160;&#160;语义相似度最高</p>
+<p style="position:absolute;top:272px;left:224px;white-space:nowrap" class="ft514">&#160;0.601&#160;&lt;&#160;0.72</p>
+<p style="position:absolute;top:295px;left:109px;white-space:nowrap" class="ft514">&#160;&#160;→&#160;</p>
+<p style="position:absolute;top:294px;left:145px;white-space:nowrap" class="ft59">保持&#160;</p>
+<p style="position:absolute;top:295px;left:180px;white-space:nowrap" class="ft514">hit=False</p>
+<p style="position:absolute;top:336px;left:109px;white-space:nowrap" class="ft59">总分</p>
+<p style="position:absolute;top:337px;left:139px;white-space:nowrap" class="ft514">:&#160;4.0&#160;→&#160;4.0</p>
+<p style="position:absolute;top:336px;left:238px;white-space:nowrap" class="ft59">（无变化）</p>
+<p style="position:absolute;top:396px;left:94px;white-space:nowrap" class="ft58"><b>场景&#160;C&#160;—&#160;V4&#160;空白答案（不应纠偏）</b></p>
+<p style="position:absolute;top:443px;left:94px;white-space:nowrap" class="ft54"><b>目标</b></p>
+<p style="position:absolute;top:443px;left:127px;white-space:nowrap" class="ft55">：验证空白答案不会被误纠偏。</p>
+<p style="position:absolute;top:485px;left:94px;white-space:nowrap" class="ft54"><b>模拟输入</b></p>
+<p style="position:absolute;top:485px;left:160px;white-space:nowrap" class="ft55">：</p>
+<p style="position:absolute;top:541px;left:109px;white-space:nowrap" class="ft59">学生答案</p>
+<p style="position:absolute;top:543px;left:169px;white-space:nowrap" class="ft514">&#160;=&#160;&#34;&#34;</p>
+<p style="position:absolute;top:541px;left:214px;white-space:nowrap" class="ft59">（空字符串）</p>
+<p style="position:absolute;top:562px;left:109px;white-space:nowrap" class="ft59">全部</p>
+<p style="position:absolute;top:564px;left:139px;white-space:nowrap" class="ft514">&#160;4&#160;</p>
+<p style="position:absolute;top:562px;left:166px;white-space:nowrap" class="ft59">个要点&#160;</p>
+<p style="position:absolute;top:564px;left:216px;white-space:nowrap" class="ft514">hit=False,&#160;score=0</p>
+<p style="position:absolute;top:616px;left:94px;white-space:nowrap" class="ft54"><b>预期校验结果</b></p>
+<p style="position:absolute;top:616px;left:193px;white-space:nowrap" class="ft55">：</p>
+<p style="position:absolute;top:672px;left:109px;white-space:nowrap" class="ft512">没有任何关键词匹配<br/>没有可提取的答案片段<br/>全部保持&#160;</p>
+<p style="position:absolute;top:716px;left:174px;white-space:nowrap" class="ft514">hit=False,&#160;score=0</p>
+<p style="position:absolute;top:757px;left:109px;white-space:nowrap" class="ft59">总分</p>
+<p style="position:absolute;top:758px;left:139px;white-space:nowrap" class="ft514">:&#160;0.0&#160;→&#160;0.0</p>
+<p style="position:absolute;top:757px;left:238px;white-space:nowrap" class="ft59">（无变化）</p>
+<p style="position:absolute;top:846px;left:94px;white-space:nowrap" class="ft53"><b>六、语义相似度模型参考数据</b></p>
+<p style="position:absolute;top:909px;left:94px;white-space:nowrap" class="ft58"><b>模型信息</b></p>
+<p style="position:absolute;top:956px;left:139px;white-space:nowrap" class="ft54"><b>模型</b></p>
+<p style="position:absolute;top:956px;left:172px;white-space:nowrap" class="ft55">:&#160;</p>
+<p style="position:absolute;top:959px;left:186px;white-space:nowrap" class="ft514">shibing624/text2vec-base-chinese</p>
+<p style="position:absolute;top:982px;left:139px;white-space:nowrap" class="ft54"><b>类型</b></p>
+<p style="position:absolute;top:982px;left:172px;white-space:nowrap" class="ft55">:&#160;Sentence-BERT（中文语义向量模型）</p>
+<p style="position:absolute;top:1008px;left:139px;white-space:nowrap" class="ft54"><b>部署</b></p>
+<p style="position:absolute;top:1008px;left:172px;white-space:nowrap" class="ft55">:&#160;本地加载，首次从&#160;hf-mirror.com&#160;下载（约&#160;400MB）</p>
+<p style="position:absolute;top:1035px;left:139px;white-space:nowrap" class="ft54"><b>计算</b></p>
+<p style="position:absolute;top:1035px;left:172px;white-space:nowrap" class="ft55">:&#160;余弦相似度</p>
+<p style="position:absolute;top:956px;left:125px;white-space:nowrap" class="ft513">•&#160;<br/>•&#160;<br/>•&#160;<br/>•&#160;</p>
+</div>
+<!-- Page 6 -->
+<a name="6"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}	.ft617{font-size:15px;font-family:LJNWZM+Menlo;color:#333333;}
+	.ft618{font-size:15px;line-height:20px;font-family:LKFSVD+Menlo;color:#333333;}
+-->
+</style>
+<div id="page6-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明006.png" alt="background image"/>
+<p style="position:absolute;top:87px;left:94px;white-space:nowrap" class="ft68"><b>近义词相似度测试</b></p>
+<p style="position:absolute;top:141px;left:106px;white-space:nowrap" class="ft66"><b>词&#160;A</b></p>
+<p style="position:absolute;top:141px;left:257px;white-space:nowrap" class="ft66"><b>词&#160;B</b></p>
+<p style="position:absolute;top:141px;left:468px;white-space:nowrap" class="ft66"><b>余弦相似度</b></p>
+<p style="position:absolute;top:141px;left:599px;white-space:nowrap" class="ft66"><b>阈值&#160;0.72&#160;判断</b></p>
+<p style="position:absolute;top:180px;left:106px;white-space:nowrap" class="ft67">非公有制经济</p>
+<p style="position:absolute;top:180px;left:257px;white-space:nowrap" class="ft67">民营经济</p>
+<p style="position:absolute;top:180px;left:468px;white-space:nowrap" class="ft67">0.701</p>
+<p style="position:absolute;top:180px;left:599px;white-space:nowrap" class="ft67">不通过（接近阈值）</p>
+<p style="position:absolute;top:219px;left:106px;white-space:nowrap" class="ft67">非公有制经济</p>
+<p style="position:absolute;top:219px;left:257px;white-space:nowrap" class="ft67">私营经济</p>
+<p style="position:absolute;top:219px;left:468px;white-space:nowrap" class="ft67">0.724</p>
+<p style="position:absolute;top:219px;left:599px;white-space:nowrap" class="ft67">通过</p>
+<p style="position:absolute;top:257px;left:106px;white-space:nowrap" class="ft67">非公有制经济</p>
+<p style="position:absolute;top:257px;left:257px;white-space:nowrap" class="ft67">国有经济</p>
+<p style="position:absolute;top:257px;left:468px;white-space:nowrap" class="ft67">0.549</p>
+<p style="position:absolute;top:257px;left:599px;white-space:nowrap" class="ft67">不通过（正确拒绝）</p>
+<p style="position:absolute;top:296px;left:106px;white-space:nowrap" class="ft67">根本特征</p>
+<p style="position:absolute;top:296px;left:257px;white-space:nowrap" class="ft67">最根本的特点</p>
+<p style="position:absolute;top:296px;left:468px;white-space:nowrap" class="ft67">0.889</p>
+<p style="position:absolute;top:296px;left:599px;white-space:nowrap" class="ft67">通过</p>
+<p style="position:absolute;top:334px;left:106px;white-space:nowrap" class="ft67">重要组成部分</p>
+<p style="position:absolute;top:334px;left:257px;white-space:nowrap" class="ft67">不可缺少的重要部分</p>
+<p style="position:absolute;top:334px;left:468px;white-space:nowrap" class="ft67">0.869</p>
+<p style="position:absolute;top:334px;left:599px;white-space:nowrap" class="ft67">通过</p>
+<p style="position:absolute;top:373px;left:106px;white-space:nowrap" class="ft67">公有制为主体</p>
+<p style="position:absolute;top:373px;left:257px;white-space:nowrap" class="ft67">多种所有制共同发展</p>
+<p style="position:absolute;top:373px;left:468px;white-space:nowrap" class="ft67">0.521</p>
+<p style="position:absolute;top:373px;left:599px;white-space:nowrap" class="ft67">不通过（正确拒绝）</p>
+<p style="position:absolute;top:412px;left:106px;white-space:nowrap" class="ft67">经济发展</p>
+<p style="position:absolute;top:412px;left:257px;white-space:nowrap" class="ft67">天气预报</p>
+<p style="position:absolute;top:412px;left:468px;white-space:nowrap" class="ft67">0.285</p>
+<p style="position:absolute;top:412px;left:599px;white-space:nowrap" class="ft67">不通过（正确拒绝）</p>
+<p style="position:absolute;top:466px;left:94px;white-space:nowrap" class="ft68"><b>阈值选择说明</b></p>
+<p style="position:absolute;top:513px;left:139px;white-space:nowrap" class="ft64"><b>0.72</b></p>
+<p style="position:absolute;top:513px;left:173px;white-space:nowrap" class="ft65">：在&#34;民营经济&#160;vs&#160;非公有制经济&#34;（0.701）和&#34;私营经济&#160;vs&#160;非公有制经济&#34;（0.724）</p>
+<p style="position:absolute;top:539px;left:139px;white-space:nowrap" class="ft613">之间取折中值<br/>低于&#160;0.70&#160;会导致近义词漏判<br/>高于&#160;0.75&#160;会导致近义词漏判（原文测试中阈值&#160;0.75&#160;导致&#34;民营经济&#34;无法匹配）</p>
+<p style="position:absolute;top:671px;left:94px;white-space:nowrap" class="ft63"><b>七、集成架构</b></p>
+<p style="position:absolute;top:733px;left:94px;white-space:nowrap" class="ft68"><b>代码修改文件</b></p>
+<p style="position:absolute;top:783px;left:144px;white-space:nowrap" class="ft617"><b>app/semantic_checker.py</b></p>
+<p style="position:absolute;top:780px;left:356px;white-space:nowrap" class="ft65">（新建）—&#160;语义相似度校验模块</p>
+<p style="position:absolute;top:810px;left:144px;white-space:nowrap" class="ft617"><b>app/qwen_engine.py</b></p>
+<p style="position:absolute;top:806px;left:311px;white-space:nowrap" class="ft65">（修改）—&#160;集成到评分引擎</p>
+<p style="position:absolute;top:856px;left:94px;white-space:nowrap" class="ft68"><b>集成位置（qwen_engine.py&#160;grade()&#160;方法）</b></p>
+<p style="position:absolute;top:915px;left:109px;white-space:nowrap" class="ft69">大模型&#160;</p>
+<p style="position:absolute;top:917px;left:159px;white-space:nowrap" class="ft614">API&#160;</p>
+<p style="position:absolute;top:915px;left:195px;white-space:nowrap" class="ft69">调用</p>
+<p style="position:absolute;top:938px;left:109px;white-space:nowrap" class="ft615">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼<br/>_parse_output()</p>
+<p style="position:absolute;top:999px;left:109px;white-space:nowrap" class="ft69">&#160;&#160;&#160;&#160;解析模型输出，提取&#160;</p>
+<p style="position:absolute;top:1001px;left:269px;white-space:nowrap" class="ft614">scoring_items</p>
+<p style="position:absolute;top:1022px;left:109px;white-space:nowrap" class="ft618">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼</p>
+<p style="position:absolute;top:1062px;left:109px;white-space:nowrap" class="ft69">格式校验（</p>
+<p style="position:absolute;top:1064px;left:184px;white-space:nowrap" class="ft614">validated_items</p>
+<p style="position:absolute;top:1062px;left:319px;white-space:nowrap" class="ft69">）</p>
+<p style="position:absolute;top:1083px;left:109px;white-space:nowrap" class="ft69">&#160;&#160;&#160;&#160;逐项提取&#160;</p>
+<p style="position:absolute;top:1085px;left:194px;white-space:nowrap" class="ft614">name/score/max_score/hit/reason/quoted_text</p>
+<p style="position:absolute;top:1106px;left:109px;white-space:nowrap" class="ft615">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼<br/>_extract_rubric_points(rubric)&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:1147px;left:488px;white-space:nowrap" class="ft69">新增</p>
+<p style="position:absolute;top:513px;left:125px;white-space:nowrap" class="ft65">•&#160;</p>
+<p style="position:absolute;top:566px;left:125px;white-space:nowrap" class="ft613">•&#160;<br/>•&#160;</p>
+<p style="position:absolute;top:780px;left:123px;white-space:nowrap" class="ft65">1.&#160;</p>
+<p style="position:absolute;top:806px;left:119px;white-space:nowrap" class="ft65">2.&#160;</p>
+</div>
+<!-- Page 7 -->
+<a name="7"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}	.ft719{font-size:15px;line-height:23px;font-family:NXYACE+苹方-简-Semi;color:#333333;}
+-->
+</style>
+<div id="page7-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明007.png" alt="background image"/>
+<p style="position:absolute;top:85px;left:109px;white-space:nowrap" class="ft79">&#160;&#160;&#160;&#160;从&#160;</p>
+<p style="position:absolute;top:87px;left:149px;white-space:nowrap" class="ft714">rubric&#160;</p>
+<p style="position:absolute;top:85px;left:212px;white-space:nowrap" class="ft79">字典中提取结构化要点和关键词</p>
+<p style="position:absolute;top:106px;left:109px;white-space:nowrap" class="ft79">&#160;&#160;&#160;&#160;优先级</p>
+<p style="position:absolute;top:108px;left:174px;white-space:nowrap" class="ft714">:&#160;points(JSON)&#160;&gt;&#160;rubricScript&#160;&gt;&#160;rubricPoints</p>
+<p style="position:absolute;top:129px;left:109px;white-space:nowrap" class="ft715">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼<br/>validate_scoring_items(&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;←&#160;</p>
+<p style="position:absolute;top:169px;left:488px;white-space:nowrap" class="ft79">新增</p>
+<p style="position:absolute;top:192px;left:109px;white-space:nowrap" class="ft715">&#160;&#160;&#160;&#160;answer,&#160;scoring_items,&#160;rubric_points,<br/>&#160;&#160;&#160;&#160;similarity_threshold=0.72<br/>)</p>
+<p style="position:absolute;top:253px;left:109px;white-space:nowrap" class="ft79">&#160;&#160;&#160;&#160;对&#160;</p>
+<p style="position:absolute;top:255px;left:149px;white-space:nowrap" class="ft714">hit=False&#160;</p>
+<p style="position:absolute;top:253px;left:239px;white-space:nowrap" class="ft79">的要点做二次校验</p>
+<p style="position:absolute;top:276px;left:109px;white-space:nowrap" class="ft716">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;├──&#160;</p>
+<p style="position:absolute;top:298px;left:181px;white-space:nowrap" class="ft79">有纠偏</p>
+<p style="position:absolute;top:299px;left:226px;white-space:nowrap" class="ft714">&#160;→&#160;</p>
+<p style="position:absolute;top:298px;left:253px;white-space:nowrap" class="ft79">重新累加&#160;</p>
+<p style="position:absolute;top:299px;left:318px;white-space:nowrap" class="ft714">final_score</p>
+<p style="position:absolute;top:298px;left:417px;white-space:nowrap" class="ft79">，写入&#160;</p>
+<p style="position:absolute;top:299px;left:467px;white-space:nowrap" class="ft714">warning</p>
+<p style="position:absolute;top:323px;left:109px;white-space:nowrap" class="ft714">&#160;&#160;&#160;&#160;└──&#160;</p>
+<p style="position:absolute;top:321px;left:181px;white-space:nowrap" class="ft79">无纠偏</p>
+<p style="position:absolute;top:323px;left:226px;white-space:nowrap" class="ft714">&#160;→&#160;</p>
+<p style="position:absolute;top:321px;left:253px;white-space:nowrap" class="ft79">保持原评分</p>
+<p style="position:absolute;top:344px;left:109px;white-space:nowrap" class="ft715">&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼<br/>_calculate_confidence()<br/>&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼<br/>boundary_check()<br/>&#160;&#160;&#160;&#160;│<br/>&#160;&#160;&#160;&#160;▼</p>
+<p style="position:absolute;top:510px;left:109px;white-space:nowrap" class="ft79">返回&#160;</p>
+<p style="position:absolute;top:512px;left:144px;white-space:nowrap" class="ft714">QwenGradingResult</p>
+<p style="position:absolute;top:570px;left:94px;white-space:nowrap" class="ft78"><b>关键方法说明</b></p>
+<p style="position:absolute;top:620px;left:99px;white-space:nowrap" class="ft717"><b>_extract_rubric_points(rubric)</b></p>
+<p style="position:absolute;top:617px;left:374px;white-space:nowrap" class="ft75">&#160;—&#160;从三种格式中提取关键词：</p>
+<p style="position:absolute;top:667px;left:106px;white-space:nowrap" class="ft719"><b>优先<br/>级</b></p>
+<p style="position:absolute;top:679px;left:174px;white-space:nowrap" class="ft76"><b>来源</b></p>
+<p style="position:absolute;top:679px;left:316px;white-space:nowrap" class="ft76"><b>格式示例</b></p>
+<p style="position:absolute;top:742px;left:106px;white-space:nowrap" class="ft77">1</p>
+<p style="position:absolute;top:732px;left:179px;white-space:nowrap" class="ft714">points</p>
+<p style="position:absolute;top:754px;left:174px;white-space:nowrap" class="ft77">(JSON)</p>
+<p style="position:absolute;top:732px;left:320px;white-space:nowrap" class="ft714">[{&#34;description&#34;:&#160;&#34;...&#34;,&#160;&#34;keywords&#34;:&#160;[&#34;kw1&#34;,</p>
+<p style="position:absolute;top:756px;left:316px;white-space:nowrap" class="ft714">&#34;kw2&#34;]}]</p>
+<p style="position:absolute;top:793px;left:106px;white-space:nowrap" class="ft77">2</p>
+<p style="position:absolute;top:795px;left:179px;white-space:nowrap" class="ft714">rubricScript</p>
+<p style="position:absolute;top:793px;left:320px;white-space:nowrap" class="ft79">要点</p>
+<p style="position:absolute;top:795px;left:350px;white-space:nowrap" class="ft714">1</p>
+<p style="position:absolute;top:793px;left:359px;white-space:nowrap" class="ft79">（</p>
+<p style="position:absolute;top:795px;left:374px;white-space:nowrap" class="ft714">2</p>
+<p style="position:absolute;top:793px;left:383px;white-space:nowrap" class="ft79">分）：公有制为主体、多种所有制经济共同发展</p>
+<p style="position:absolute;top:832px;left:106px;white-space:nowrap" class="ft77">3</p>
+<p style="position:absolute;top:834px;left:179px;white-space:nowrap" class="ft714">rubricPoints</p>
+<p style="position:absolute;top:832px;left:320px;white-space:nowrap" class="ft79">公有制为主体、多种所有制经济共同发展</p>
+<p style="position:absolute;top:834px;left:590px;white-space:nowrap" class="ft714">&#160;(2</p>
+<p style="position:absolute;top:832px;left:617px;white-space:nowrap" class="ft79">分</p>
+<p style="position:absolute;top:834px;left:632px;white-space:nowrap" class="ft714">)</p>
+<p style="position:absolute;top:884px;left:99px;white-space:nowrap" class="ft717"><b>_keywords_from_text(text)</b></p>
+<p style="position:absolute;top:881px;left:329px;white-space:nowrap" class="ft75">&#160;—&#160;从文本中自动提取关键词：</p>
+<p style="position:absolute;top:924px;left:139px;white-space:nowrap" class="ft713">按顿号、逗号、&#34;和&#34;、&#34;及&#34;&#160;切分<br/>过滤长度：只保留&#160;2~12&#160;字的片段<br/>兜底：切分后不足&#160;2&#160;个关键词时，把整句（截取前&#160;30&#160;字）也加入</p>
+<p style="position:absolute;top:1055px;left:94px;white-space:nowrap" class="ft73"><b>八、已知限制</b></p>
+<p style="position:absolute;top:1112px;left:139px;white-space:nowrap" class="ft74"><b>近义词识别不完美</b></p>
+<p style="position:absolute;top:1112px;left:271px;white-space:nowrap" class="ft75">：text2vec&#160;模型对某些领域术语（如&#34;民营经济&#160;vs&#160;非公有制经济&#34;）相似</p>
+<p style="position:absolute;top:1139px;left:139px;white-space:nowrap" class="ft75">度仅为&#160;0.701，低于&#160;0.72&#160;阈值</p>
+<p style="position:absolute;top:924px;left:125px;white-space:nowrap" class="ft713">•&#160;<br/>•&#160;<br/>•&#160;</p>
+<p style="position:absolute;top:1112px;left:123px;white-space:nowrap" class="ft75">1.&#160;</p>
+</div>
+<!-- Page 8 -->
+<a name="8"></a>
+<style type="text/css">
+<!--
+	p {margin: 0; padding: 0;}-->
+</style>
+<div id="page8-div" style="position:relative;width:892px;height:1262px;">
+<img width="892" height="1262" src="语义校验测试用例说明008.png" alt="background image"/>
+<p style="position:absolute;top:87px;left:139px;white-space:nowrap" class="ft84"><b>关键词提取依赖文本格式</b></p>
+<p style="position:absolute;top:87px;left:321px;white-space:nowrap" class="ft85">：如果要点文本没有顿号、逗号等分隔符，只能以整句作为关键</p>
+<p style="position:absolute;top:113px;left:139px;white-space:nowrap" class="ft85">词</p>
+<p style="position:absolute;top:140px;left:139px;white-space:nowrap" class="ft84"><b>无法纠偏&#160;hit=True&#160;的误判</b></p>
+<p style="position:absolute;top:140px;left:331px;white-space:nowrap" class="ft85">：语义校验只处理模型标记为未命中的要点，对&#160;hit=True&#160;但给</p>
+<p style="position:absolute;top:166px;left:139px;white-space:nowrap" class="ft85">分错误的情况无能为力</p>
+<p style="position:absolute;top:192px;left:139px;white-space:nowrap" class="ft84"><b>性能开销</b></p>
+<p style="position:absolute;top:192px;left:205px;white-space:nowrap" class="ft85">：首次加载&#160;text2vec&#160;模型约&#160;10&#160;秒（后续缓存），每次校验增加约&#160;0.5&#160;秒延迟</p>
+<p style="position:absolute;top:87px;left:119px;white-space:nowrap" class="ft85">2.&#160;</p>
+<p style="position:absolute;top:140px;left:119px;white-space:nowrap" class="ft85">3.&#160;</p>
+<p style="position:absolute;top:192px;left:119px;white-space:nowrap" class="ft85">4.&#160;</p>
+</div>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="语义校验测试用例说明.html#1">AI 语义校验模块 - 测试用例说明</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#1">一、测试题目</a></li>
+<li><a href="语义校验测试用例说明.html#1">二、评分标准（4 个要点，每个 2 分）</a></li>
+<li><a href="语义校验测试用例说明.html#1">三、答案版本定义（8 个版本）</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#1">V0 — 完整答案（预期 8 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V1 — 删除要点4（预期 6 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V2 — 删除要点3和4（预期 4 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V3 — 只保留要点1（预期 2 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V4 — 空白答案（预期 0 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V5 — 只保留要点3（预期 2 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V6 — 保留要点1+4（预期 4 分）</a></li>
+<li><a href="语义校验测试用例说明.html#2">V7 — 完整答案近义改写（预期 8 分）</a></li>
+</ul>
+</li>
+<li><a href="语义校验测试用例说明.html#3">四、语义校验核心逻辑</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#3">工作流程</a></li>
+<li><a href="语义校验测试用例说明.html#3">防误判机制</a></li>
+</ul>
+</li>
+<li><a href="语义校验测试用例说明.html#4">五、语义校验测试场景</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#4">场景 A — V7 近义改写（应纠偏）</a></li>
+<li><a href="语义校验测试用例说明.html#4">场景 B — V2 确实缺少要点（不应纠偏）</a></li>
+<li><a href="语义校验测试用例说明.html#5">场景 C — V4 空白答案（不应纠偏）</a></li>
+</ul>
+</li>
+<li><a href="语义校验测试用例说明.html#5">六、语义相似度模型参考数据</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#5">模型信息</a></li>
+<li><a href="语义校验测试用例说明.html#6">近义词相似度测试</a></li>
+<li><a href="语义校验测试用例说明.html#6">阈值选择说明</a></li>
+</ul>
+</li>
+<li><a href="语义校验测试用例说明.html#6">七、集成架构</a>
+<ul>
+<li><a href="语义校验测试用例说明.html#6">代码修改文件</a></li>
+<li><a href="语义校验测试用例说明.html#6">集成位置（qwen_engine.py grade() 方法）</a></li>
+<li><a href="语义校验测试用例说明.html#7">关键方法说明</a></li>
+</ul>
+</li>
+<li><a href="语义校验测试用例说明.html#7">八、已知限制</a></li>
+</ul>
+</li>
+</ul>
+</body>
+</html>

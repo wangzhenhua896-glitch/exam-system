@@ -76,6 +76,20 @@ def register_routes(app: Flask):
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'test-cases.html')
         return send_file(template_path, mimetype='text/html')
 
+    # 敏感词管理 - 独立页面
+    @app.route("/sensitive-words")
+    def sensitive_words_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'sensitive-words.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 用户管理 - 独立页面
+    @app.route("/user-management")
+    def user_management_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'user-management.html')
+        return send_file(template_path, mimetype='text/html')
+
     # 评分引擎源码查看
     @app.route("/code-viewer")
     def code_viewer():

@@ -216,6 +216,35 @@ class QwenGradingEngine:
             else:
                 scoring_items = None
 
+            # 语义相似度二次校验：发现模型漏判的等价表达并自动纠偏
+            semantic_warnings = []
+            if scoring_items:
+                rubric_points = self._extract_rubric_points(rubric)
+                if rubric_points:
+                    try:
+                        from app.semantic_checker import validate_scoring_items
+                        scoring_items, sem_changes = validate_scoring_items(
+                            answer, scoring_items, rubric_points,
+                            similarity_threshold=0.72,
+                        )
+                        if sem_changes:
+                            from loguru import logger
+                            for ch in sem_changes:
+                                logger.info(f"语义校验纠偏: {ch['item']} - {ch['action']} - {ch.get('keyword', '')}")
+                            # 重新从校验后的 scoring_items 累加总分
+                            final_score = round(sum(
+                                float(it.get("score", 0)) for it in scoring_items
+                                if isinstance(it, dict)
+                            ), 2)
+                            # 记录纠偏信息，后续写入 warning
+                            semantic_warnings = [
+                                f"要点'{ch['item']}'由语义校验自动纠偏"
+                                for ch in sem_changes
+                            ]
+                    except Exception as e:
+                        from loguru import logger
+                        logger.warning(f"语义校验异常（忽略，保留模型原始评分）: {e}")
+
             # 计算置信度
             confidence = self._calculate_confidence(final_score, max_score, content)
 
@@ -228,6 +257,7 @@ class QwenGradingEngine:
                 comment=comment,
                 needs_review=False,
                 scoring_items=scoring_items,
+                warning='；'.join(semantic_warnings) if semantic_warnings else None,
             )
 
             return self.boundary_check(result)
@@ -348,6 +378,79 @@ scoring_items 规则：
             return "\n".join(parts)
 
         return str(rubric)
+
+    def _extract_rubric_points(self, rubric: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """从 rubric 字典中提取结构化的评分要点（含关键词），供语义校验使用
+
+        返回格式: [{"description": "...", "keywords": ["kw1", "kw2"]}, ...]
+        """
+        points = []
+
+        # 1. 如果 rubric 中有 points 列表（JSON 结构，含明确 keywords）
+        raw_points = rubric.get("points", [])
+        if raw_points and isinstance(raw_points, list):
+            for p in raw_points:
+                if isinstance(p, dict):
+                    desc = p.get("description", "")
+                    kws = p.get("keywords", [])
+                    if isinstance(kws, str):
+                        kws = [k.strip() for k in kws.split(",") if k.strip()]
+                    if desc:
+                        points.append({"description": desc, "keywords": kws or []})
+                elif isinstance(p, str):
+                    kws = self._keywords_from_text(p)
+                    points.append({"description": p, "keywords": kws})
+            if points:
+                return points
+
+        # 2. 从 rubricScript 解析 "要点N（X分）：内容" 格式（比 rubricPoints 结构更好）
+        rubric_script = rubric.get("rubricScript", "")
+        if rubric_script and rubric_script.strip():
+            for m in re.finditer(r'要点\d+[（(]\d+分[)）][:：]\s*(.+)', rubric_script):
+                desc = m.group(1).strip()
+                if desc:
+                    kws = self._keywords_from_text(desc)
+                    points.append({"description": desc, "keywords": kws})
+            if points:
+                return points
+
+        # 3. 从 rubricPoints（数据库 rubric_points 字段）解析
+        rubric_points_text = rubric.get("rubricPoints", "")
+        if rubric_points_text and rubric_points_text.strip():
+            for line in rubric_points_text.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # 去掉末尾的 (X分) 标记
+                desc = re.sub(r'\s*[\(（]\s*\d+\s*分\s*[\)）]\s*$', '', line).strip()
+                if desc:
+                    kws = self._keywords_from_text(desc)
+                    points.append({"description": desc, "keywords": kws})
+            if points:
+                return points
+
+        return points
+
+    @staticmethod
+    def _keywords_from_text(text: str) -> List[str]:
+        """从评分要点文本中提取关键词
+
+        按顿号、逗号、"和"、"及" 等切分，过滤掉太短和太长的词。
+        """
+        # 去掉括号内容
+        clean = re.sub(r'[（(][^)）]*[)）]', '', text)
+        # 按分隔符切分
+        parts = re.split(r'[、，,；;和及]', clean)
+        keywords = []
+        for p in parts:
+            p = p.strip()
+            # 只保留 2~12 字的关键词（太短如"的"无意义，太长如整句不适合作为关键词）
+            if 2 <= len(p) <= 12:
+                keywords.append(p)
+        # 如果切分后关键词太少，把整句也加入（作为语义匹配的锚点）
+        if len(keywords) < 2 and len(text) >= 4:
+            keywords.append(text[:30])
+        return keywords
 
     def _parse_output(self, content: str) -> Dict[str, Any]:
         """解析 LLM 输出

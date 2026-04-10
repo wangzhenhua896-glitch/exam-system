@@ -91,6 +91,10 @@ def init_database():
         cursor.execute('ALTER TABLE grading_records ADD COLUMN grading_flags TEXT DEFAULT NULL')
     except Exception:
         pass
+    try:
+        cursor.execute('ALTER TABLE grading_records ADD COLUMN student_id TEXT DEFAULT NULL')
+    except Exception:
+        pass
 
     # 评分规则表（题库）
     cursor.execute('''
@@ -181,6 +185,19 @@ def init_database():
         )
     ''')
 
+    # 敏感词表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sensitive_words (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word TEXT NOT NULL,
+            subject TEXT DEFAULT 'all',
+            category TEXT DEFAULT 'politics',
+            severity TEXT DEFAULT 'high',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # 已有数据迁移：为已有评分脚本回填版本 1（幂等）
     try:
         cursor.execute('''
@@ -205,6 +222,40 @@ def init_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # 用户表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT,
+            role TEXT DEFAULT 'teacher',
+            subject TEXT DEFAULT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # 预置默认用户（幂等）
+    default_users = [
+        ('admin', '管理员', 'admin', None),
+        ('politics', '思政老师', 'teacher', 'politics'),
+        ('chinese', '语文老师', 'teacher', 'chinese'),
+        ('english', '英语老师', 'teacher', 'english'),
+        ('math', '数学老师', 'teacher', 'math'),
+        ('history', '历史老师', 'teacher', 'history'),
+        ('geography', '地理老师', 'teacher', 'geography'),
+        ('physics', '物理老师', 'teacher', 'physics'),
+        ('chemistry', '化学老师', 'teacher', 'chemistry'),
+        ('biology', '生物老师', 'teacher', 'biology'),
+    ]
+    for u in default_users:
+        try:
+            cursor.execute(
+                'INSERT OR IGNORE INTO users (username, display_name, role, subject) VALUES (?, ?, ?, ?)',
+                u
+            )
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
@@ -593,13 +644,13 @@ def delete_question(question_id: int) -> bool:
 # 评分记录操作
 def add_grading_record(question_id: int, student_answer: str, score: float,
                         details: str, model_used: str, confidence: float,
-                        grading_flags: str = None) -> int:
+                        grading_flags: str = None, student_id: str = None) -> int:
     """添加评分记录"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence, grading_flags) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (question_id, student_answer, score, details, model_used, confidence, grading_flags)
+        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id)
     )
     conn.commit()
     record_id = cursor.lastrowid
@@ -621,6 +672,25 @@ def get_grading_history(question_id: Optional[int] = None, limit: int = 50) -> L
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_previous_grade(student_id: str, question_id: int, exclude_record_id: int = None) -> Optional[Dict]:
+    """查询同学生同题的最近一次评分记录（排除指定记录ID）"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if exclude_record_id:
+        cursor.execute(
+            'SELECT * FROM grading_records WHERE student_id = ? AND question_id = ? AND id != ? ORDER BY graded_at DESC LIMIT 1',
+            (student_id, question_id, exclude_record_id)
+        )
+    else:
+        cursor.execute(
+            'SELECT * FROM grading_records WHERE student_id = ? AND question_id = ? ORDER BY graded_at DESC LIMIT 1',
+            (student_id, question_id)
+        )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # 批量任务操作
@@ -805,6 +875,177 @@ def log_bug(bug_type: str, description: str, details: str = '', question_id: int
     )
     conn.commit()
     conn.close()
+
+
+# ==================== 敏感词管理 ====================
+
+def get_sensitive_words(subject: str = None, category: str = None,
+                        keyword: str = None, severity: str = None) -> List[Dict]:
+    """获取敏感词列表，支持筛选"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    conditions = []
+    params = []
+    if subject and subject != 'all':
+        conditions.append('(subject = ? OR subject = ?)')
+        params.extend([subject, 'all'])
+    if category:
+        conditions.append('category = ?')
+        params.append(category)
+    if severity:
+        conditions.append('severity = ?')
+        params.append(severity)
+    if keyword:
+        conditions.append('word LIKE ?')
+        params.append(f'%{keyword}%')
+    where = 'WHERE ' + ' AND '.join(conditions) if conditions else ''
+    cursor.execute(f'SELECT * FROM sensitive_words {where} ORDER BY created_at DESC', params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def add_sensitive_word(word: str, subject: str = 'all', category: str = 'politics',
+                       severity: str = 'high') -> int:
+    """添加敏感词"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO sensitive_words (word, subject, category, severity) VALUES (?, ?, ?, ?)',
+        (word, subject, category, severity)
+    )
+    conn.commit()
+    record_id = cursor.lastrowid
+    conn.close()
+    return record_id
+
+
+def update_sensitive_word(word_id: int, **kwargs) -> bool:
+    """更新敏感词"""
+    allowed = {'word', 'subject', 'category', 'severity'}
+    fields = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if not fields:
+        return False
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    set_clause += ', updated_at = CURRENT_TIMESTAMP'
+    values = list(fields.values()) + [word_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'UPDATE sensitive_words SET {set_clause} WHERE id = ?', values)
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def delete_sensitive_word(word_id: int) -> bool:
+    """删除敏感词"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM sensitive_words WHERE id = ?', (word_id,))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def batch_add_sensitive_words(words: List[Dict]) -> int:
+    """批量导入敏感词，返回成功导入数量"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    count = 0
+    for w in words:
+        cursor.execute(
+            'INSERT INTO sensitive_words (word, subject, category, severity) VALUES (?, ?, ?, ?)',
+            (w['word'], w.get('subject', 'all'), w.get('category', 'politics'), w.get('severity', 'high'))
+        )
+        count += 1
+    conn.commit()
+    conn.close()
+    return count
+
+
+def check_sensitive_words(answer: str, subject: str = 'all') -> List[Dict]:
+    """扫描答案中的敏感词，返回命中的敏感词列表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # 获取该科目和全局(all)的敏感词
+    cursor.execute(
+        "SELECT * FROM sensitive_words WHERE subject = ? OR subject = 'all'",
+        (subject,)
+    )
+    words = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    hits = []
+    for w in words:
+        if w['word'] in answer:
+            hits.append(w)
+    return hits
+
+
+# ==================== 用户管理 ====================
+
+def get_users() -> List[Dict]:
+    """获取所有用户列表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users ORDER BY id')
+    users = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return users
+
+
+def get_user(username: str) -> Optional[Dict]:
+    """按用户名查询用户"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def add_user(username: str, display_name: str = '', role: str = 'teacher',
+             subject: str = None) -> int:
+    """新增用户，返回新用户ID"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO users (username, display_name, role, subject) VALUES (?, ?, ?, ?)',
+        (username, display_name, role, subject)
+    )
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return user_id
+
+
+def update_user(user_id: int, **kwargs) -> bool:
+    """更新用户信息"""
+    allowed = {'username', 'display_name', 'role', 'subject', 'is_active'}
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if not fields:
+        return False
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    values = list(fields.values()) + [user_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'UPDATE users SET {set_clause} WHERE id = ?', values)
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def delete_user(user_id: int) -> bool:
+    """删除用户"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
 
 
 # 初始化数据库

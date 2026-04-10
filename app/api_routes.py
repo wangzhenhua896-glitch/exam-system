@@ -14,7 +14,13 @@ from app.models.db_models import (
     update_test_case, delete_test_case, update_test_case_result,
     get_all_test_cases_overview, get_all_test_cases_with_question,
     save_script_version, get_script_history, get_script_version,
-    update_script_version_result
+    check_sensitive_words,
+    get_previous_grade,
+    update_script_version_result,
+    get_sensitive_words, add_sensitive_word, update_sensitive_word,
+    delete_sensitive_word, batch_add_sensitive_words,
+    get_users, get_user, add_user as db_add_user, update_user, delete_user,
+    log_bug
 )
 # 使用 Qwen-Agent 官方评分引擎替换原聚合引擎
 from app.qwen_engine import QwenGradingEngine
@@ -219,6 +225,10 @@ def get_question_detail(question_id):
             question['rubric'] = json.loads(question['rubric'])
         except:
             pass
+    # 添加评分脚本版本信息
+    history = get_script_history(question_id)
+    question['script_version'] = history[0]['version'] if history else 0
+    question['script_version_count'] = len(history)
     return jsonify({'success': True, 'data': question})
 
 
@@ -385,6 +395,7 @@ async def grade_answer():
     data = request.json
     question_id = data.get('question_id') or data.get('questionId')
     student_answer = data.get('answer', '')
+    student_id = data.get('student_id', '')
 
     # 空答案前置拦截：去除空格和标点后长度 < 2，直接0分，不调LLM
     import re as _re
@@ -407,7 +418,8 @@ async def grade_answer():
                 "warning": "答案为空或仅含标点，系统直接判0分"
             }, ensure_ascii=False),
             model_used='precheck',
-            confidence=1.0
+            confidence=1.0,
+            student_id=student_id or None
         )
         return jsonify({
             'success': True,
@@ -471,6 +483,59 @@ async def grade_answer():
                 except Exception:
                     pass
 
+    # 敏感词扫描
+    sensitive_hits = check_sensitive_words(student_answer, subject)
+    high_hits = [h for h in sensitive_hits if h.get('severity') == 'high']
+    if high_hits:
+        hit_words = '、'.join(h['word'] for h in high_hits)
+        log_bug(
+            bug_type='sensitive_word',
+            description=f'答案触发敏感词：{hit_words}',
+            details=json.dumps([h.get('word','') for h in high_hits], ensure_ascii=False),
+            question_id=question_id,
+            model_used='sensitive_filter'
+        )
+        record_id = add_grading_record(
+            question_id=question_id,
+            student_answer=student_answer,
+            score=0,
+            details=json.dumps({
+                "final_score": 0,
+                "comment": "答案触发敏感词，系统直接判0分",
+                "scoring_items": [],
+                "needs_review": True,
+                "warning": f"触发敏感词：{hit_words}"
+            }, ensure_ascii=False),
+            model_used='sensitive_filter',
+            confidence=1.0,
+            grading_flags=json.dumps([{
+                "type": "sensitive_word",
+                "severity": "error",
+                "desc": f"触发敏感词：{hit_words}"
+            }], ensure_ascii=False),
+            student_id=student_id or None
+        )
+        return jsonify({
+            'success': True,
+            'data': {
+                'record_id': record_id,
+                'score': 0,
+                'confidence': 1.0,
+                'comment': '答案触发敏感词，系统直接判0分',
+                'details': {
+                    'final_score': 0,
+                    'comment': '答案触发敏感词，系统直接判0分',
+                    'scoring_items': [],
+                    'needs_review': True,
+                    'warning': f'触发敏感词：{hit_words}'
+                },
+                'model_used': 'sensitive_filter',
+                'needs_review': True,
+                'warning': f'触发敏感词：{hit_words}',
+                'grading_flags': [{"type": "sensitive_word", "severity": "error", "desc": f"触发敏感词：{hit_words}"}]
+            }
+        })
+
     # 使用 Qwen-Agent GradingAgent 评分
     result = await grading_engine.grade(
         question=question_text,
@@ -482,6 +547,17 @@ async def grade_answer():
 
     # 边界检查
     result = grading_engine.boundary_check(result)
+
+    # 记录异常到 bug_log
+    if result.needs_review:
+        bug_type = 'grading_failed' if result.final_score is None else 'boundary_warning'
+        log_bug(
+            bug_type=bug_type,
+            description=result.warning or '评分异常需人工复核',
+            details=json.dumps(result.dict(), ensure_ascii=False),
+            question_id=question_id,
+            model_used='qwen-agent'
+        )
 
     # 证据真实性验证：检查 quoted_text 是否真实存在于原始答案中
     grading_flags = []
@@ -499,6 +575,14 @@ async def grade_answer():
                 if not result.warning:
                     result.warning = ""
                 result.warning += f"；评分点'{item.get('name', '')}'引用原文疑似编造"
+    if grading_flags:
+        log_bug(
+            bug_type='fake_quote',
+            description='LLM 引用了不存在的原文',
+            details=json.dumps(grading_flags, ensure_ascii=False),
+            question_id=question_id,
+            model_used='qwen-agent'
+        )
 
     # 保存评分记录
     record_id = add_grading_record(
@@ -508,8 +592,35 @@ async def grade_answer():
         details=json.dumps(result.dict(), ensure_ascii=False),
         model_used='qwen-agent',
         confidence=result.confidence,
-        grading_flags=json.dumps(grading_flags, ensure_ascii=False) if grading_flags else None
+        grading_flags=json.dumps(grading_flags, ensure_ascii=False) if grading_flags else None,
+        student_id=student_id or None
     )
+
+    # 一致性校验：同学生同题多次评分
+    if student_id and question_id and result.final_score is not None:
+        prev = get_previous_grade(student_id, question_id, exclude_record_id=record_id)
+        if prev and prev.get('score') is not None:
+            diff = abs(result.final_score - prev['score'])
+            if diff > max_score * 0.2:
+                flag = {
+                    "type": "score_inconsistency",
+                    "severity": "warning",
+                    "desc": f"与上次评分({prev['score']}分)差异较大({diff:.1f}分)，可能评分不一致"
+                }
+                grading_flags.append(flag)
+                result.needs_review = True
+                # 更新记录的 grading_flags
+                try:
+                    from app.models.db_models import get_db_connection
+                    conn = get_db_connection()
+                    conn.execute(
+                        'UPDATE grading_records SET grading_flags = ? WHERE id = ?',
+                        (json.dumps(grading_flags, ensure_ascii=False), record_id)
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
 
     return jsonify({
         'success': True,
@@ -1942,3 +2053,115 @@ def auto_generate():
             'questions': results
         }
     })
+
+
+# ==================== 敏感词管理 API ====================
+
+@api_bp.route('/sensitive-words', methods=['GET'])
+def list_sensitive_words():
+    """获取敏感词列表"""
+    subject = request.args.get('subject', '').strip() or None
+    category = request.args.get('category', '').strip() or None
+    severity = request.args.get('severity', '').strip() or None
+    keyword = request.args.get('keyword', '').strip() or None
+    words = get_sensitive_words(subject=subject, category=category,
+                                keyword=keyword, severity=severity)
+    return jsonify({'success': True, 'data': words})
+
+
+@api_bp.route('/sensitive-words', methods=['POST'])
+def create_sensitive_word():
+    """添加敏感词"""
+    data = request.json
+    word = data.get('word', '').strip()
+    if not word:
+        return jsonify({'success': False, 'message': '敏感词不能为空'}), 400
+    word_id = add_sensitive_word(
+        word=word,
+        subject=data.get('subject', 'all'),
+        category=data.get('category', 'politics'),
+        severity=data.get('severity', 'high')
+    )
+    return jsonify({'success': True, 'data': {'id': word_id}})
+
+
+@api_bp.route('/sensitive-words/<int:word_id>', methods=['PUT'])
+def modify_sensitive_word(word_id):
+    """更新敏感词"""
+    data = request.json
+    ok = update_sensitive_word(word_id, **data)
+    if ok:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': '更新失败'}), 400
+
+
+@api_bp.route('/sensitive-words/<int:word_id>', methods=['DELETE'])
+def remove_sensitive_word(word_id):
+    """删除敏感词"""
+    ok = delete_sensitive_word(word_id)
+    if ok:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': '删除失败'}), 404
+
+
+@api_bp.route('/sensitive-words/batch', methods=['POST'])
+def batch_import_sensitive_words():
+    """批量导入敏感词"""
+    data = request.json
+    words = data.get('words', [])
+    if not words:
+        return jsonify({'success': False, 'message': '导入列表为空'}), 400
+    # 支持纯文本格式（每行一个词）
+    if isinstance(words, str):
+        lines = [l.strip() for l in words.strip().split('\n') if l.strip()]
+        words = [{'word': l, 'subject': data.get('subject', 'all'),
+                  'category': data.get('category', 'politics'),
+                  'severity': data.get('severity', 'high')} for l in lines]
+    count = batch_add_sensitive_words(words)
+    return jsonify({'success': True, 'data': {'imported': count}})
+
+
+# ==================== 用户管理 ====================
+
+@api_bp.route('/users', methods=['GET'])
+def list_users():
+    """获取用户列表"""
+    users = get_users()
+    return jsonify({'success': True, 'data': users})
+
+
+@api_bp.route('/users', methods=['POST'])
+def create_user():
+    """新增用户"""
+    data = request.json
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify({'success': False, 'message': '用户名不能为空'}), 400
+    if get_user(username):
+        return jsonify({'success': False, 'message': '用户名已存在'}), 400
+    user_id = db_add_user(
+        username=username,
+        display_name=data.get('display_name', ''),
+        role=data.get('role', 'teacher'),
+        subject=data.get('subject')
+    )
+    return jsonify({'success': True, 'data': {'id': user_id}})
+
+
+@api_bp.route('/users/<int:user_id>', methods=['PUT'])
+def modify_user(user_id):
+    """更新用户"""
+    data = request.json
+    ok = update_user(user_id, **data)
+    if ok:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': '更新失败'}), 400
+
+
+@api_bp.route('/users/<int:user_id>', methods=['DELETE'])
+def remove_user(user_id):
+    """删除用户"""
+    ok = delete_user(user_id)
+    if ok:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': '删除失败'}), 404
