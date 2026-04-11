@@ -143,10 +143,10 @@ createApp({
 
         const onSubjectChange = (subject) => {
             const user = userMap.value[subject];
-            if (user && user.teacher_name) {
-                teacherName.value = user.teacher_name;
+            const saved = user?.teacher_name || user?.display_name || '';
+            if (saved) {
+                teacherName.value = saved;
             } else {
-                // 没有记录过，尝试从 localStorage 恢复（仅当是同一个科目时）
                 const lastSubject = localStorage.getItem(CURRENT_SUBJECT_KEY);
                 if (lastSubject === subject) {
                     teacherName.value = localStorage.getItem(TEACHER_NAME_KEY) || '';
