@@ -300,7 +300,7 @@
                                             {{ consistencyLoading ? '检查中...' : '一致检查' }}
                                         </a>
                                         <a href="#" @click.prevent="evaluateQuality" :style="{ marginLeft: '12px', fontSize: '12px', color: evaluatingQuality ? '#c0c4cc' : '#67c23a', textDecoration: 'none' }">
-                                            {{ evaluatingQuality ? '评估中...' : (qualityScore !== null ? '科学性: ' + qualityScore + '分' : '科学性评估') }}
+                                            {{ evaluatingQuality ? '评估中...' : (qualityScore !== null ? '命题质量检查: ' + qualityScore + '分' : '命题质量评估') }}
                                         </a>
                                         <span style="margin-left: 12px; font-size: 12px; color: #c0c4cc;">
                                             <a href="#" @click.prevent="formFontSize = Math.max(12, formFontSize - 2)" style="color: #909399; text-decoration: none;">A-</a>
@@ -1873,21 +1873,21 @@ const app = createApp({
                     const color = verdictColors[d.verdict] || '#a0a0a0';
 
                     let html = '<div style="font-family:inherit;">';
-                    html += '<div style="text-align:center;margin-bottom:16px;">';
-                    html += '<div style="font-size:48px;font-weight:700;color:' + color + ';">' + d.overall_score + '</div>';
-                    html += '<div style="font-size:16px;color:' + color + ';margin-top:4px;">' + (verdictLabels[d.verdict] || d.verdict) + '</div>';
+                    html += '<div style="text-align:center;margin-bottom:32px;">';
+                    html += '<div style="font-size:96px;font-weight:700;color:' + color + ';">' + d.overall_score + '</div>';
+                    html += '<div style="font-size:32px;color:' + color + ';margin-top:8px;">' + (verdictLabels[d.verdict] || d.verdict) + '</div>';
                     html += '</div>';
 
                     if (d.issues && d.issues.length > 0) {
-                        html += '<div style="margin-bottom:12px;">';
-                        html += '<div style="font-weight:600;margin-bottom:8px;color:#d1d5db;">发现 ' + d.issues.length + ' 个问题：</div>';
+                        html += '<div style="margin-bottom:24px;">';
+                        html += '<div style="font-weight:600;margin-bottom:16px;color:#d1d5db;font-size:24px;">发现 ' + d.issues.length + ' 个问题：</div>';
                         d.issues.forEach(function(issue) {
                             var ic = severityColors[issue.severity] || '#a0a0a0';
                             var il = severityLabels[issue.severity] || issue.severity;
-                            html += '<div style="padding:8px 12px;margin-bottom:6px;background:#1e1e1e;border-radius:6px;border-left:3px solid ' + ic + ';">';
-                            html += '<span style="color:' + ic + ';font-weight:600;font-size:12px;">[' + il + ']</span> ';
-                            html += '<span style="color:#9ca3af;font-size:12px;">' + issue.category + '</span>';
-                            html += '<div style="color:#d1d5db;margin-top:4px;font-size:13px;">' + issue.description + '</div>';
+                            html += '<div style="padding:12px 16px;margin-bottom:10px;background:#1e1e1e;border-radius:6px;border-left:3px solid ' + ic + ';">';
+                            html += '<span style="color:' + ic + ';font-weight:600;font-size:24px;">[' + il + ']</span> ';
+                            html += '<span style="color:#9ca3af;font-size:24px;">' + issue.category + '</span>';
+                            html += '<div style="color:#d1d5db;margin-top:8px;font-size:26px;">' + issue.description + '</div>';
                             html += '</div>';
                         });
                         html += '</div>';
@@ -1895,26 +1895,34 @@ const app = createApp({
 
                     if (d.suggestions && d.suggestions.length > 0) {
                         html += '<div>';
-                        html += '<div style="font-weight:600;margin-bottom:8px;color:#d1d5db;">改进建议：</div>';
-                        html += '<ul style="margin:0;padding-left:20px;color:#9ca3af;font-size:13px;">';
+                        html += '<div style="font-weight:600;margin-bottom:16px;color:#d1d5db;font-size:24px;">改进建议：</div>';
+                        html += '<ul style="margin:0;padding-left:20px;color:#9ca3af;font-size:26px;">';
                         d.suggestions.forEach(function(s) {
-                            html += '<li style="margin-bottom:4px;">' + s + '</li>';
+                            html += '<li style="margin-bottom:8px;">' + s + '</li>';
                         });
                         html += '</ul></div>';
                     }
 
                     html += '</div>';
 
-                    ElMessageBox.alert(html, '试题科学性评估报告', {
+                    ElMessageBox.alert(html, '命题质量检查报告', {
                         dangerouslyUseHTMLString: true,
-                        confirmButtonText: d.verdict === 'fail' ? '我知道了，去修改' : '确定',
-                        customStyle: { maxWidth: '560px' }
+                        confirmButtonText: '关闭',
+                        customStyle: { maxWidth: '1120px' },
+                        showCancelButton: true,
+                        cancelButtonText: '保存分数',
+                        distinguishCancelAndClose: true,
+                        callback: function(action) {
+                            if (action === 'cancel') {
+                                saveQuestion();
+                            }
+                        }
                     });
                 } else {
                     ElMessage.error('评估失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('科学性评估失败：' + (e.response?.data?.error || e.message));
+                ElMessage.error('命题质量评估失败：' + (e.response?.data?.error || e.message));
             } finally {
                 evaluatingQuality.value = false;
             }
@@ -1926,7 +1934,7 @@ const app = createApp({
                 return;
             }
             if (qualityScore.value !== null && qualityScore.value < 60) {
-                ElMessage.error('试题科学性评估未通过（' + qualityScore.value + '分），请根据评估结果修改后再保存');
+                ElMessage.error('命题质量检查未通过（' + qualityScore.value + '分），请根据评估结果修改后再保存');
                 return;
             }
             try {
