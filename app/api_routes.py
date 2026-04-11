@@ -557,6 +557,68 @@ def merge_questions():
     return jsonify({'success': True, 'deleted': deleted, 'keep_id': keep_id})
 
 
+@api_bp.route('/questions/find-same-number', methods=['POST'])
+def find_same_number():
+    """按题号分组，找出题号相同但可能是不同版本的题目，返回合并建议"""
+    questions = get_questions()
+    if len(questions) < 2:
+        return jsonify({'success': True, 'data': [], 'total_groups': 0})
+
+    # 按 question_number 分组
+    by_number = {}
+    for q in questions:
+        num = (q.get('question_number') or '').strip()
+        if not num:
+            continue
+        by_number.setdefault(num, []).append(q)
+
+    import re
+
+    def normalize(text):
+        if not text:
+            return ''
+        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'\s+', '', text)
+        return text.strip()
+
+    COMPARE_FIELDS = ['content', 'standard_answer', 'rubric_points', 'rubric_rules', 'original_text']
+
+    groups = []
+    for num, qs in sorted(by_number.items()):
+        if len(qs) < 2:
+            continue
+
+        # 判断是否完全相同
+        is_exact = True
+        for field in COMPARE_FIELDS:
+            vals = [normalize(q.get(field, '')) for q in qs]
+            if len(set(vals)) > 1:
+                is_exact = False
+                break
+
+        suggestion = _build_merge_suggestion(qs)
+        groups.append({
+            'group_id': f'num_{num}',
+            'question_number': num,
+            'exact': is_exact,
+            'questions': [{
+                'id': q['id'],
+                'content': (q.get('content') or '')[:200],
+                'original_text': (q.get('original_text') or '')[:200],
+                'standard_answer': (q.get('standard_answer') or '')[:200],
+                'rubric_rules': (q.get('rubric_rules') or '')[:200],
+                'rubric_points': (q.get('rubric_points') or '')[:200],
+                'rubric_script': (q.get('rubric_script') or '')[:200],
+                'max_score': q.get('max_score'),
+                'quality_score': q.get('quality_score'),
+                'question_number': q.get('question_number'),
+            } for q in qs],
+            'suggestion': suggestion,
+        })
+
+    return jsonify({'success': True, 'data': groups, 'total_groups': len(groups)})
+
+
 @api_bp.route('/export-rubric-scripts', methods=['GET'])
 def export_rubric_scripts():
     """按科目导出评分脚本，生成 Markdown 格式"""
@@ -1490,6 +1552,62 @@ def available_models():
     return jsonify({"success": True, "models": models})
 
 
+@api_bp.route('/generate-rubric-points', methods=['POST'])
+def generate_rubric_points():
+    """AI 从标准答案中提取分数分布（得分要点）"""
+    data = request.json
+    content = data.get('content', '').strip()
+    score = data.get('score', 10)
+    standard_answer = data.get('standardAnswer', '').strip()
+    rubric_rules = data.get('rubricRules', '').strip()
+
+    if not content:
+        return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
+    if not standard_answer:
+        return jsonify({'success': False, 'error': '标准答案不能为空'}), 400
+
+    user_prompt = f"""请根据以下题目、标准答案和评分规则，提取得分要点，生成分数分布：
+
+【题目】
+{content}
+
+【满分】
+{score} 分
+
+【标准答案】
+{standard_answer}"""
+
+    if rubric_rules:
+        user_prompt += f"\n\n【评分规则】\n{rubric_rules}"
+
+    user_prompt += """
+要求：
+1. 将标准答案拆分为若干得分要点
+2. 每个要点一行，格式：要点描述 (X分)
+3. 所有要点分值之和 = 满分
+4. 参考评分规则中的分值分配和扣分要求
+5. 使用确定性语言，不含模糊表述
+6. 直接输出得分要点，每行一个，不要加编号或其他内容"""
+
+    try:
+        response = grading_engine.client.chat.completions.create(
+            model=grading_engine.model,
+            messages=[
+                {"role": "system", "content": "你是一个命题专家，擅长从标准答案中提取结构化得分要点。"},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            max_tokens=2048,
+        )
+        points = response.choices[0].message.content.strip()
+        if not points or len(points) < 10:
+            return jsonify({'success': False, 'error': 'AI 生成的内容过短，请重试'}), 500
+        return jsonify({'success': True, 'data': {'rubricPoints': points}})
+    except Exception as e:
+        logger.error(f"生成分数分布失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/generate-rubric-script', methods=['POST'])
 def generate_rubric_script():
     """AI 生成结构化评分脚本"""
@@ -1590,11 +1708,264 @@ def get_bugs():
     return jsonify({'success': True, 'data': rows, 'stats': stats, 'by_model': by_model})
 
 
+@api_bp.route('/check-consistency', methods=['POST'])
+def check_consistency():
+    """检查原题与题干/答案/规则之间的一致性，以及分值之和是否等于满分"""
+    import re
+    data = request.json
+    original_text = data.get('originalText', '').strip()
+    content = data.get('content', '').strip()
+    standard_answer = data.get('standardAnswer', '').strip()
+    rubric_rules = data.get('rubricRules', '').strip()
+    rubric_points_raw = data.get('rubricPoints', '')
+    # rubricPoints 可以是字符串或数组（前端可能传数组形式）
+    if isinstance(rubric_points_raw, list):
+        rubric_points = '\n'.join(
+            f"{p.get('text', p.get('label', ''))} ({p.get('score', 0)}分)"
+            for p in rubric_points_raw if isinstance(p, dict)
+        )
+    else:
+        rubric_points = (rubric_points_raw or '').strip()
+    max_score = data.get('maxScore', 10)
+    logger.debug(f"[check-consistency] maxScore={max_score}, rubricPoints类型={type(rubric_points_raw).__name__}, rubricPoints[:100]={str(rubric_points)[:100]}")
+
+    def normalize(s):
+        return re.sub(r'\s+', '', re.sub(r'<[^>]+>', '', s or ''))
+
+    issues = []
+
+    # 提取原文中的满分值：匹配 "（N分）" 或 "（N 分）" 但排除小题分值
+    orig_total_score = None
+    if original_text:
+        score_matches = re.findall(r'[(（](\d+\.?\d*)\s*分[)）]', original_text)
+        if score_matches:
+            all_scores = [float(s) for s in score_matches]
+            # 策略：只有 ≥5 分的才认为是总分（小题分值一般 ≤5）
+            candidates = [s for s in all_scores if s >= 5]
+            if candidates:
+                orig_total_score = max(candidates)
+
+    # 提取分数分布各点之和
+    rubric_total = None
+    if rubric_points:
+        scores = re.findall(r'[(（](\d+\.?\d*)\s*分', rubric_points)
+        if scores:
+            rubric_total = sum(float(s) for s in scores)
+
+    # 推断"正确"的满分：原文满分是权威来源
+    inferred_score = None
+    if orig_total_score is not None and rubric_total is not None:
+        if abs(orig_total_score - rubric_total) < 0.01:
+            # 两者一致 → 这就是正确满分
+            inferred_score = orig_total_score
+        else:
+            # 两者不一致 → 以原文为准，分数分布需要修正
+            inferred_score = orig_total_score
+            issues.append({
+                'type': 'orig_vs_rubric_mismatch',
+                'field': 'rubricPoints',
+                'desc': f'原文标注满分 {orig_total_score} 分，分数分布合计 {rubric_total} 分，两者不一致',
+                'suggestion': f'分数分布各点之和应为 {orig_total_score} 分，当前加起来是 {rubric_total} 分，请检查各要点分值'
+            })
+    elif orig_total_score is not None:
+        inferred_score = orig_total_score
+    elif rubric_total is not None:
+        inferred_score = rubric_total
+
+    # 用推断出的满分检查表单的 maxScore
+    if inferred_score is not None and abs(inferred_score - max_score) > 0.01:
+        issues.append({
+            'type': 'form_score_wrong',
+            'field': 'score',
+            'desc': f'表单满分 {max_score} 分不正确，应为 {inferred_score} 分',
+            'suggestion': f'请将满分值修改为 {inferred_score}',
+            'original_value': str(inferred_score)
+        })
+
+    # 3. 原文 vs 题干：原文中有关键内容在题干中缺失
+    if original_text and content:
+        orig_match = re.search(r'题目[：:]\s*(.*?)(?=标准答案|评分规则|$)', original_text, re.DOTALL)
+        if orig_match:
+            orig_question = orig_match.group(1).strip()
+        else:
+            orig_question = original_text
+
+        # 如果题干明显比原文题目部分短，可能有遗漏
+        if len(normalize(content)) < len(normalize(orig_question)) * 0.7:
+            issues.append({
+                'type': 'content_shorter',
+                'field': 'content',
+                'desc': f'题干（{len(normalize(content))}字）比原题（{len(normalize(orig_question))}字）短很多，可能有内容遗漏',
+                'suggestion': '请对比原题检查题干是否完整',
+                'original_value': orig_question
+            })
+
+    # 4. 原文 vs 标准答案
+    if original_text and standard_answer:
+        orig_match_ans = re.search(r'标准答案[：:]\s*(.*?)(?=评分规则|$)', original_text, re.DOTALL)
+        if orig_match_ans:
+            orig_answer = orig_match_ans.group(1).strip()
+            if len(normalize(standard_answer)) < len(normalize(orig_answer)) * 0.7:
+                issues.append({
+                    'type': 'answer_shorter',
+                    'field': 'standardAnswer',
+                    'desc': f'标准答案（{len(normalize(standard_answer))}字）比原题中的答案（{len(normalize(orig_answer))}字）短很多',
+                    'suggestion': '请对比原题检查标准答案是否完整',
+                    'original_value': orig_answer
+                })
+
+    # 5. 原文 vs 评分规则
+    if original_text and rubric_rules:
+        orig_match_rules = re.search(r'评分规则[：:]\s*(.*?)(?=【简答题|$)', original_text, re.DOTALL)
+        if orig_match_rules:
+            orig_rules = orig_match_rules.group(1).strip()
+            if len(normalize(rubric_rules)) < len(normalize(orig_rules)) * 0.7:
+                issues.append({
+                    'type': 'rules_shorter',
+                    'field': 'rubricRules',
+                    'desc': f'评分规则（{len(normalize(rubric_rules))}字）比原题中的规则（{len(normalize(orig_rules))}字）短很多',
+                    'suggestion': '请对比原题检查评分规则是否完整',
+                    'original_value': orig_rules
+                })
+
+    # 6. 原文标准答案中的小题分值 vs 分数分布
+    if original_text and rubric_points:
+        orig_match_ans = re.search(r'标准答案[：:]\s*(.*?)(?=评分规则|$)', original_text, re.DOTALL)
+        if orig_match_ans:
+            orig_answer_text = orig_match_ans.group(1)
+            orig_point_scores = re.findall(r'[(（](\d+\.?\d*)\s*分', orig_answer_text)
+            rubric_point_scores = re.findall(r'[(（](\d+\.?\d*)\s*分', rubric_points)
+            if orig_point_scores and rubric_point_scores:
+                orig_total = sum(float(s) for s in orig_point_scores)
+                rubric_total = sum(float(s) for s in rubric_point_scores)
+                if abs(orig_total - rubric_total) > 0.01:
+                    issues.append({
+                        'type': 'points_mismatch',
+                        'field': 'rubricPoints',
+                        'desc': f'原文答案中各题分值合计 {orig_total} 分 ≠ 分数分布合计 {rubric_total} 分',
+                        'suggestion': f'请检查分数分布是否与原文答案中的分值一致'
+                    })
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'issues': issues,
+            'pass': len(issues) == 0
+        }
+    })
+
+
+@api_bp.route('/batch-check-consistency', methods=['POST'])
+def batch_check_consistency():
+    """按科目批量检查所有题目的一致性"""
+    import re
+    data = request.json
+    subject = data.get('subject', '').strip()
+    if not subject:
+        return jsonify({'success': False, 'error': '请指定科目'}), 400
+
+    questions = [q for q in get_questions() if q.get('subject') == subject]
+    if not questions:
+        return jsonify({'success': False, 'error': f'科目「{subject}」下没有题目'}), 400
+
+    def normalize(s):
+        return re.sub(r'\s+', '', re.sub(r'<[^>]+>', '', s or ''))
+
+    def check_one(q):
+        issues = []
+        original_text = (q.get('original_text') or '').strip()
+        content = (q.get('content') or '').strip()
+        standard_answer = (q.get('standard_answer') or '').strip()
+        rubric_rules = (q.get('rubric_rules') or '').strip()
+        rubric_points = (q.get('rubric_points') or '').strip()
+        max_score = q.get('max_score', 10) or 10
+
+        # 原文满分（≥5分的才认为是总分）
+        orig_total_score = None
+        if original_text:
+            score_matches = re.findall(r'[(（](\d+\.?\d*)\s*分[)）]', original_text)
+            if score_matches:
+                candidates = [float(s) for s in score_matches if float(s) >= 5]
+                if candidates:
+                    orig_total_score = max(candidates)
+
+        # 1. 原文满分 vs 表单满分
+        if orig_total_score is not None and abs(orig_total_score - max_score) > 0.01:
+            issues.append(f'原文满分{orig_total_score}分 ≠ 表单满分{max_score}分')
+
+        # 2. 分数分布各点之和 vs 表单满分
+        if rubric_points:
+            scores = re.findall(r'[(（](\d+\.?\d*)\s*分', rubric_points)
+            if scores:
+                total = sum(float(s) for s in scores)
+                if abs(total - max_score) > 0.01:
+                    issues.append(f'分数分布合计{total}分 ≠ 满分{max_score}分')
+
+        # 3. 原文 vs 题干
+        if original_text and content:
+            orig_match = re.search(r'题目[：:]\s*(.*?)(?=标准答案|评分规则|$)', original_text, re.DOTALL)
+            orig_question = orig_match.group(1).strip() if orig_match else original_text
+            if len(normalize(content)) < len(normalize(orig_question)) * 0.7:
+                issues.append(f'题干比原题短很多（{len(normalize(content))}字 vs {len(normalize(orig_question))}字）')
+
+        # 4. 原文 vs 标准答案
+        if original_text and standard_answer:
+            orig_match_ans = re.search(r'标准答案[：:]\s*(.*?)(?=评分规则|$)', original_text, re.DOTALL)
+            if orig_match_ans:
+                orig_answer = orig_match_ans.group(1).strip()
+                if len(normalize(standard_answer)) < len(normalize(orig_answer)) * 0.7:
+                    issues.append(f'标准答案比原题中的答案短很多')
+
+        # 5. 原文 vs 评分规则
+        if original_text and rubric_rules:
+            orig_match_rules = re.search(r'评分规则[：:]\s*(.*?)(?=【简答题|$)', original_text, re.DOTALL)
+            if orig_match_rules:
+                orig_rules = orig_match_rules.group(1).strip()
+                if len(normalize(rubric_rules)) < len(normalize(orig_rules)) * 0.7:
+                    issues.append(f'评分规则比原题中的规则短很多')
+
+        # 6. 原文答案中小题分值 vs 分数分布
+        if original_text and rubric_points:
+            orig_match_ans = re.search(r'标准答案[：:]\s*(.*?)(?=评分规则|$)', original_text, re.DOTALL)
+            if orig_match_ans:
+                orig_point_scores = re.findall(r'[(（](\d+\.?\d*)\s*分', orig_match_ans.group(1))
+                rubric_point_scores = re.findall(r'[(（](\d+\.?\d*)\s*分', rubric_points)
+                if orig_point_scores and rubric_point_scores:
+                    orig_total = sum(float(s) for s in orig_point_scores)
+                    rubric_total = sum(float(s) for s in rubric_point_scores)
+                    if abs(orig_total - rubric_total) > 0.01:
+                        issues.append(f'原文答案分值合计{orig_total}分 ≠ 分数分布合计{rubric_total}分')
+
+        return issues
+
+    results = []
+    for q in questions:
+        issues = check_one(q)
+        if issues:
+            results.append({
+                'id': q['id'],
+                'question_number': q.get('question_number', ''),
+                'title': (q.get('content') or '')[:50],
+                'issues': issues
+            })
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'total': len(questions),
+            'problems': results,
+            'problem_count': len(results),
+            'pass': len(results) == 0
+        }
+    })
+
+
 @api_bp.route('/evaluate-question', methods=['POST'])
 def evaluate_question():
     """AI 命题质量评估"""
     import re
     data = request.json
+    original_text = data.get('originalText', '').strip()
     content = data.get('content', '').strip()
     standard_answer = data.get('standardAnswer', '').strip()
     rubric_points = data.get('rubricPoints', '').strip()
@@ -1603,21 +1974,30 @@ def evaluate_question():
     difficulty = data.get('difficulty', '')
     content_type = data.get('contentType', '')
 
-    if not content:
+    if not content and not original_text:
         return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
     if not standard_answer:
         return jsonify({'success': False, 'error': '标准答案不能为空，无法评估质量'}), 400
 
-    user_prompt = f"""请评估以下命题的质量：
+    if original_text:
+        user_prompt = f"""请评估以下命题的质量：
+
+【原始命题原文】
+{original_text}
+
+【满分】
+{max_score} 分"""
+    else:
+        user_prompt = f"""请评估以下命题的质量：
 
 【题目内容】
 {content}
 
 【满分】
-{max_score} 分
+{max_score} 分"""
 
-【标准答案】
-{standard_answer}"""
+    if standard_answer:
+        user_prompt += f"\n\n【标准答案】\n{standard_answer}"
 
     if rubric_points:
         user_prompt += f"\n\n【分数分布/得分要点】\n{rubric_points}"

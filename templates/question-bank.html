@@ -271,75 +271,101 @@
 
                             <!-- 基本信息 -->
                             <div style="margin-bottom: 24px;">
-                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">基本信息</div>
-                                <el-row :gutter="16">
-                                    <el-col :span="5"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;"></el-input-number></el-form-item></el-col>
-                                    <el-col :span="5"><el-form-item label="难度"><el-select v-model="questionForm.difficulty" style="width: 100%;"><el-option label="简单" value="easy"></el-option><el-option label="中等" value="medium"></el-option><el-option label="困难" value="hard"></el-select></el-form-item></el-col>
-                                    <el-col :span="7"><el-form-item label="知识点"><el-input v-model="questionForm.knowledge" type="text" placeholder="本题考查的知识点"></el-input></el-form-item></el-col>
-                                    <el-col :span="7"><el-form-item label="考核内容"><el-input v-model="questionForm.contentType" type="text" placeholder="简答题/选择题/计算题"></el-input></el-form-item></el-col>
-                                </el-row>
+                                <el-collapse :model-value="viewMode === 'create' ? ['1'] : []" style="margin-bottom: 12px;">
+                                    <el-collapse-item title="基本信息" name="1">
+                                        <el-row :gutter="16">
+                                            <el-col :span="5"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;" data-consistency-field="score"></el-input-number></el-form-item></el-col>
+                                            <el-col :span="5"><el-form-item label="难度"><el-select v-model="questionForm.difficulty" style="width: 100%;"><el-option label="简单" value="easy"></el-option><el-option label="中等" value="medium"></el-option><el-option label="困难" value="hard"></el-select></el-form-item></el-col>
+                                            <el-col :span="7"><el-form-item label="知识点"><el-input v-model="questionForm.knowledge" type="text" placeholder="本题考查的知识点"></el-input></el-form-item></el-col>
+                                            <el-col :span="7"><el-form-item label="考核内容"><el-input v-model="questionForm.contentType" type="text" placeholder="简答题/选择题/计算题"></el-input></el-form-item></el-col>
+                                        </el-row>
+                                    </el-collapse-item>
+                                </el-collapse>
                             </div>
 
                             <!-- 题目内容 -->
                             <div style="margin-bottom: 24px;">
-                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">题目内容</div>
-                                <el-form-item label="原题（原始未处理）"><el-input v-model="questionForm.originalText" type="textarea" :rows="5" placeholder="粘贴的原始原题，保存供对照参考"></el-input></el-form-item>
-                                <el-form-item label="题干（处理后）"><el-input v-model="questionForm.content" type="textarea" :rows="6" placeholder="请输入题目内容..."></el-input></el-form-item>
-                                <el-form-item label="标准答案">
-                                    <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="5" placeholder="输入参考答案/标准答案，方便AI评分参考"></el-input>
-                                    <div style="margin-top: 8px;">
-                                        <el-button type="warning" size="small" @click="cleanAnswerScores">
-                                            <el-icon><MagicStick /></el-icon>一键清除分数标注
-                                        </el-button>
-                                        <span style="margin-left: 8px; font-size: 12px; color: #909399;">
-                                            去除「（2分，其中...不得分）」这类评分说明，得到纯标准答案
+                                <el-collapse :model-value="viewMode === 'create' ? ['orig'] : []" style="margin-bottom: 12px;">
+                                    <el-collapse-item name="orig">
+                                        <template #title>
+                                            <span>原题（原始未处理）</span>
+                                        </template>
+                                        <el-input v-model="questionForm.originalText" type="textarea" :rows="5" placeholder="粘贴的原始原题，保存供对照参考" :style="{ fontSize: formFontSize + 'px' }" :disabled="viewMode !== 'create'"></el-input>
+                                    </el-collapse-item>
+                                </el-collapse>
+                                <el-form-item>
+                                    <template #label>
+                                        <span>题干（处理后）</span>
+                                        <a href="#" @click.prevent="runConsistencyCheck" :style="{ marginLeft: '12px', fontSize: '12px', color: consistencyLoading ? '#c0c4cc' : '#409eff', textDecoration: 'none' }">
+                                            {{ consistencyLoading ? '检查中...' : '一致检查' }}
+                                        </a>
+                                        <a href="#" @click.prevent="evaluateQuality" :style="{ marginLeft: '12px', fontSize: '12px', color: evaluatingQuality ? '#c0c4cc' : '#67c23a', textDecoration: 'none' }">
+                                            {{ evaluatingQuality ? '评估中...' : (qualityScore !== null ? '科学性: ' + qualityScore + '分' : '科学性评估') }}
+                                        </a>
+                                        <span style="margin-left: 12px; font-size: 12px; color: #c0c4cc;">
+                                            <a href="#" @click.prevent="formFontSize = Math.max(12, formFontSize - 2)" style="color: #909399; text-decoration: none;">A-</a>
+                                            <span style="margin: 0 2px;">{{ formFontSize }}</span>
+                                            <a href="#" @click.prevent="formFontSize = Math.min(24, formFontSize + 2)" style="color: #909399; text-decoration: none;">A+</a>
                                         </span>
-                                    </div>
+                                    </template>
+                                    <el-input v-model="questionForm.content" type="textarea" :rows="6" placeholder="请输入题目内容..." :style="{ fontSize: formFontSize + 'px' }" data-consistency-field="content"></el-input>
+                                </el-form-item>
+                                <el-form-item>
+                                    <template #label>
+                                        <span>标准答案</span>
+                                        <a href="#" @click.prevent="cleanAnswerScores" style="margin-left: 12px; font-size: 12px; color: #e6a23c; text-decoration: none;">清除分数标注</a>
+                                    </template>
+                                    <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="5" placeholder="输入参考答案/标准答案，方便AI评分参考" :style="{ fontSize: formFontSize + 'px' }" data-consistency-field="standardAnswer"></el-input>
                                 </el-form-item>
                             </div>
 
                             <!-- 评分规则 -->
                             <div style="margin-bottom: 24px;">
-                                <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">评分规则</div>
-                                <el-form-item label="评分规则">
-                                    <el-input v-model="questionForm.rubricRules" type="textarea" :rows="4" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分"></el-input>
-                                </el-form-item>
-                                <el-row :gutter="16">
-                                    <el-col :span="12">
-                                        <el-form-item label="分数分布（每行一个得分点，带分值）">
-                                            <el-input v-model="questionForm.rubricPoints" type="textarea" :rows="5" placeholder="每行一个得分点，例如：正确回答出公有制为主体 (2分)"></el-input>
+                                <el-collapse :model-value="viewMode === 'create' ? ['rubric'] : []" style="margin-bottom: 12px;">
+                                    <el-collapse-item title="评分规则" name="rubric">
+                                        <el-form-item label="评分规则">
+                                            <el-input v-model="questionForm.rubricRules" type="textarea" :rows="8" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分" :style="{ fontSize: formFontSize + 'px' }" data-consistency-field="rubricRules"></el-input>
                                         </el-form-item>
-                                    </el-col>
-                                    <el-col :span="12">
-                                        <el-form-item label="评分提示词">
-                                            <el-input v-model="questionForm.aiRubric" type="textarea" :rows="5" placeholder="补充评分注意事项，例如：请严格按要点给分，部分答对给部分分数"></el-input>
+                                        <el-row :gutter="16">
+                                            <el-col :span="12">
+                                                <el-form-item>
+                                                    <template #label>
+                                                        <span>分数分布（每行一个得分点，带分值）</span>
+                                                        <a href="#" @click.prevent="autoGeneratePoints" :style="{ marginLeft: '12px', fontSize: '12px', color: generatingPoints ? '#c0c4cc' : '#409eff', textDecoration: 'none' }">
+                                                            {{ generatingPoints ? '生成中...' : '自动生成' }}
+                                                        </a>
+                                                    </template>
+                                                    <el-input v-model="questionForm.rubricPoints" type="textarea" :rows="5" placeholder="每行一个得分点，例如：正确回答出公有制为主体 (2分)" :style="{ fontSize: formFontSize + 'px' }" data-consistency-field="rubricPoints"></el-input>
+                                                </el-form-item>
+                                            </el-col>
+                                            <el-col :span="12">
+                                                <el-form-item label="评分提示词">
+                                                    <el-input v-model="questionForm.aiRubric" type="textarea" :rows="5" placeholder="补充评分注意事项，例如：请严格按要点给分，部分答对给部分分数" :style="{ fontSize: formFontSize + 'px' }"></el-input>
+                                                </el-form-item>
+                                            </el-col>
+                                        </el-row>
+                                        <el-form-item label="评分约定">
+                                            <el-input v-model="questionForm.rubricScript" type="textarea" :rows="12" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定" :style="{ fontSize: formFontSize + 'px' }"></el-input>
+                                            <div style="margin-top: 8px; display: flex; gap: 8px;">
+                                                <el-button type="primary" plain size="small" @click="generateRubric" :loading="generatingScript">
+                                                    <el-icon><MagicStick /></el-icon>AI 生成评分脚本
+                                                </el-button>
+                                                <el-button type="success" plain size="small" @click="openTestCaseDialog" :disabled="!editingQuestionId">
+                                                    <el-icon><CircleCheck /></el-icon>验证脚本
+                                                    <span v-if="testCaseCount > 0">（{{testCaseCount}}个用例）</span>
+                                                </el-button>
+                                                <el-button type="info" plain size="small" @click="openScriptHistory" :disabled="!editingQuestionId">
+                                                    <el-icon><Clock /></el-icon>版本历史
+                                                </el-button>
+                                            </div>
                                         </el-form-item>
-                                    </el-col>
-                                </el-row>
-                                <el-form-item label="评分脚本">
-                                    <el-input v-model="questionForm.rubricScript" type="textarea" :rows="6" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定"></el-input>
-                                    <div style="margin-top: 8px; display: flex; gap: 8px;">
-                                        <el-button type="primary" plain size="small" @click="generateRubric" :loading="generatingScript">
-                                            <el-icon><MagicStick /></el-icon>AI 生成评分脚本
-                                        </el-button>
-                                        <el-button type="success" plain size="small" @click="openTestCaseDialog" :disabled="!editingQuestionId">
-                                            <el-icon><CircleCheck /></el-icon>验证脚本
-                                            <span v-if="testCaseCount > 0">（{{testCaseCount}}个用例）</span>
-                                        </el-button>
-                                        <el-button type="info" plain size="small" @click="openScriptHistory" :disabled="!editingQuestionId">
-                                            <el-icon><Clock /></el-icon>版本历史
-                                        </el-button>
-                                    </div>
-                                </el-form-item>
+                                    </el-collapse-item>
+                                </el-collapse>
                             </div>
 
                             <!-- 操作栏 -->
                             <el-form-item v-if="viewMode !== 'view'">
-                                <el-button type="success" plain @click="evaluateQuality" :loading="evaluatingQuality">
-                                    <el-icon><Search /></el-icon>
-                                    {{ qualityScore !== null ? '科学性评估: ' + qualityScore + '分' : '试题科学性评估' }}
-                                </el-button>
-                                <el-button type="primary" @click="saveQuestion">{{ viewMode === 'edit' ? '更新题目' : '保存题目' }}</el-button>
+                                <el-button type="primary" @click="saveQuestion">{{ viewMode === 'edit' ? '保存修改' : '保存题目' }}</el-button>
                                 <el-button @click="resetForm">{{ viewMode === 'edit' ? '取消' : '重置' }}</el-button>
                             </el-form-item>
                         </el-form>
@@ -384,8 +410,14 @@
                             <el-button size="small" type="danger" plain @click="findDuplicates" :loading="dedupLoading">
                                 <el-icon><Operation /></el-icon> 去重处理
                             </el-button>
+                            <el-button size="small" type="primary" plain @click="findSameNumber" :loading="mergeLoading">
+                                <el-icon><Connection /></el-icon> 合并同题
+                            </el-button>
                             <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
                                 <el-icon><Download /></el-icon> 导出评分脚本
+                            </el-button>
+                            <el-button size="small" type="warning" plain @click="batchConsistencyCheck" :loading="batchCheckLoading">
+                                <el-icon><CircleCheck /></el-icon> 一致检查
                             </el-button>
                         </div>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
@@ -466,10 +498,10 @@
                     </el-dialog>
 
                     <!-- 去重处理弹窗 -->
-                    <el-dialog v-model="dedupDialogVisible" title="去重处理" :width="dedupFullscreen ? '100%' : '900px'" :fullscreen="dedupFullscreen" :close-on-click-modal="false">
+                    <el-dialog v-model="dedupDialogVisible" :title="mergeMode === 'merge' ? '合并同题' : '去重处理'" :width="dedupFullscreen ? '100%' : '900px'" :fullscreen="dedupFullscreen" :close-on-click-modal="false">
                         <template #header="{ titleId, titleClass }">
                             <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                                <span :id="titleId" :class="titleClass">去重处理</span>
+                                <span :id="titleId" :class="titleClass">{{ mergeMode === 'merge' ? '合并同题' : '去重处理' }}</span>
                                 <div style="display: flex; gap: 6px; align-items: center;">
                                     <el-button size="small" @click="dedupFontSize = Math.max(12, dedupFontSize - 2)">A-</el-button>
                                     <span style="font-size: 12px; color: #909399; min-width: 32px; text-align: center;">{{ dedupFontSize }}px</span>
@@ -483,10 +515,66 @@
                         <div :style="{ fontSize: dedupFontSize + 'px' }">
                         <!-- 完成状态 -->
                         <div v-if="dedupDone" style="text-align: center; padding: 40px; color: #909399;">
-                            所有重复题目已处理完毕
+                            {{ mergeMode === 'merge' ? '所有同题号题目已处理完毕' : '所有重复题目已处理完毕' }}
                         </div>
+                        <!-- 合并同题模式：直接字段合并 -->
+                        <div v-else-if="mergeMode === 'merge' && currentDedupGroup">
+                            <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>
+                                    <el-tag type="primary" size="small">题号 {{ currentDedupGroup.question_number }}</el-tag>
+                                    &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupSimilarGroups.length }} 组
+                                </span>
+                                <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                            </div>
+                            <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="200">
+                                <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                                <el-table-column label="题号" width="80">
+                                    <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                                <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                                <el-table-column label="质量" width="70">
+                                    <template #default="scope">
+                                        <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                        <span v-else style="color: #c0c4cc;">-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="脚本" width="50">
+                                    <template #default="scope">
+                                        <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                        <el-tag v-else type="info" size="small">无</el-tag>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <!-- 字段合并表 -->
+                            <el-table :data="currentDedupGroup.fieldRows" size="small" style="width: 100%; margin-top: 12px;" max-height="350">
+                                <el-table-column label="字段" width="90" prop="label"></el-table-column>
+                                <el-table-column label="合并值">
+                                    <template #default="scope">
+                                        <div style="font-size: 12px; color: #606266; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto;">
+                                            {{ getFieldValue(currentDedupGroup, scope.row) }}
+                                        </div>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="来源" width="130">
+                                    <template #default="scope">
+                                        <el-select v-model="scope.row.selectedFromId" size="small" style="width: 100%;">
+                                            <el-option v-for="q in currentDedupGroup.questions" :key="q.id"
+                                                :label="'#' + q.id + (q.question_number ? ' (' + q.question_number + ')' : '')"
+                                                :value="q.id">
+                                            </el-option>
+                                        </el-select>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                                <el-button @click="skipGroup">跳过</el-button>
+                                <el-button type="primary" @click="confirmMerge">合并</el-button>
+                            </div>
+                        </div>
+                        <!-- 去重模式 -->
                         <!-- 第一步：处理完全相同的 -->
-                        <div v-else-if="dedupPhase === 'exact' && currentDedupGroup">
+                        <div v-else-if="dedupPhase === 'exact' && currentDedupGroup && mergeMode === 'dedup'">
                             <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
                                 <span>
                                     <el-tag type="danger" size="small">第一步：完全相同</el-tag>
@@ -1028,6 +1116,9 @@ const app = createApp({
         const dedupSimilarGroups = ref([]);
         const exactKeepId = ref(null);
         const dedupTotalDuplicates = ref(0);
+        const mergeMode = ref('dedup'); // 'dedup' | 'merge'
+        const mergeLoading = ref(false);
+        const formFontSize = ref(14);
 
         const subjectList = ref([]);
 
@@ -1229,6 +1320,8 @@ const app = createApp({
         };
 
         const generatingScript = ref(false);
+        const generatingPoints = ref(false);
+        const consistencyLoading = ref(false);
         const evaluatingQuality = ref(false);
         const qualityScore = ref(null);
 
@@ -1318,6 +1411,7 @@ const app = createApp({
 
         // 导出评分脚本
         const exportLoading = ref(false);
+        const batchCheckLoading = ref(false);
 
         function exportRubricScripts() {
             const subject = filterSubject.value || '';
@@ -1335,6 +1429,43 @@ const app = createApp({
             document.body.removeChild(a);
             setTimeout(() => { exportLoading.value = false; }, 1500);
             ElMessage.success('正在导出「' + getSubjectLabel(subject) + '」评分脚本...');
+        }
+
+        // 批量一致检查
+        async function batchConsistencyCheck() {
+            const subject = filterSubject.value || '';
+            if (!subject) {
+                ElMessage.warning('请先在筛选栏选择一个科目');
+                return;
+            }
+            batchCheckLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/batch-check-consistency', { subject });
+                if (data.success) {
+                    const { total, problems, problem_count, pass } = data.data;
+                    if (pass) {
+                        ElMessage.success(`「${getSubjectLabel(subject)}」共 ${total} 题，全部通过一致检查`);
+                    } else {
+                        const html = problems.map(p =>
+                            `<div style="margin-bottom:10px;">
+                                <b>#${p.question_number || p.id}</b> ${p.title}...
+                                <ul style="margin:4px 0;padding-left:20px;">${p.issues.map(i => `<li>${i}</li>`).join('')}</ul>
+                            </div>`
+                        ).join('');
+                        ElMessageBox.alert(
+                            `<div>共 ${total} 题，${problem_count} 题有问题：</div><br/>${html}`,
+                            '批量一致检查结果',
+                            { confirmButtonText: '知道了', dangerouslyUseHTMLString: true, customStyle: { width: '600px' } }
+                        );
+                    }
+                } else {
+                    ElMessage.error('检查失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('检查失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                batchCheckLoading.value = false;
+            }
         }
 
         // 导入 Excel
@@ -1576,6 +1707,108 @@ const app = createApp({
             }
         };
 
+        const autoGeneratePoints = async () => {
+            if (!questionForm.content.trim()) {
+                ElMessage.warning('请先填写题干内容');
+                return;
+            }
+            if (!questionForm.standardAnswer.trim()) {
+                ElMessage.warning('请先填写标准答案');
+                return;
+            }
+            generatingPoints.value = true;
+            try {
+                const res = await axios.post('/api/generate-rubric-points', {
+                    content: questionForm.content,
+                    score: questionForm.score,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricRules: questionForm.rubricRules
+                });
+                if (res.data.success) {
+                    questionForm.rubricPoints = res.data.data.rubricPoints;
+                    ElMessage.success('分数分布已生成');
+                } else {
+                    ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('生成失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                generatingPoints.value = false;
+            }
+        };
+
+        const runConsistencyCheck = async () => {
+            consistencyLoading.value = true;
+            try {
+                const payload = {
+                    originalText: questionForm.originalText,
+                    content: questionForm.content,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricRules: questionForm.rubricRules,
+                    rubricPoints: questionForm.rubricPoints,
+                    maxScore: questionForm.score
+                };
+                console.log('[一致检查] 发送数据:', JSON.stringify(payload, null, 2));
+                const res = await axios.post('/api/check-consistency', payload);
+                console.log('[一致检查] 返回结果:', JSON.stringify(res.data, null, 2));
+                if (res.data.success) {
+                    const { issues, pass } = res.data.data;
+                    if (pass) {
+                        ElMessage.success('一致检查通过，未发现问题');
+                        return;
+                    }
+                    showNextIssue(issues, 0);
+                } else {
+                    ElMessage.error('检查失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('检查失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                consistencyLoading.value = false;
+            }
+        };
+
+        const showNextIssue = (issues, index) => {
+            if (index >= issues.length) return;
+            const issue = issues[index];
+            const total = issues.length;
+            const current = index + 1;
+            const canFix = !!issue.original_value || issue.type === 'orig_score_mismatch' || issue.type === 'form_score_wrong';
+            ElMessageBox.confirm(
+                `<div style="margin-bottom:8px;"><b>(${current}/${total}) ${issue.desc}</b><br/><span style="color:#909399;">${issue.suggestion}</span></div>`,
+                '一致检查',
+                {
+                    confirmButtonText: canFix ? '确定' : '知道了',
+                    cancelButtonText: current < total ? '跳过' : '关闭',
+                    type: 'warning',
+                    dangerouslyUseHTMLString: true,
+                    showCancelButton: canFix
+                }
+            ).then(() => {
+                // 确定：用原文值替换对应字段
+                if ((issue.type === 'orig_score_mismatch' || issue.type === 'form_score_wrong') && issue.original_value) {
+                    questionForm.score = parseFloat(issue.original_value);
+                } else if (issue.type === 'content_shorter' && issue.original_value) {
+                    questionForm.content = issue.original_value;
+                } else if (issue.type === 'answer_shorter' && issue.original_value) {
+                    questionForm.standardAnswer = issue.original_value;
+                } else if (issue.type === 'rules_shorter' && issue.original_value) {
+                    questionForm.rubricRules = issue.original_value;
+                }
+                // 最后一个问题处理完后自动保存
+                if (current >= total) {
+                    saveQuestion();
+                } else {
+                    showNextIssue(issues, index + 1);
+                }
+            }).catch(function() {
+                // 跳过
+                if (current < total) {
+                    showNextIssue(issues, index + 1);
+                }
+            });
+        };
+
         const generateRubric = async () => {
             if (!questionForm.content.trim()) {
                 ElMessage.warning('请先填写题干内容');
@@ -1620,6 +1853,7 @@ const app = createApp({
             evaluatingQuality.value = true;
             try {
                 const res = await axios.post('/api/evaluate-question', {
+                    originalText: questionForm.originalText,
                     content: questionForm.content,
                     standardAnswer: questionForm.standardAnswer,
                     rubricPoints: questionForm.rubricPoints,
@@ -1847,13 +2081,7 @@ const app = createApp({
                 questionForm.rubricPoints = q.rubric_points || '';
                 questionForm.rubricScript = q.rubric_script || '';
 
-                // 从 rubric_points 或 standard_answer 中提取每个得分点的分值，计算实际总分
-                const scoreSource = [q.rubric_points || '', q.standard_answer || ''].join('\n');
-                const pointScores = [...scoreSource.matchAll(/[(（](\d+\.?\d*)\s*分/g)].map(m => parseFloat(m[1]));
-                if (pointScores.length > 0) {
-                    const sum = pointScores.reduce((a, b) => a + b, 0);
-                    if (sum > 0) questionForm.score = Math.round(sum * 10) / 10;
-                }
+                // 不再用分数分布之和覆盖 max_score，保留数据库原始值以便一致检查发现问题
 
                 questionForm.title = q.title || '';
                 questionForm.knowledge = '';
@@ -1951,6 +2179,7 @@ const app = createApp({
         };
 
         const findDuplicates = async () => {
+            mergeMode.value = 'dedup';
             dedupLoading.value = true;
             try {
                 const res = await axios.post('/api/questions/find-duplicates');
@@ -1980,6 +2209,37 @@ const app = createApp({
                 ElMessage.error('扫描失败: ' + e.message);
             } finally {
                 dedupLoading.value = false;
+            }
+        };
+
+        const findSameNumber = async () => {
+            mergeMode.value = 'merge';
+            mergeLoading.value = true;
+            try {
+                const res = await axios.post('/api/questions/find-same-number');
+                if (!res.data.success) {
+                    ElMessage.error('扫描失败');
+                    return;
+                }
+                const groups = res.data.data;
+                for (const g of groups) {
+                    g.fieldRows = buildFieldRows(g);
+                }
+                dedupExactGroups.value = [];
+                dedupSimilarGroups.value = groups;
+                dedupPhase.value = 'similar';
+                dedupCurrentIndex.value = 0;
+                dedupDone.value = groups.length === 0;
+                dedupDialogVisible.value = true;
+                if (groups.length === 0) {
+                    ElMessage.success('未发现题号相同的重复题目');
+                } else {
+                    ElMessage.info(`发现 ${groups.length} 组同题号题目待合并`);
+                }
+            } catch (e) {
+                ElMessage.error('扫描失败: ' + e.message);
+            } finally {
+                mergeLoading.value = false;
             }
         };
 
@@ -2123,6 +2383,7 @@ const app = createApp({
             dedupCurrentIndex.value = 0;
             dedupPhase.value = 'exact';
             dedupDone.value = false;
+            mergeMode.value = 'dedup';
             loadQuestions();
             loadStats();
         };
@@ -2379,6 +2640,7 @@ const app = createApp({
             currentDedupGroup, dedupProgress,
             currentSubject, currentSubjectLabel, switchSubject,
             filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions, exportLoading, exportRubricScripts,
+            batchCheckLoading, batchConsistencyCheck,
             importLoading, handleImportFile, importPreviewVisible, importPreview, confirmImport,
             enabledSheetCount, hasEnabledSheet, isColumnMapped, getMappedFieldLabel,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
@@ -2387,10 +2649,10 @@ const app = createApp({
             scriptHistoryVisible, scriptHistory, scriptHistoryLoading, scriptPreviewVisible, scriptPreviewText,
             autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
             loadSubjects, saveSubjects, getSubjectLabel,
-            handleMenuSelect, generateRubric, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
+            handleMenuSelect, generateRubric, autoGeneratePoints, generatingPoints, runConsistencyCheck, consistencyLoading, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
             autoParseText, clearAutoImport, cleanAnswerScores,
             loadSyllabusContent, saveSyllabusContent, viewQuestion, editQuestion, viewQuestionDialog, loadPickedQuestion,
-            findDuplicates, confirmExactMerge, skipExactGroup, confirmMerge, skipGroup, closeDedupDialog, getFieldValue,
+            findDuplicates, findSameNumber, mergeLoading, mergeMode, formFontSize, confirmExactMerge, skipExactGroup, confirmMerge, skipGroup, closeDedupDialog, getFieldValue,
             openTestCaseDialog, loadTestCases, saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm, runVerification,
             openScriptHistory, previewScriptVersion, rollbackScriptVersion,
             runAutoGenerate

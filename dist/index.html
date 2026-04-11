@@ -152,11 +152,11 @@
                                         <el-collapse-item title="题目 / 答案">
                                             <div style="margin-bottom: 10px;">
                                                 <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">题目内容</div>
-                                                <div style="padding: 8px 10px; background: #fafafa; border-radius: 4px; font-size: 13px; color: #606266; line-height: 1.6; white-space: pre-wrap; max-height: 100px; overflow-y: auto;">{{ selectedQuestion.content }}</div>
+                                                <div style="padding: 12px; background: #fafafa; border-radius: 4px; font-size: 14px; color: #303133; line-height: 1.8; white-space: pre-wrap; max-height: 2400px; overflow-y: auto;">{{ selectedQuestion.content }}</div>
                                             </div>
                                             <div>
                                                 <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">标准答案</div>
-                                                <div style="padding: 8px 10px; background: #fafafa; border-radius: 4px; font-size: 13px; color: #67c23a; line-height: 1.6; white-space: pre-wrap; max-height: 80px; overflow-y: auto;">{{ selectedQuestion.standard_answer || '(无标准答案)' }}</div>
+                                                <div style="padding: 12px; background: #fafafa; border-radius: 4px; font-size: 14px; color: #67c23a; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">{{ selectedQuestion.standard_answer || '(无标准答案)' }}</div>
                                             </div>
                                         </el-collapse-item>
                                     </el-collapse>
@@ -222,7 +222,7 @@
                         </el-button>
 
                         <!-- 右侧结果区 -->
-                        <div v-if="grading || gradeResult" style="flex: 1; min-width: 0;">
+                        <div v-if="grading || gradeResult" :style="{ flex: resultCollapsed ? '0 0 auto' : '1', width: resultCollapsed ? '0' : 'auto', overflow: 'hidden', transition: 'width 0.25s, flex 0.25s', minWidth: 0 }">
                             <div class="page-card" style="margin-bottom: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                     <span style="font-size: 16px; font-weight: 600; color: #303133;">评分结果</span>
@@ -398,6 +398,10 @@
                                 </div><!-- end v-show -->
                             </div>
                         </div>
+                        <!-- 结果区折叠时的展开按钮 -->
+                        <el-button v-if="resultCollapsed && (grading || gradeResult)" @click="resultCollapsed = false" style="flex-shrink: 0; height: auto; padding: 20px 8px; writing-mode: vertical-lr; letter-spacing: 2px;">
+                            <el-icon><DArrowLeft /></el-icon> 展开结果
+                        </el-button>
                     </div>
                 </template>
 
