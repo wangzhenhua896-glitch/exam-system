@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 评分系统 - 管理后台</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
+        .subtitle { font-size: 12px; color: #909399; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 160px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; }
+        .menu-group-title { padding: 12px 20px 8px; font-size: 12px; color: #909399; font-weight: 500; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; min-width: 0; }
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); overflow: hidden; }
+        .page-header { margin-bottom: 20px; }
+        .page-title { font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+        .page-desc { font-size: 14px; color: #909399; }
+        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="layout">
+        <!-- 顶部导航 -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">⚙ 管理后台</div>
+                <div class="subtitle">AI 评分系统 · 管理端</div>
+            </div>
+            <div class="header-right">
+                <el-tag size="small" type="danger">管理员</el-tag>
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>系统就绪</span>
+                </div>
+                <el-button size="small" @click="logout">退出</el-button>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- 左侧导航 -->
+            <div class="sidebar">
+                <div class="menu-group-title">系统管理</div>
+                <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
+                    <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
+                    <el-menu-item index="model-config"><el-icon><Monitor /></el-icon><span>模型配置</span></el-menu-item>
+                    <el-menu-item index="bug-log"><el-icon><WarningFilled /></el-icon><span>Bug 清单</span></el-menu-item>
+                </el-menu>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="content">
+                <!-- 科目管理 -->
+                <div v-if="currentPage === 'subject-manage'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">科目管理</div>
+                            <div class="page-desc">自定义管理可用科目，增删改后题目表单会自动更新选项</div>
+                        </div>
+                        <el-row :gutter="16" style="margin-bottom: 20px;">
+                            <el-col :span="12">
+                                <el-input v-model="newSubjectName" placeholder="输入新科目名称" clearable></el-input>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-button type="primary" @click="addSubject" :disabled="!newSubjectName.trim()">添加科目</el-button>
+                            </el-col>
+                        </el-row>
+                        <el-table :data="subjectList" stripe style="width: 100%">
+                            <el-table-column prop="label" label="科目名称" width="200"></el-table-column>
+                            <el-table-column prop="value" label="标识" width="200"></el-table-column>
+                            <el-table-column label="操作" width="120" fixed="right">
+                                <template #default="scope">
+                                    <el-button type="danger" size="small" @click="deleteSubject(scope.row.value)" :disabled="subjectList.length <= 1">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <el-empty v-if="subjectList.length === 0" description="暂无科目，请添加至少一个科目"></el-empty>
+                    </div>
+                </div>
+
+                <!-- 模型配置 -->
+                <div v-if="currentPage === 'model-config'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">模型配置</div>
+                            <div class="page-desc">管理大模型 API 连接，支持启用/禁用、编辑参数、测试连通性</div>
+                        </div>
+                        <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+                            <el-button type="primary" @click="testAllModels" :loading="modelTestAllLoading">
+                                测试所有已启用模型
+                            </el-button>
+                            <el-button @click="enableAllModels">启用所有</el-button>
+                            <el-button @click="disableAllModels">禁用所有</el-button>
+                            <span style="color: #909399; font-size: 13px; margin-left: 8px;">已启用 {{ modelConfigs.filter(m => m.enabled).length }} / {{ modelConfigs.length }} 个服务商</span>
+                        </div>
+                        <el-table :data="modelConfigs" stripe style="width: 100%;">
+                            <el-table-column prop="name" label="模型提供商" width="200"></el-table-column>
+                            <el-table-column label="服务商启用" width="100">
+                                <template #default="scope">
+                                    <el-switch v-model="scope.row.enabled" @change="toggleModelProvider(scope.row)"></el-switch>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="默认模型" min-width="180">
+                                <template #default="scope">
+                                    <span>{{ scope.row.model || '未配置' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="可用模型" min-width="260">
+                                <template #default="scope">
+                                    <template v-if="scope.row.available_models && scope.row.available_models.length">
+                                        <div v-for="m in scope.row.available_models" :key="m.id" style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
+                                            <el-switch :model-value="m.model_enabled" size="small" @change="toggleSingleModel(scope.row, m, $event)"></el-switch>
+                                            <span style="font-size: 13px;" :style="{ opacity: m.model_enabled ? 1 : 0.4 }">{{ m.name }}</span>
+                                        </div>
+                                    </template>
+                                    <span v-else style="color: #909399; font-size: 13px;">—</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="140" fixed="right">
+                                <template #default="scope">
+                                    <el-button size="small" @click="editModelProvider(scope.row)">编辑</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+
+                        <!-- 测试结果详情 -->
+                        <div v-if="modelTestResults.length" style="margin-top: 16px;">
+                            <div v-for="(r, i) in modelTestResults" :key="i" style="margin-bottom: 4px; font-size: 13px;">
+                                <template v-if="r.success === true">
+                                    <span style="color: #67c23a;">✓</span> {{ r.name }} — {{ r.model_name || r.model }}: 正常 ({{ r.latency_ms }}ms)
+                                    <span v-if="r.reply" style="color: #909399;"> — "{{ r.reply }}"</span>
+                                </template>
+                                <template v-else-if="r.success === false">
+                                    <span style="color: #f56c6c;">✗</span> {{ r.name }}<template v-if="r.model_name"> — {{ r.model_name }}</template>: {{ r.error }}
+                                </template>
+                                <template v-else>
+                                    <span style="color: #909399;">—</span> {{ r.name }}: {{ r.error || '跳过' }}
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 编辑弹窗 -->
+                    <el-dialog v-model="showModelDialog" :title="'编辑 — ' + (editingModelConfig?.name || '')" width="520px" @close="resetModelForm">
+                        <el-form label-position="top" v-if="editingModelConfig">
+                            <el-form-item label="API Key">
+                                <el-input v-model="modelForm.api_key" type="password" show-password placeholder="输入 API Key"></el-input>
+                            </el-form-item>
+                            <el-form-item label="Base URL">
+                                <el-input v-model="modelForm.base_url" placeholder="https://..."></el-input>
+                            </el-form-item>
+                            <el-form-item label="模型">
+                                <el-select v-if="editingModelConfig.available_models && editingModelConfig.available_models.length" v-model="modelForm.model" style="width: 100%;" filterable allow-create>
+                                    <el-option v-for="m in editingModelConfig.available_models" :key="m.id" :label="m.name" :value="m.id"></el-option>
+                                </el-select>
+                                <el-input v-else v-model="modelForm.model" placeholder="模型名称"></el-input>
+                            </el-form-item>
+                            <template v-if="editingModelConfig.extra_fields && editingModelConfig.extra_fields.length">
+                                <el-form-item v-for="f in editingModelConfig.extra_fields" :key="f.key" :label="f.label">
+                                    <el-input v-model="modelForm.extra_config[f.key]" :placeholder="f.label"></el-input>
+                                </el-form-item>
+                            </template>
+                        </el-form>
+                        <template #footer>
+                            <el-button @click="showModelDialog = false">取消</el-button>
+                            <el-button type="primary" @click="saveModelConfig">保存</el-button>
+                        </template>
+                    </el-dialog>
+                </div>
+
+                <!-- Bug 清单 -->
+                <div v-if="currentPage === 'bug-log'">
+                    <div class="page-card">
+                        <div class="page-header">
+                            <div class="page-title">Bug 清单</div>
+                            <div class="page-desc">评分引擎异常记录与统计</div>
+                        </div>
+
+                        <!-- 统计卡片 -->
+                        <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                            <div style="flex: 1; background: #fdf6ec; border: 1px solid #faecd8; border-radius: 8px; padding: 16px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #e6a23c;">{{ bugStats.score_mismatch || 0 }}</div>
+                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总分不一致</div>
+                            </div>
+                            <div style="flex: 1; background: #f0f9eb; border: 1px solid #e1f3d8; border-radius: 8px; padding: 16px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #67c23a;">{{ bugTotal }}</div>
+                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总计</div>
+                            </div>
+                        </div>
+
+                        <!-- 按模型统计 -->
+                        <div v-if="bugByModel.length > 0" style="margin-bottom: 20px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">按模型统计</div>
+                            <el-table :data="bugByModelTable" size="small" style="width: 100%;">
+                                <el-table-column prop="model_used" label="模型" min-width="200"></el-table-column>
+                                <el-table-column prop="score_mismatch" label="总分不一致" width="120"></el-table-column>
+                                <el-table-column prop="total" label="合计" width="80"></el-table-column>
+                            </el-table>
+                        </div>
+
+                        <!-- 筛选 -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+                            <el-select v-model="bugTypeFilter" size="small" style="width: 160px;" @change="loadBugs" clearable placeholder="全部类型">
+                                <el-option label="总分不一致" value="score_mismatch"></el-option>
+                            </el-select>
+                            <el-button size="small" @click="loadBugs"><el-icon><Refresh /></el-icon> 刷新</el-button>
+                            <span style="font-size: 12px; color: #909399; margin-left: auto;">共 {{ bugList.length }} 条记录</span>
+                        </div>
+
+                        <!-- Bug 列表 -->
+                        <el-table :data="bugList" size="small" style="width: 100%;" max-height="500">
+                            <el-table-column prop="created_at" label="时间" width="170"></el-table-column>
+                            <el-table-column prop="bug_type" label="类型" width="130">
+                                <template #default="scope">
+                                    <el-tag size="small" type="warning">{{ scope.row.bug_type === 'score_mismatch' ? '总分不一致' : scope.row.bug_type }}</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="model_used" label="模型" width="180"></el-table-column>
+                            <el-table-column prop="description" label="描述" min-width="300" show-overflow-tooltip></el-table-column>
+                            <el-table-column label="详情" width="60">
+                                <template #default="scope">
+                                    <el-button v-if="scope.row.details" size="small" link type="primary" @click="showBugDetail(scope.row)">查看</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            湖南省中职普测考试 · AI 智能评分系统 · 管理后台
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+const DEFAULT_SUBJECTS = [
+    { label: '思想政治', value: 'politics' },
+    { label: '语文', value: 'chinese' },
+    { label: '英语', value: 'english' }
+];
+const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
+const ROLE_KEY = 'ai_grading_role';
+const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
+
+const app = createApp({
+    setup() {
+        const currentPage = ref('subject-manage');
+        const subjectList = ref([]);
+        const newSubjectName = ref('');
+
+        // 权限检查
+        const role = localStorage.getItem(ROLE_KEY) || 'teacher';
+        if (role !== 'admin') {
+            window.location.href = '/login';
+        }
+
+        // 退出
+        const logout = () => {
+            localStorage.removeItem(CURRENT_SUBJECT_KEY);
+            localStorage.removeItem(ROLE_KEY);
+            window.location.href = '/login';
+        };
+
+        // ========== 科目管理 ==========
+        const loadSubjects = () => {
+            try {
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                    if (subjectList.value.length === 0) {
+                        subjectList.value = [...DEFAULT_SUBJECTS];
+                    }
+                    saveSubjects();
+                } else {
+                    subjectList.value = [...DEFAULT_SUBJECTS];
+                    saveSubjects();
+                }
+            } catch (e) {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
+        };
+
+        const saveSubjects = () => {
+            localStorage.setItem(SUBJECT_STORAGE_KEY, JSON.stringify(subjectList.value));
+        };
+
+        const addSubject = () => {
+            const name = newSubjectName.value.trim();
+            if (!name) return;
+            const value = name.toLowerCase()
+                .replace(/\s+/g, '_')
+                .replace(/[^\w\u4e00-\u9fa5]/g, '');
+            const exists = subjectList.value.find(s => s.value === value || s.label === name);
+            if (exists) {
+                ElMessage.warning('该科目已存在');
+                return;
+            }
+            subjectList.value.push({ label: name, value });
+            saveSubjects();
+            newSubjectName.value = '';
+            ElMessage.success('科目添加成功');
+        };
+
+        const deleteSubject = async (value) => {
+            if (subjectList.value.length <= 1) {
+                ElMessage.warning('至少保留一个科目');
+                return;
+            }
+            try {
+                await ElMessageBox.confirm('确定要删除这个科目吗？已有的题目不会受影响，但新建题目时将不再显示该选项。', '确认删除', {
+                    type: 'warning'
+                });
+                subjectList.value = subjectList.value.filter(s => s.value !== value);
+                saveSubjects();
+                ElMessage.success('科目已删除');
+            } catch (e) {
+                // cancelled
+            }
+        };
+
+        // ========== 模型配置 ==========
+        const modelConfigs = ref([]);
+        const modelTestResults = ref([]);
+        const modelTestAllLoading = ref(false);
+        const showModelDialog = ref(false);
+        const editingModelConfig = ref(null);
+        const modelForm = reactive({
+            api_key: '',
+            base_url: '',
+            model: '',
+            enabled: false,
+            extra_config: {},
+        });
+
+        const loadModelConfigs = async () => {
+            try {
+                const resp = await fetch('/api/config/models');
+                const data = await resp.json();
+                modelConfigs.value = data.map(d => ({ ...d, testResult: undefined, testing: false }));
+            } catch (e) {
+                console.error('加载模型配置失败', e);
+            }
+        };
+
+        const toggleModelProvider = async (row) => {
+            try {
+                await fetch(`/api/config/models/${row.provider}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: row.enabled }),
+                });
+            } catch (e) {
+                console.error('切换失败', e);
+                row.enabled = !row.enabled;
+            }
+        };
+
+        const enableAllModels = async () => {
+            try {
+                await fetch('/api/config/models/toggle-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: true }),
+                });
+                modelConfigs.value.forEach(m => m.enabled = true);
+                ElMessage.success('已启用所有模型');
+            } catch (e) { ElMessage.error('操作失败'); }
+        };
+
+        const disableAllModels = async () => {
+            try {
+                await fetch('/api/config/models/toggle-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: false }),
+                });
+                modelConfigs.value.forEach(m => m.enabled = false);
+                ElMessage.success('已禁用所有模型');
+            } catch (e) { ElMessage.error('操作失败'); }
+        };
+
+        const toggleSingleModel = async (providerRow, modelItem, newVal) => {
+            try {
+                await fetch(`/api/config/models/${providerRow.provider}/toggle-model`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_id: modelItem.id, enabled: newVal }),
+                });
+                modelItem.model_enabled = newVal;
+            } catch (e) {
+                ElMessage.error('切换失败');
+            }
+        };
+
+        const editModelProvider = (row) => {
+            editingModelConfig.value = row;
+            modelForm.api_key = row.api_key;
+            modelForm.base_url = row.base_url;
+            modelForm.model = row.model;
+            modelForm.enabled = row.enabled;
+            modelForm.extra_config = { ...(row.extra_config || {}) };
+            showModelDialog.value = true;
+        };
+
+        const resetModelForm = () => {
+            editingModelConfig.value = null;
+        };
+
+        const saveModelConfig = async () => {
+            const provider = editingModelConfig.value.provider;
+            try {
+                const resp = await fetch(`/api/config/models/${provider}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(modelForm),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    ElMessage.success(data.message);
+                    showModelDialog.value = false;
+                    loadModelConfigs();
+                }
+            } catch (e) {
+                ElMessage.error('保存失败');
+            }
+        };
+
+        const testAllModels = async () => {
+            modelTestAllLoading.value = true;
+            modelTestResults.value = [];
+            try {
+                const resp = await fetch('/api/config/models/test-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await resp.json();
+                modelTestResults.value = data;
+                for (const r of data) {
+                    const row = modelConfigs.value.find(m => m.provider === r.provider);
+                    if (row) row.testResult = r;
+                }
+            } catch (e) {
+                ElMessage.error('批量测试请求失败');
+            } finally {
+                modelTestAllLoading.value = false;
+            }
+        };
+
+        // ========== Bug 清单 ==========
+        const bugList = ref([]);
+        const bugStats = ref({});
+        const bugByModel = ref([]);
+        const bugTypeFilter = ref('');
+        const bugTotal = computed(() => Object.values(bugStats.value).reduce((a, b) => a + b, 0));
+        const bugByModelTable = computed(() => {
+            const map = {};
+            for (const r of bugByModel.value) {
+                const key = r.model_used || '未知';
+                if (!map[key]) map[key] = { model_used: key, total: 0 };
+                map[key][r.bug_type] = r.count;
+                map[key].total += r.count;
+            }
+            return Object.values(map).sort((a, b) => b.total - a.total);
+        });
+
+        async function loadBugs() {
+            try {
+                const params = { limit: 200 };
+                if (bugTypeFilter.value) params.bug_type = bugTypeFilter.value;
+                const { data } = await axios.get('/api/bugs', { params });
+                if (data.success) {
+                    bugList.value = data.data || [];
+                    bugStats.value = data.stats || {};
+                    bugByModel.value = data.by_model || [];
+                }
+            } catch (e) {
+                console.error('加载 Bug 日志失败', e);
+            }
+        }
+
+        function showBugDetail(row) {
+            ElMessageBox.alert('<pre style="white-space: pre-wrap; font-size: 12px; max-height: 400px; overflow-y: auto;">' + (row.details || '').replace(/</g, '&lt;') + '</pre>', 'Bug 详情', { dangerouslyUseHTMLString: true, confirmButtonText: '关闭' });
+        }
+
+        // ========== 菜单切换 ==========
+        const handleMenuSelect = (index) => {
+            if (index === 'bug-log') {
+                loadBugs();
+            }
+            currentPage.value = index;
+        };
+
+        onMounted(() => {
+            loadSubjects();
+            loadModelConfigs();
+        });
+
+        return {
+            currentPage, subjectList, newSubjectName,
+            addSubject, deleteSubject, logout,
+            modelConfigs, modelTestResults, modelTestAllLoading, showModelDialog, editingModelConfig, modelForm,
+            loadModelConfigs, toggleModelProvider, enableAllModels, disableAllModels, toggleSingleModel,
+            editModelProvider, resetModelForm, saveModelConfig, testAllModels,
+            bugList, bugStats, bugByModel, bugTypeFilter, bugTotal, bugByModelTable,
+            loadBugs, showBugDetail,
+            handleMenuSelect,
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 评分系统 - 登录</title>
+    <title>AI 命题系统 - 登录</title>
     <link rel="stylesheet" href="/static/vendor/element-plus.css">
     <script src="/static/vendor/vue.global.prod.js"></script>
     <script src="/static/vendor/element-plus.js"></script>
@@ -39,42 +39,6 @@
             text-align: center;
             margin-bottom: 32px;
         }
-        .role-cards {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 28px;
-        }
-        .role-card {
-            flex: 1;
-            padding: 20px 16px;
-            border: 2px solid #e4e7ed;
-            border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .role-card:hover {
-            border-color: #667eea;
-            background: #f5f3ff;
-        }
-        .role-card.active {
-            border-color: #667eea;
-            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-        }
-        .role-card .role-icon {
-            font-size: 28px;
-            margin-bottom: 8px;
-        }
-        .role-card .role-label {
-            font-size: 15px;
-            font-weight: 600;
-            color: #303133;
-        }
-        .role-card .role-desc {
-            font-size: 12px;
-            color: #909399;
-            margin-top: 4px;
-        }
         .login-form .el-form-item__label {
             font-size: 15px;
             font-weight: 500;
@@ -96,43 +60,29 @@
 <body>
 <div id="app">
     <div class="login-card">
-        <div class="login-title">AI 评分系统</div>
-        <div class="login-desc">{{ role === 'admin' ? '管理员模式' : '选择您的科目，进入题库管理' }}</div>
+        <div class="login-title">AI 命题系统</div>
+        <div class="login-desc">选择科目，进入题库管理</div>
 
         <el-form class="login-form" label-position="top">
-            <el-form-item label="选择用户">
-                <el-select v-model="selectedUsername" style="width: 100%;" placeholder="请选择登录用户" size="large" filterable @change="onUserChange">
-                    <el-option v-for="u in userList" :key="u.username" :label="u.display_name + ' (' + u.username + ')'" :value="u.username" />
-                </el-select>
-            </el-form-item>
-        </el-form>
-
-        <div class="role-cards">
-            <div class="role-card" :class="{ active: role === 'teacher' }" @click="role = 'teacher'">
-                <div class="role-icon">&#128218;</div>
-                <div class="role-label">科目老师</div>
-                <div class="role-desc">题库管理 · 评分</div>
-            </div>
-            <div class="role-card" :class="{ active: role === 'admin' }" @click="role = 'admin'">
-                <div class="role-icon">&#9881;</div>
-                <div class="role-label">管理员</div>
-                <div class="role-desc">科目 · 模型配置</div>
-            </div>
-        </div>
-
-        <el-form class="login-form" label-position="top">
-            <el-form-item label="选择科目" v-if="role === 'teacher'">
-                <el-select v-model="selectedSubject" style="width: 100%;" placeholder="请选择您负责的科目" size="large">
+            <el-form-item label="选择科目">
+                <el-select v-model="selectedSubject" style="width: 100%;" placeholder="请选择您负责的科目" size="large" @change="onSubjectChange">
                     <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
                 </el-select>
             </el-form-item>
 
+            <el-form-item label="科目老师姓名" v-if="selectedSubject">
+                <el-input v-model="teacherName" placeholder="请输入您的真实姓名" size="large" clearable />
+            </el-form-item>
+
             <el-button type="primary" class="login-btn" @click="enterSystem"
-                :disabled="role === 'teacher' && !selectedSubject">
-                {{ role === 'admin' ? '进入管理后台' : '进入系统' }}
+                :disabled="!selectedSubject || !teacherName.trim()">
+                进入系统
             </el-button>
         </el-form>
         <div class="login-footer">湖南省中职普测考试 · AI 智能评分</div>
+        <div style="text-align: center; margin-top: 12px;">
+            <a href="javascript:void(0)" @click="goAdmin" style="font-size: 12px; color: #909399; text-decoration: none;">管理员入口</a>
+        </div>
     </div>
 </div>
 
@@ -143,29 +93,22 @@ const DEFAULT_SUBJECTS = [
     { label: '思想政治', value: 'politics' },
     { label: '语文', value: 'chinese' },
     { label: '英语', value: 'english' },
-    { label: '数学', value: 'math' },
-    { label: '历史', value: 'history' },
-    { label: '地理', value: 'geography' },
-    { label: '物理', value: 'physics' },
-    { label: '化学', value: 'chemistry' },
-    { label: '生物', value: 'biology' }
 ];
 
 const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
 const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
 const ROLE_KEY = 'ai_grading_role';
-const USERNAME_KEY = 'ai_grading_username';
+const TEACHER_NAME_KEY = 'ai_grading_teacher_name';
 
 createApp({
     setup() {
-        const role = ref('teacher');
         const selectedSubject = ref('');
         const subjectList = ref([]);
-        const userList = ref([]);
-        const selectedUsername = ref('');
+        const teacherName = ref('');
+        const userMap = ref({}); // subject -> user record
 
         onMounted(async () => {
-            // 加载科目列表（只保留默认科目中已定义的）
+            // 加载科目列表
             const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
@@ -176,61 +119,80 @@ createApp({
                 subjectList.value = [...DEFAULT_SUBJECTS];
             }
 
-            // 加载用户列表
+            // 加载用户列表，建立 subject -> user 映射
             try {
                 const { data } = await axios.get('/api/users');
-                if (data.success) userList.value = data.data;
+                if (data.success) {
+                    for (const u of data.data) {
+                        if (u.role === 'teacher' && u.subject) {
+                            userMap.value[u.subject] = u;
+                        }
+                    }
+                }
             } catch (e) {
-                console.error('加载用户列表失败', e);
-            }
-
-            // 恢复上次的角色
-            const lastRole = localStorage.getItem(ROLE_KEY);
-            if (lastRole === 'admin' || lastRole === 'teacher') {
-                role.value = lastRole;
+                ElMessage.error('加载用户列表失败，请检查网络连接');
             }
 
             // 恢复上次选择的科目
-            const last = localStorage.getItem(CURRENT_SUBJECT_KEY);
-            if (last && subjectList.value.find(s => s.value === last)) {
-                selectedSubject.value = last;
-            }
-
-            // 恢复上次的用户名
-            const lastUser = localStorage.getItem(USERNAME_KEY);
-            if (lastUser) {
-                selectedUsername.value = lastUser;
+            const lastSubject = localStorage.getItem(CURRENT_SUBJECT_KEY);
+            if (lastSubject && subjectList.value.find(s => s.value === lastSubject)) {
+                selectedSubject.value = lastSubject;
+                onSubjectChange(lastSubject);
             }
         });
 
-        const onUserChange = (username) => {
-            const user = userList.value.find(u => u.username === username);
-            if (!user) return;
-            // 自动填充角色
-            role.value = user.role;
-            // 自动填充科目
-            if (user.role === 'teacher' && user.subject) {
-                selectedSubject.value = user.subject;
+        const onSubjectChange = (subject) => {
+            const user = userMap.value[subject];
+            if (user && user.teacher_name) {
+                teacherName.value = user.teacher_name;
             } else {
-                selectedSubject.value = '';
+                // 没有记录过，尝试从 localStorage 恢复（仅当是同一个科目时）
+                const lastSubject = localStorage.getItem(CURRENT_SUBJECT_KEY);
+                if (lastSubject === subject) {
+                    teacherName.value = localStorage.getItem(TEACHER_NAME_KEY) || '';
+                } else {
+                    teacherName.value = '';
+                }
             }
         };
 
-        const enterSystem = () => {
-            localStorage.setItem(ROLE_KEY, role.value);
-            if (selectedUsername.value) {
-                localStorage.setItem(USERNAME_KEY, selectedUsername.value);
+        const enterSystem = async () => {
+            if (!selectedSubject.value) {
+                ElMessage.warning('请选择科目');
+                return;
             }
-            if (role.value === 'admin') {
-                localStorage.removeItem(CURRENT_SUBJECT_KEY);
-            } else {
-                if (!selectedSubject.value) return;
-                localStorage.setItem(CURRENT_SUBJECT_KEY, selectedSubject.value);
+            if (!teacherName.value.trim()) {
+                ElMessage.warning('请输入您的姓名');
+                return;
             }
+
+            const name = teacherName.value.trim();
+            const user = userMap.value[selectedSubject.value];
+
+            // 保存姓名到数据库
+            if (user && name !== (user.teacher_name || '')) {
+                try {
+                    await axios.put(`/api/users/${user.id}`, { teacher_name: name });
+                    user.teacher_name = name;
+                } catch (e) {
+                    console.error('保存科目老师姓名失败', e);
+                }
+            }
+
+            localStorage.setItem(ROLE_KEY, 'teacher');
+            localStorage.setItem(CURRENT_SUBJECT_KEY, selectedSubject.value);
+            localStorage.setItem(TEACHER_NAME_KEY, name);
             window.location.href = '/management';
         };
 
-        return { role, selectedSubject, subjectList, userList, selectedUsername, onUserChange, enterSystem };
+        const goAdmin = () => {
+            localStorage.setItem(ROLE_KEY, 'admin');
+            localStorage.removeItem(CURRENT_SUBJECT_KEY);
+            localStorage.removeItem(TEACHER_NAME_KEY);
+            window.location.href = '/admin';
+        };
+
+        return { selectedSubject, subjectList, teacherName, onSubjectChange, enterSystem, goAdmin };
     }
 }).use(ElementPlus).mount('#app');
 </script>

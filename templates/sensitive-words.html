@@ -71,7 +71,7 @@
                     </div>
 
                     <!-- 表格 -->
-                    <el-table :data="filteredWords" stripe style="width: 100%;" v-loading="loading">
+                    <el-table :data="words" stripe style="width: 100%;" v-loading="loading">
                         <el-table-column prop="word" label="敏感词" min-width="200" />
                         <el-table-column prop="category" label="分类" width="100">
                             <template #default="{ row }">
@@ -190,10 +190,6 @@
                 const categoryLabels = { politics: '政治敏感', other: '其他' };
                 const severityLabels = { high: '高危', medium: '中危', low: '低危' };
 
-                const filteredWords = computed(() => {
-                    return words.value;
-                });
-
                 const highCount = computed(() => words.value.filter(w => w.severity === 'high').length);
                 const mediumCount = computed(() => words.value.filter(w => w.severity === 'medium').length);
                 const lowCount = computed(() => words.value.filter(w => w.severity === 'low').length);
@@ -305,7 +301,7 @@
                     form, batchForm,
                     currentSubject, isAdmin,
                     subjectLabels, categoryLabels, severityLabels,
-                    filteredWords, highCount, mediumCount, lowCount,
+                    highCount, mediumCount, lowCount,
                     loadWords, showAddDialog, editWord, saveWord,
                     deleteWord, showBatchDialog, batchImport,
                     Search,

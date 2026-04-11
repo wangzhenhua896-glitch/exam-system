@@ -22,7 +22,7 @@
         .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .main-container { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { width: 220px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; }
+        .sidebar { width: 160px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; }
         .menu-group-title { padding: 12px 20px 8px; font-size: 12px; color: #909399; font-weight: 500; }
         .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; min-width: 0; }
         .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); overflow: hidden; }
@@ -40,6 +40,7 @@
         .progress-text { text-align: center; margin-top: 10px; font-size: 14px; color: #606266; }
         .question-table { margin-top: 0; }
         .el-table .cell { white-space: nowrap; }
+        .el-textarea__inner { resize: vertical !important; }
     </style>
 </head>
 <body>
@@ -52,10 +53,7 @@
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
-                <el-tag v-if="isAdmin" size="small" type="danger" style="cursor: pointer;" @click="switchSubject">
-                    管理员
-                </el-tag>
-                <el-tag v-else size="small" type="success" style="cursor: pointer;" @click="switchSubject">
+                <el-tag size="small" type="success" style="cursor: pointer;" @click="switchSubject">
                     {{ currentSubjectLabel }}
                 </el-tag>
                 <div class="status-badge">
@@ -69,20 +67,11 @@
         <div class="main-container">
             <!-- 左侧导航 -->
             <div class="sidebar">
-                <template v-if="isAdmin">
-                    <div class="menu-group-title">系统管理</div>
-                    <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
-                        <el-menu-item index="subject-manage"><el-icon><Setting /></el-icon><span>科目管理</span></el-menu-item>
-                        <el-menu-item index="model-config"><el-icon><Monitor /></el-icon><span>模型配置</span></el-menu-item>
-                        <el-menu-item index="bug-log"><el-icon><WarningFilled /></el-icon><span>Bug 清单</span></el-menu-item>
-                    </el-menu>
-                </template>
-
                 <div class="menu-group-title">题库管理</div>
                 <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
                     <el-menu-item index="overview"><el-icon><DataAnalysis /></el-icon><span>题库总览</span></el-menu-item>
                     <el-menu-item index="question-list"><el-icon><Document /></el-icon><span>题目列表</span></el-menu-item>
-                    <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>人工出题</span></el-menu-item>
+                    <el-menu-item index="question-manage"><el-icon><EditPen /></el-icon><span>单题处理</span></el-menu-item>
                     <el-menu-item index="ai-generate"><el-icon><MagicStick /></el-icon><span>AI 批量出题</span></el-menu-item>
                     <el-menu-item index="test-case-manage"><el-icon><List /></el-icon><span>测试集管理</span></el-menu-item>
                 </el-menu>
@@ -120,23 +109,8 @@
                         </el-row>
 
                         <el-row :gutter="16" style="margin-bottom: 24px;">
-                            <!-- 科目分布（管理员视图） -->
-                            <el-col :span="isAdmin ? 12 : 24" v-if="isAdmin">
-                                <div style="font-weight:600;margin-bottom:8px;">各科目题目分布</div>
-                                <el-table :data="dashboard.subject_dist || []" stripe size="small" style="width:100%;">
-                                    <el-table-column prop="subject" label="科目" width="120">
-                                        <template #default="{ row }">{{ getSubjectLabel(row.subject) }}</template>
-                                    </el-table-column>
-                                    <el-table-column prop="count" label="题目数" width="100" />
-                                    <el-table-column label="占比">
-                                        <template #default="{ row }">
-                                            <el-progress :percentage="dashboard.overview?.total_questions ? Math.round(row.count / dashboard.overview.total_questions * 100) : 0" :stroke-width="14" :show-text="false" />
-                                        </template>
-                                    </el-table-column>
-                                </el-table>
-                            </el-col>
                             <!-- 覆盖率 -->
-                            <el-col :span="isAdmin ? 12 : 24">
+                            <el-col :span="24">
                                 <el-row :gutter="16">
                                     <el-col :span="12">
                                         <el-card shadow="never" style="text-align:center;">
@@ -225,124 +199,6 @@
                     </div>
                 </div>
 
-                <!-- 科目管理 -->
-                <div v-if="currentPage === 'subject-manage'">
-                    <div class="page-card">
-                        <div class="page-header">
-                            <div class="page-title">科目管理</div>
-                            <div class="page-desc">自定义管理可用科目，增删改后题目表单会自动更新选项</div>
-                        </div>
-                        <el-row :gutter="16" style="margin-bottom: 20px;">
-                            <el-col :span="12">
-                                <el-input v-model="newSubjectName" placeholder="输入新科目名称" clearable></el-input>
-                            </el-col>
-                            <el-col :span="12">
-                                <el-button type="primary" @click="addSubject" :disabled="!newSubjectName.trim()">添加科目</el-button>
-                            </el-col>
-                        </el-row>
-                        <el-table :data="subjectList" stripe style="width: 100%">
-                            <el-table-column prop="label" label="科目名称" width="200"></el-table-column>
-                            <el-table-column prop="value" label="标识" width="200"></el-table-column>
-                            <el-table-column label="操作" width="120" fixed="right">
-                                <template #default="scope">
-                                    <el-button type="danger" size="small" @click="deleteSubject(scope.row.value)" :disabled="subjectList.length <= 1">删除</el-button>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-                        <el-empty v-if="subjectList.length === 0" description="暂无科目，请添加至少一个科目"></el-empty>
-                    </div>
-                </div>
-
-                <!-- 模型配置（管理员专用） -->
-                <div v-if="currentPage === 'model-config'">
-                    <div class="page-card">
-                        <div class="page-header">
-                            <div class="page-title">模型配置</div>
-                            <div class="page-desc">管理大模型 API 连接，支持启用/禁用、编辑参数、测试连通性</div>
-                        </div>
-                        <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
-                            <el-button type="primary" @click="testAllModels" :loading="modelTestAllLoading">
-                                测试所有已启用模型
-                            </el-button>
-                            <el-button @click="enableAllModels">启用所有</el-button>
-                            <el-button @click="disableAllModels">禁用所有</el-button>
-                            <span style="color: #909399; font-size: 13px; margin-left: 8px;">已启用 {{ modelConfigs.filter(m => m.enabled).length }} / {{ modelConfigs.length }} 个服务商</span>
-                        </div>
-                        <el-table :data="modelConfigs" stripe style="width: 100%;">
-                            <el-table-column prop="name" label="模型提供商" width="200"></el-table-column>
-                            <el-table-column label="服务商启用" width="100">
-                                <template #default="scope">
-                                    <el-switch v-model="scope.row.enabled" @change="toggleModelProvider(scope.row)"></el-switch>
-                                </template>
-                            </el-table-column>
-                            <el-table-column label="默认模型" min-width="180">
-                                <template #default="scope">
-                                    <span>{{ scope.row.model || '未配置' }}</span>
-                                </template>
-                            </el-table-column>
-                            <el-table-column label="可用模型" min-width="260">
-                                <template #default="scope">
-                                    <template v-if="scope.row.available_models && scope.row.available_models.length">
-                                        <div v-for="m in scope.row.available_models" :key="m.id" style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
-                                            <el-switch :model-value="m.model_enabled" size="small" @change="toggleSingleModel(scope.row, m, $event)"></el-switch>
-                                            <span style="font-size: 13px;" :style="{ opacity: m.model_enabled ? 1 : 0.4 }">{{ m.name }}</span>
-                                        </div>
-                                    </template>
-                                    <span v-else style="color: #909399; font-size: 13px;">—</span>
-                                </template>
-                            </el-table-column>
-                            <el-table-column label="操作" width="140" fixed="right">
-                                <template #default="scope">
-                                    <el-button size="small" @click="editModelProvider(scope.row)">编辑</el-button>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-
-                        <!-- 测试结果详情 -->
-                        <div v-if="modelTestResults.length" style="margin-top: 16px;">
-                            <div v-for="(r, i) in modelTestResults" :key="i" style="margin-bottom: 4px; font-size: 13px;">
-                                <template v-if="r.success === true">
-                                    <span style="color: #67c23a;">✓</span> {{ r.name }} — {{ r.model_name || r.model }}: 正常 ({{ r.latency_ms }}ms)
-                                    <span v-if="r.reply" style="color: #909399;"> — "{{ r.reply }}"</span>
-                                </template>
-                                <template v-else-if="r.success === false">
-                                    <span style="color: #f56c6c;">✗</span> {{ r.name }}<template v-if="r.model_name"> — {{ r.model_name }}</template>: {{ r.error }}
-                                </template>
-                                <template v-else>
-                                    <span style="color: #909399;">—</span> {{ r.name }}: {{ r.error || '跳过' }}
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 编辑弹窗 -->
-                    <el-dialog v-model="showModelDialog" :title="'编辑 — ' + (editingModelConfig?.name || '')" width="520px" @close="resetModelForm">
-                        <el-form label-position="top" v-if="editingModelConfig">
-                            <el-form-item label="API Key">
-                                <el-input v-model="modelForm.api_key" type="password" show-password placeholder="输入 API Key"></el-input>
-                            </el-form-item>
-                            <el-form-item label="Base URL">
-                                <el-input v-model="modelForm.base_url" placeholder="https://..."></el-input>
-                            </el-form-item>
-                            <el-form-item label="模型">
-                                <el-select v-if="editingModelConfig.available_models && editingModelConfig.available_models.length" v-model="modelForm.model" style="width: 100%;" filterable allow-create>
-                                    <el-option v-for="m in editingModelConfig.available_models" :key="m.id" :label="m.name" :value="m.id"></el-option>
-                                </el-select>
-                                <el-input v-else v-model="modelForm.model" placeholder="模型名称"></el-input>
-                            </el-form-item>
-                            <template v-if="editingModelConfig.extra_fields && editingModelConfig.extra_fields.length">
-                                <el-form-item v-for="f in editingModelConfig.extra_fields" :key="f.key" :label="f.label">
-                                    <el-input v-model="modelForm.extra_config[f.key]" :placeholder="f.label"></el-input>
-                                </el-form-item>
-                            </template>
-                        </el-form>
-                        <template #footer>
-                            <el-button @click="showModelDialog = false">取消</el-button>
-                            <el-button type="primary" @click="saveModelConfig">保存</el-button>
-                        </template>
-                    </el-dialog>
-                </div>
-
                 <!-- 命题管理 -->
                 <div v-if="currentPage === 'question-manage'">
                     <div class="page-card">
@@ -350,12 +206,12 @@
                             <div>
                                 <div class="page-title">
                                     <span v-if="viewMode === 'create'">人工出题</span>
-                                    <span v-else-if="viewMode === 'view'">查看题目 #{{ editingQuestionId }}</span>
-                                    <span v-else>编辑题目 #{{ editingQuestionId }}</span>
+                                    <span v-else-if="viewMode === 'view'">查看题目 #{{ editingQuestionNumber || editingQuestionId }}</span>
+                                    <span v-else>编辑题目 #{{ editingQuestionNumber || editingQuestionId }}</span>
                                     <el-tag v-if="viewMode === 'view'" type="info" size="small" style="margin-left: 12px;">只读模式</el-tag>
                                     <el-tag v-else-if="viewMode === 'edit'" type="warning" size="small" style="margin-left: 12px;">编辑模式</el-tag>
                                 </div>
-                                <div class="page-desc" v-if="viewMode === 'create'" style="margin-top: 4px;">
+                                <div v-if="viewMode === 'create'" class="page-desc" style="margin-top: 4px;">
                                     题目 <b>{{ stats.total_questions || 0 }}</b> / 已评分 <b>{{ stats.total_gradings || 0 }}</b> / 科目 <b>{{ subjectList.length }}</b> / 均分 <b>{{ stats.average_score || 0 }}</b>
                                 </div>
                             </div>
@@ -368,8 +224,28 @@
                             </div>
                         </div>
 
-                        <!-- 快速导入（可折叠） -->
-                        <el-collapse style="margin-bottom: 20px;">
+                        <!-- 快速导入（可折叠，仅新建模式显示） -->
+                        <el-collapse v-if="viewMode === 'create'" style="margin-bottom: 20px;">
+                            <el-collapse-item title="从题库选择 — 选择已有题目加载到表单" name="pick">
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <el-select
+                                        v-model="pickQuestionId"
+                                        filterable
+                                        clearable
+                                        placeholder="搜索题目（输入关键词）"
+                                        style="flex: 1;"
+                                        :loading="loadingQuestions"
+                                    >
+                                        <el-option
+                                            v-for="q in questions"
+                                            :key="q.id"
+                                            :label="'#' + (q.question_number || q.id) + ' [' + getSubjectLabel(q.subject) + '] ' + (q.content || '').substring(0, 50)"
+                                            :value="q.id"
+                                        ></el-option>
+                                    </el-select>
+                                    <el-button type="primary" size="default" @click="loadPickedQuestion" :disabled="!pickQuestionId">加载到表单</el-button>
+                                </div>
+                            </el-collapse-item>
                             <el-collapse-item title="快速导入 — 粘贴整段内容自动识别提取" name="import">
                                 <el-input
                                     v-model="autoImportText"
@@ -407,10 +283,10 @@
                             <!-- 题目内容 -->
                             <div style="margin-bottom: 24px;">
                                 <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">题目内容</div>
-                                <el-form-item label="原题（原始未处理）"><el-input v-model="questionForm.originalText" type="textarea" :rows="3" placeholder="粘贴的原始原题，保存供对照参考"></el-input></el-form-item>
-                                <el-form-item label="题干（处理后）"><el-input v-model="questionForm.content" type="textarea" :rows="4" placeholder="请输入题目内容..."></el-input></el-form-item>
+                                <el-form-item label="原题（原始未处理）"><el-input v-model="questionForm.originalText" type="textarea" :rows="5" placeholder="粘贴的原始原题，保存供对照参考"></el-input></el-form-item>
+                                <el-form-item label="题干（处理后）"><el-input v-model="questionForm.content" type="textarea" :rows="6" placeholder="请输入题目内容..."></el-input></el-form-item>
                                 <el-form-item label="标准答案">
-                                    <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="3" placeholder="输入参考答案/标准答案，方便AI评分参考"></el-input>
+                                    <el-input v-model="questionForm.standardAnswer" type="textarea" :rows="5" placeholder="输入参考答案/标准答案，方便AI评分参考"></el-input>
                                     <div style="margin-top: 8px;">
                                         <el-button type="warning" size="small" @click="cleanAnswerScores">
                                             <el-icon><MagicStick /></el-icon>一键清除分数标注
@@ -426,22 +302,22 @@
                             <div style="margin-bottom: 24px;">
                                 <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5;">评分规则</div>
                                 <el-form-item label="评分规则">
-                                    <el-input v-model="questionForm.rubricRules" type="textarea" :rows="2" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分"></el-input>
+                                    <el-input v-model="questionForm.rubricRules" type="textarea" :rows="4" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分"></el-input>
                                 </el-form-item>
                                 <el-row :gutter="16">
                                     <el-col :span="12">
                                         <el-form-item label="分数分布（每行一个得分点，带分值）">
-                                            <el-input v-model="questionForm.rubricPoints" type="textarea" :rows="3" placeholder="每行一个得分点，例如：正确回答出公有制为主体 (2分)"></el-input>
+                                            <el-input v-model="questionForm.rubricPoints" type="textarea" :rows="5" placeholder="每行一个得分点，例如：正确回答出公有制为主体 (2分)"></el-input>
                                         </el-form-item>
                                     </el-col>
                                     <el-col :span="12">
                                         <el-form-item label="评分提示词">
-                                            <el-input v-model="questionForm.aiRubric" type="textarea" :rows="3" placeholder="补充评分注意事项，例如：请严格按要点给分，部分答对给部分分数"></el-input>
+                                            <el-input v-model="questionForm.aiRubric" type="textarea" :rows="5" placeholder="补充评分注意事项，例如：请严格按要点给分，部分答对给部分分数"></el-input>
                                         </el-form-item>
                                     </el-col>
                                 </el-row>
                                 <el-form-item label="评分脚本">
-                                    <el-input v-model="questionForm.rubricScript" type="textarea" :rows="4" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定"></el-input>
+                                    <el-input v-model="questionForm.rubricScript" type="textarea" :rows="6" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定"></el-input>
                                     <div style="margin-top: 8px; display: flex; gap: 8px;">
                                         <el-button type="primary" plain size="small" @click="generateRubric" :loading="generatingScript">
                                             <el-icon><MagicStick /></el-icon>AI 生成评分脚本
@@ -505,19 +381,23 @@
                                     <el-icon><Upload /></el-icon> 导入Excel
                                 </el-button>
                             </el-upload>
+                            <el-button size="small" type="danger" plain @click="findDuplicates" :loading="dedupLoading">
+                                <el-icon><Operation /></el-icon> 去重处理
+                            </el-button>
                             <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
                                 <el-icon><Download /></el-icon> 导出评分脚本
                             </el-button>
                         </div>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
-                            <el-table-column prop="id" label="ID" width="60"></el-table-column>
+                            <el-table-column label="题号" width="80">
+                                <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                            </el-table-column>
                             <el-table-column prop="subject" label="学科" width="80">
                                 <template #default="scope">
                                     {{ getSubjectLabel(scope.row.subject) }}
                                 </template>
                             </el-table-column>
-                            <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip></el-table-column>
-                            <el-table-column prop="content" label="题干" min-width="200" show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="content" label="题干" min-width="100" show-overflow-tooltip></el-table-column>
                             <el-table-column prop="max_score" label="分值" width="60"></el-table-column>
                             <el-table-column label="质量" width="80">
                                 <template #default="scope">
@@ -529,12 +409,16 @@
                                     <el-tag v-else type="info" size="small">未评</el-tag>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="操作" width="230" fixed="right">
+                            <el-table-column label="操作" width="300" fixed="right">
                                 <template #default="scope">
-                                    <el-button type="info" size="small" plain @click="viewQuestion(scope.row.id)">查看</el-button>
+                                    <el-button type="primary" size="small" plain @click="viewQuestionDialog(scope.row.id)">查看</el-button>
                                     <el-button type="warning" size="small" plain @click="editQuestion(scope.row.id)">编辑</el-button>
-                                    <el-button type="primary" size="small" @click="startGrading(scope.row.id)">评分验证</el-button>
-                                    <el-button type="danger" size="small" plain @click="deleteQuestion(scope.row.id)">删除</el-button>
+                                    <el-button type="success" size="small" @click="startGrading(scope.row.id)">规则完善</el-button>
+                                    <el-popconfirm title="确定删除此题目？" @confirm="deleteQuestion(scope.row.id)">
+                                        <template #reference>
+                                            <el-button type="danger" size="small" plain>删除</el-button>
+                                        </template>
+                                    </el-popconfirm>
                                 </template>
                             </el-table-column>
                         </el-table>
@@ -549,9 +433,159 @@
                             ></el-pagination>
                         </div>
                     </div>
-                </div>
 
-                <!-- AI 批量出题 -->
+                    <!-- 查看题目详情弹窗 -->
+                    <el-dialog v-model="viewDialogVisible" title="题目详情" width="700px" :close-on-click-modal="true">
+                        <div v-if="viewDialogData" style="max-height: 60vh; overflow-y: auto;">
+                            <el-descriptions :column="3" border size="small">
+                                <el-descriptions-item label="题号">{{ viewDialogData.question_number || '-' }}</el-descriptions-item>
+                                <el-descriptions-item label="学科">{{ getSubjectLabel(viewDialogData.subject) }}</el-descriptions-item>
+                                <el-descriptions-item label="分值">{{ viewDialogData.max_score }}分</el-descriptions-item>
+                            </el-descriptions>
+                            <div style="margin-top: 16px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">题干</div>
+                                <div style="padding: 10px; background: #f5f7fa; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.content }}</div>
+                            </div>
+                            <div v-if="viewDialogData.standard_answer" style="margin-top: 12px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">标准答案</div>
+                                <div style="padding: 10px; background: #ecfdf5; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.standard_answer }}</div>
+                            </div>
+                            <div v-if="viewDialogData.rubric_rules" style="margin-top: 12px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">评分规则</div>
+                                <div style="padding: 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_rules }}</div>
+                            </div>
+                            <div v-if="viewDialogData.rubric_points" style="margin-top: 12px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">评分要点</div>
+                                <div style="padding: 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_points }}</div>
+                            </div>
+                            <div v-if="viewDialogData.rubric_script" style="margin-top: 12px;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">评分脚本</div>
+                                <div style="padding: 10px; background: #f0f9ff; border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 12px;">{{ viewDialogData.rubric_script }}</div>
+                            </div>
+                        </div>
+                    </el-dialog>
+
+                    <!-- 去重处理弹窗 -->
+                    <el-dialog v-model="dedupDialogVisible" title="去重处理" :width="dedupFullscreen ? '100%' : '900px'" :fullscreen="dedupFullscreen" :close-on-click-modal="false">
+                        <template #header="{ titleId, titleClass }">
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                                <span :id="titleId" :class="titleClass">去重处理</span>
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <el-button size="small" @click="dedupFontSize = Math.max(12, dedupFontSize - 2)">A-</el-button>
+                                    <span style="font-size: 12px; color: #909399; min-width: 32px; text-align: center;">{{ dedupFontSize }}px</span>
+                                    <el-button size="small" @click="dedupFontSize = Math.min(24, dedupFontSize + 2)">A+</el-button>
+                                    <el-button size="small" @click="dedupFullscreen = !dedupFullscreen">
+                                        {{ dedupFullscreen ? '退出全屏' : '全屏' }}
+                                    </el-button>
+                                </div>
+                            </div>
+                        </template>
+                        <div :style="{ fontSize: dedupFontSize + 'px' }">
+                        <!-- 完成状态 -->
+                        <div v-if="dedupDone" style="text-align: center; padding: 40px; color: #909399;">
+                            所有重复题目已处理完毕
+                        </div>
+                        <!-- 第一步：处理完全相同的 -->
+                        <div v-else-if="dedupPhase === 'exact' && currentDedupGroup">
+                            <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>
+                                    <el-tag type="danger" size="small">第一步：完全相同</el-tag>
+                                    &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupExactGroups.length }} 组
+                                </span>
+                                <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                            </div>
+                            <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">以下题目题干完全相同，请选择保留哪一条，其余将删除：</div>
+                            <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="250">
+                                <el-table-column label="保留" width="50">
+                                    <template #default="scope">
+                                        <el-radio :value="scope.row.id" v-model="exactKeepId">&nbsp;</el-radio>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                                <el-table-column label="题号" width="80">
+                                    <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                                <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                                <el-table-column label="质量" width="70">
+                                    <template #default="scope">
+                                        <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                        <span v-else style="color: #c0c4cc;">-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="脚本" width="50">
+                                    <template #default="scope">
+                                        <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                        <el-tag v-else type="info" size="small">无</el-tag>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                                <el-button @click="skipExactGroup">跳过</el-button>
+                                <el-button type="primary" @click="confirmExactMerge">确认保留并删除其他</el-button>
+                            </div>
+                        </div>
+                        <!-- 第二步：处理相似的（字段合并） -->
+                        <div v-else-if="dedupPhase === 'similar' && currentDedupGroup">
+                            <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>
+                                    <el-tag type="warning" size="small">第二步：相似题目</el-tag>
+                                    &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupSimilarGroups.length }} 组
+                                </span>
+                                <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                            </div>
+                            <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="200">
+                                <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                                <el-table-column label="题号" width="80">
+                                    <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                                <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                                <el-table-column label="质量" width="70">
+                                    <template #default="scope">
+                                        <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                        <span v-else style="color: #c0c4cc;">-</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="脚本" width="50">
+                                    <template #default="scope">
+                                        <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                        <el-tag v-else type="info" size="small">无</el-tag>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <!-- 字段合并表 -->
+                            <el-table :data="currentDedupGroup.fieldRows" size="small" style="width: 100%; margin-top: 12px;" max-height="350">
+                                <el-table-column label="字段" width="90" prop="label"></el-table-column>
+                                <el-table-column label="合并值">
+                                    <template #default="scope">
+                                        <div style="font-size: 12px; color: #606266; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto;">
+                                            {{ getFieldValue(currentDedupGroup, scope.row) }}
+                                        </div>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="来源" width="130">
+                                    <template #default="scope">
+                                        <el-select v-model="scope.row.selectedFromId" size="small" style="width: 100%;">
+                                            <el-option v-for="q in currentDedupGroup.questions" :key="q.id"
+                                                :label="'#' + q.id + (q.question_number ? ' (' + q.question_number + ')' : '')"
+                                                :value="q.id">
+                                            </el-option>
+                                        </el-select>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                                <el-button @click="skipGroup">跳过</el-button>
+                                <el-button type="primary" @click="confirmMerge">合并</el-button>
+                            </div>
+                        </div>
+                        <div v-else style="text-align: center; padding: 40px; color: #909399;">
+                            未发现重复题目
+                        </div>
+                        </div>
+                    </el-dialog>
+                </div>
                 <div v-if="currentPage === 'ai-generate'">
                     <div class="page-card">
                         <div class="page-header">
@@ -607,64 +641,6 @@
                                 <el-table-column prop="test_cases" label="测试用例" width="90"></el-table-column>
                             </el-table>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Bug 清单 -->
-                <div v-if="currentPage === 'bug-log'">
-                    <div class="page-card">
-                        <div class="page-header">
-                            <div class="page-title">Bug 清单</div>
-                            <div class="page-desc">评分引擎异常记录与统计</div>
-                        </div>
-
-                        <!-- 统计卡片 -->
-                        <div style="display: flex; gap: 16px; margin-bottom: 20px;">
-                            <div style="flex: 1; background: #fdf6ec; border: 1px solid #faecd8; border-radius: 8px; padding: 16px; text-align: center;">
-                                <div style="font-size: 28px; font-weight: 700; color: #e6a23c;">{{ bugStats.score_mismatch || 0 }}</div>
-                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总分不一致</div>
-                            </div>
-                            <div style="flex: 1; background: #f0f9eb; border: 1px solid #e1f3d8; border-radius: 8px; padding: 16px; text-align: center;">
-                                <div style="font-size: 28px; font-weight: 700; color: #67c23a;">{{ bugTotal }}</div>
-                                <div style="font-size: 13px; color: #909399; margin-top: 4px;">总计</div>
-                            </div>
-                        </div>
-
-                        <!-- 按模型统计 -->
-                        <div v-if="bugByModel.length > 0" style="margin-bottom: 20px;">
-                            <div style="font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 8px;">按模型统计</div>
-                            <el-table :data="bugByModelTable" size="small" style="width: 100%;">
-                                <el-table-column prop="model_used" label="模型" min-width="200"></el-table-column>
-                                <el-table-column prop="score_mismatch" label="总分不一致" width="120"></el-table-column>
-                                <el-table-column prop="total" label="合计" width="80"></el-table-column>
-                            </el-table>
-                        </div>
-
-                        <!-- 筛选 -->
-                        <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
-                            <el-select v-model="bugTypeFilter" size="small" style="width: 160px;" @change="loadBugs" clearable placeholder="全部类型">
-                                <el-option label="总分不一致" value="score_mismatch"></el-option>
-                            </el-select>
-                            <el-button size="small" @click="loadBugs"><el-icon><Refresh /></el-icon> 刷新</el-button>
-                            <span style="font-size: 12px; color: #909399; margin-left: auto;">共 {{ bugList.length }} 条记录</span>
-                        </div>
-
-                        <!-- Bug 列表 -->
-                        <el-table :data="bugList" size="small" style="width: 100%;" max-height="500">
-                            <el-table-column prop="created_at" label="时间" width="170"></el-table-column>
-                            <el-table-column prop="bug_type" label="类型" width="130">
-                                <template #default="scope">
-                                    <el-tag size="small" type="warning">{{ scope.row.bug_type === 'score_mismatch' ? '总分不一致' : scope.row.bug_type }}</el-tag>
-                                </template>
-                            </el-table-column>
-                            <el-table-column prop="model_used" label="模型" width="180"></el-table-column>
-                            <el-table-column prop="description" label="描述" min-width="300" show-overflow-tooltip></el-table-column>
-                            <el-table-column label="详情" width="60">
-                                <template #default="scope">
-                                    <el-button v-if="scope.row.details" size="small" link type="primary" @click="showBugDetail(scope.row)">查看</el-button>
-                                </template>
-                            </el-table-column>
-                        </el-table>
                     </div>
                 </div>
 
@@ -936,6 +912,79 @@
             <div style="background:#f5f7fa;padding:16px;border-radius:4px;white-space:pre-wrap;font-size:13px;line-height:1.6;max-height:400px;overflow-y:auto;">{{scriptPreviewText}}</div>
         </el-dialog>
 
+        <!-- 导入预览弹窗 -->
+        <el-dialog v-model="importPreviewVisible" title="导入预览" width="900px" :close-on-click-modal="false">
+            <div style="margin-bottom: 16px; font-size: 14px; color: #606266;">
+                文件「<b>{{ importPreview.filename }}</b>」共 {{ importPreview.sheets.length }} 个工作表，<span style="color: #f56c6c;">请勾选要导入的表，确认字段对应关系</span>：
+            </div>
+            <div v-for="(sheet, idx) in importPreview.sheets" :key="idx" style="margin-bottom: 20px; border: 1px solid #e4e7ed; border-radius: 6px; padding: 16px;" :style="{ opacity: sheet._enabled ? 1 : 0.5 }">
+                <!-- Sheet 头部：勾选 + 名称 + 科目 -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <el-checkbox v-model="sheet._enabled" size="large" />
+                        <b style="font-size: 15px;">{{ sheet.name }}</b>
+                        <el-tag size="small">{{ sheet.rows }} 行 · {{ sheet.columns.length }} 列</el-tag>
+                        <el-tag v-if="!sheet._mapping.content" size="small" type="danger">未找到题目列</el-tag>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 13px; color: #909399;">导入科目：</span>
+                        <el-select v-model="sheet._subject" size="small" style="width: 140px;" placeholder="请选择科目">
+                            <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value" />
+                        </el-select>
+                    </div>
+                </div>
+
+                <!-- 字段映射表 -->
+                <div v-if="sheet._enabled" style="margin-bottom: 12px; padding: 12px; background: #f8f9fb; border-radius: 4px;">
+                    <div style="font-size: 13px; font-weight: 600; color: #606266; margin-bottom: 8px;">字段对应关系：</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                        <div v-for="field in importPreview.db_fields" :key="field.key" style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 12px; color: #909399; width: 70px; text-align: right;">
+                                {{ field.label }}
+                                <span v-if="field.required" style="color: #f56c6c;">*</span>
+                            </span>
+                            <el-select v-model="sheet._mapping[field.key]" size="small" style="flex: 1;" clearable placeholder="不映射">
+                                <el-option v-for="col in sheet.columns" :key="col" :label="col" :value="col" />
+                            </el-select>
+                        </div>
+                    </div>
+                    <!-- 未识别的列 -->
+                    <div v-if="sheet._unmapped && sheet._unmapped.length > 0" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #dcdfe6;">
+                        <div style="font-size: 12px; color: #e6a23c; margin-bottom: 6px;">
+                            以下列未匹配到数据库字段，是否作为附加字段导入？
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <div v-for="col in sheet._unmapped" :key="col" style="display: flex; align-items: center; gap: 4px; background: #fdf6ec; padding: 4px 10px; border-radius: 4px;">
+                                <el-checkbox v-model="sheet._extraFieldsEnabled[col]" size="small" />
+                                <span style="font-size: 12px; color: #b37c00;">{{ col }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据预览 -->
+                <el-table v-if="sheet._enabled" :data="sheet.preview" stripe size="small" style="width: 100%;" max-height="180">
+                    <el-table-column v-for="col in sheet.columns" :key="col" :prop="col" :label="col" :min-width="120" show-overflow-tooltip>
+                        <template #header="{ column }">
+                            <span>{{ column.label }}</span>
+                            <el-tag v-if="isColumnMapped(sheet, col)" size="small" type="success" style="margin-left: 4px; font-size: 10px;">
+                                {{ getMappedFieldLabel(col) }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <div v-if="sheet._enabled && sheet.rows > 5" style="font-size: 12px; color: #909399; margin-top: 8px;">
+                    仅展示前 5 行，共 {{ sheet.rows }} 行数据
+                </div>
+            </div>
+            <template #footer>
+                <el-button @click="importPreviewVisible = false">取消</el-button>
+                <el-button type="primary" @click="confirmImport" :loading="importLoading" :disabled="!hasEnabledSheet">
+                    确认导入 ({{ enabledSheetCount }} 个工作表)
+                </el-button>
+            </template>
+        </el-dialog>
+
     </div>
 </div>
 
@@ -958,23 +1007,36 @@ const app = createApp({
         const questions = ref([]);
         const stats = ref({});
         const dashboard = ref({});
-        const newSubjectName = ref('');
         const autoImportText = ref('');
         const parseResult = ref(null);
         const viewMode = ref('create'); // 'create' | 'view' | 'edit'
         const editingQuestionId = ref(null);
+        const editingQuestionNumber = ref(null);
+        const viewDialogVisible = ref(false);
+        const viewDialogData = ref(null);
+        const pickQuestionId = ref(null);
+        const loadingQuestions = ref(false);
+        const dedupLoading = ref(false);
+        const dedupDialogVisible = ref(false);
+        const dedupGroups = ref([]);
+        const dedupFullscreen = ref(false);
+        const dedupCurrentIndex = ref(0);
+        const dedupDone = ref(false);
+        const dedupFontSize = ref(14);
+        const dedupPhase = ref('exact'); // 'exact' | 'similar'
+        const dedupExactGroups = ref([]);
+        const dedupSimilarGroups = ref([]);
+        const exactKeepId = ref(null);
+        const dedupTotalDuplicates = ref(0);
 
         const subjectList = ref([]);
 
         // 全局科目状态 — 从登录页存入的 localStorage 读取
         const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
-        const ROLE_KEY = 'ai_grading_role';
-        const userRole = ref(localStorage.getItem(ROLE_KEY) || 'teacher');
-        const isAdmin = Vue.computed(() => userRole.value === 'admin');
         const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
 
-        // 首次访问保护：管理员不需要选科目，科目老师必须选科目
-        if (!isAdmin.value && !currentSubject.value) {
+        // 首次访问保护：科目老师必须选科目
+        if (!currentSubject.value) {
             window.location.href = '/login';
         }
 
@@ -985,18 +1047,17 @@ const app = createApp({
             return found ? found.label : currentSubject.value;
         });
 
-        // 切换身份/科目（header 点击触发）
+        // 切换科目（header 点击触发）
         const switchSubject = async () => {
             try {
                 await ElMessageBox.confirm(
-                    isAdmin.value ? '确定要退出管理后台吗？' : '切换科目后，将跳转到登录页重新选择。确定要切换吗？',
-                    isAdmin.value ? '退出管理' : '切换科目',
+                    '切换科目后，将跳转到登录页重新选择。确定要切换吗？',
+                    '切换科目',
                     { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
                 );
             } catch { return; }
 
             localStorage.removeItem(CURRENT_SUBJECT_KEY);
-            localStorage.removeItem(ROLE_KEY);
             window.location.href = '/login';
         };
 
@@ -1095,47 +1156,6 @@ const app = createApp({
             localStorage.setItem(SUBJECT_STORAGE_KEY, JSON.stringify(subjectList.value));
         };
 
-        // 添加科目
-        const addSubject = () => {
-            const name = newSubjectName.value.trim();
-            if (!name) return;
-
-            // 生成 value：转小写拼音，这里简单处理用 slug
-            const value = name.toLowerCase()
-                .replace(/\s+/g, '_')
-                .replace(/[^\w\u4e00-\u9fa5]/g, '');
-
-            // 检查是否已存在
-            const exists = subjectList.value.find(s => s.value === value || s.label === name);
-            if (exists) {
-                ElMessage.warning('该科目已存在');
-                return;
-            }
-
-            subjectList.value.push({ label: name, value });
-            saveSubjects();
-            newSubjectName.value = '';
-            ElMessage.success('科目添加成功');
-        };
-
-        // 删除科目
-        const deleteSubject = async (value) => {
-            if (subjectList.value.length <= 1) {
-                ElMessage.warning('至少保留一个科目');
-                return;
-            }
-            try {
-                await ElMessageBox.confirm('确定要删除这个科目吗？已有的题目不会受影响，但新建题目时将不再显示该选项。', '确认删除', {
-                    type: 'warning'
-                });
-                subjectList.value = subjectList.value.filter(s => s.value !== value);
-                saveSubjects();
-                ElMessage.success('科目已删除');
-            } catch (e) {
-                // cancelled
-            }
-        };
-
         // 获取科目显示名称
         const getSubjectLabel = (value) => {
             const sub = subjectList.value.find(s => s.value === value);
@@ -1157,7 +1177,7 @@ const app = createApp({
         const loadDashboard = async () => {
             try {
                 const params = {};
-                if (!isAdmin.value && currentSubject.value) {
+                if (currentSubject.value) {
                     params.subject = currentSubject.value;
                 }
                 const res = await axios.get('/api/dashboard', { params });
@@ -1205,51 +1225,12 @@ const app = createApp({
             if (index === 'overview') {
                 loadDashboard();
             }
-            if (index === 'bug-log') {
-                loadBugs();
-            }
             currentPage.value = index;
         };
 
         const generatingScript = ref(false);
         const evaluatingQuality = ref(false);
         const qualityScore = ref(null);
-
-        // Bug 清单
-        const bugList = ref([]);
-        const bugStats = ref({});
-        const bugByModel = ref([]);
-        const bugTypeFilter = ref('');
-        const bugTotal = computed(() => Object.values(bugStats.value).reduce((a, b) => a + b, 0));
-        const bugByModelTable = computed(() => {
-            const map = {};
-            for (const r of bugByModel.value) {
-                const key = r.model_used || '未知';
-                if (!map[key]) map[key] = { model_used: key, total: 0 };
-                map[key][r.bug_type] = r.count;
-                map[key].total += r.count;
-            }
-            return Object.values(map).sort((a, b) => b.total - a.total);
-        });
-
-        async function loadBugs() {
-            try {
-                const params = { limit: 200 };
-                if (bugTypeFilter.value) params.bug_type = bugTypeFilter.value;
-                const { data } = await axios.get('/api/bugs', { params });
-                if (data.success) {
-                    bugList.value = data.data || [];
-                    bugStats.value = data.stats || {};
-                    bugByModel.value = data.by_model || [];
-                }
-            } catch (e) {
-                console.error('加载 Bug 日志失败', e);
-            }
-        }
-
-        function showBugDetail(row) {
-            ElMessageBox.alert('<pre style="white-space: pre-wrap; font-size: 12px; max-height: 400px; overflow-y: auto;">' + (row.details || '').replace(/</g, '&lt;') + '</pre>', 'Bug 详情', { dangerouslyUseHTMLString: true, confirmButtonText: '关闭' });
-        }
 
         // AI 批量生成
         const autoGenSubject = ref(currentSubject.value);
@@ -1315,6 +1296,15 @@ const app = createApp({
                 else if (filterQuality.value === 'fail') list = list.filter(q => q.quality_score !== null && q.quality_score < 60);
                 else if (filterQuality.value === 'unrated') list = list.filter(q => q.quality_score === null || q.quality_score === undefined);
             }
+            // 按题号排序（有题号的在前，按题号排；无题号的排最后）
+            list = [...list].sort((a, b) => {
+                const an = a.question_number;
+                const bn = b.question_number;
+                if (an && bn) return an.localeCompare(bn, undefined, { numeric: true });
+                if (an) return -1;
+                if (bn) return 1;
+                return a.id - b.id;
+            });
             return list;
         });
 
@@ -1349,12 +1339,87 @@ const app = createApp({
 
         // 导入 Excel
         const importLoading = ref(false);
+        const importPreviewVisible = ref(false);
+        const importPreview = ref({ filename: '', sheets: [], db_fields: [] });
+        let importFileRaw = null;
+
+        const enabledSheetCount = computed(() => importPreview.value.sheets.filter(s => s._enabled).length);
+        const hasEnabledSheet = computed(() => enabledSheetCount.value > 0);
+
+        function isColumnMapped(sheet, col) {
+            return Object.values(sheet._mapping || {}).includes(col);
+        }
+        function getMappedFieldLabel(col) {
+            const fields = importPreview.value.db_fields || [];
+            for (const f of fields) {
+                const sheets = importPreview.value.sheets || [];
+                for (const s of sheets) {
+                    if (s._mapping && s._mapping[f.key] === col) return f.label;
+                }
+            }
+            return '';
+        }
 
         async function handleImportFile(file) {
-            const subject = filterSubject.value || 'politics';
+            importFileRaw = file.raw;
             const formData = new FormData();
             formData.append('file', file.raw);
-            formData.append('subject', subject);
+
+            importLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-questions/preview', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (data.success) {
+                    const defaultSubject = filterSubject.value || '';
+                    data.data.sheets.forEach(s => {
+                        s._subject = defaultSubject;
+                        s._enabled = true;
+                        s._mapping = { ...s.mapping }; // 从后端自动猜测的映射
+                        s._unmapped = s.unmapped_columns || [];
+                        s._extraFieldsEnabled = {}; // 未映射列的勾选状态
+                        (s._unmapped || []).forEach(c => { s._extraFieldsEnabled[c] = false; });
+                    });
+                    importPreview.value = data.data;
+                    importPreviewVisible.value = true;
+                } else {
+                    ElMessage.error('预览失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('预览失败：' + (e.response?.data?.error || e.message));
+            }
+            importLoading.value = false;
+        }
+
+        async function confirmImport() {
+            if (!importFileRaw) return;
+            const enabledSheets = importPreview.value.sheets.filter(s => s._enabled);
+            if (enabledSheets.length === 0) {
+                ElMessage.warning('请至少勾选一个工作表');
+                return;
+            }
+            // 校验科目和必填字段映射
+            for (const s of enabledSheets) {
+                if (!s._subject) {
+                    ElMessage.warning(`工作表「${s.name}」请选择导入科目`);
+                    return;
+                }
+                if (!s._mapping.content) {
+                    ElMessage.warning(`工作表「${s.name}」请映射「题目内容」字段`);
+                    return;
+                }
+            }
+            const formData = new FormData();
+            formData.append('file', importFileRaw);
+            formData.append('sheet_configs', JSON.stringify(
+                enabledSheets.map(s => {
+                    const extra_fields = {};
+                    Object.entries(s._extraFieldsEnabled || {}).forEach(([col, enabled]) => {
+                        if (enabled) extra_fields[col] = col;
+                    });
+                    return { sheet: s.name, subject: s._subject, col_map: s._mapping, extra_fields };
+                })
+            ));
 
             importLoading.value = true;
             try {
@@ -1362,7 +1427,12 @@ const app = createApp({
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 if (data.success) {
-                    ElMessage.success('导入成功：' + data.data.imported + ' 题' + (data.data.skipped > 0 ? '，跳过 ' + data.data.skipped + ' 行' : ''));
+                    const detail = data.data.sheets
+                        .map(s => `${s.sheet}: ${s.imported}题`)
+                        .join('，');
+                    ElMessage.success(`导入完成，共 ${data.data.imported} 题（${detail}）`);
+                    importPreviewVisible.value = false;
+                    currentPage.value = 'question-list';
                     loadQuestions();
                 } else {
                     ElMessage.error('导入失败：' + (data.error || '未知错误'));
@@ -1655,6 +1725,9 @@ const app = createApp({
                     res = await axios.post('/api/questions', payload);
                 }
                 if (res.data.success) {
+                    if (viewMode.value !== 'edit') {
+                        editingQuestionId.value = res.data.data.id;
+                    }
                     ElMessage.success(viewMode.value === 'edit' ? '题目已更新' : '题目已保存');
                     resetForm();
                     loadStats();
@@ -1683,6 +1756,7 @@ const app = createApp({
             qualityScore.value = null;
             viewMode.value = 'create';
             editingQuestionId.value = null;
+            editingQuestionNumber.value = null;
         };
 
         // 版本历史方法
@@ -1763,6 +1837,7 @@ const app = createApp({
                     return null;
                 }
                 const q = res.data.data;
+                editingQuestionNumber.value = q.question_number || null;
                 questionForm.subject = q.subject || '';
                 questionForm.score = (q.max_score !== null && q.max_score !== undefined) ? q.max_score : 10;
                 questionForm.content = q.content || '';
@@ -1771,12 +1846,20 @@ const app = createApp({
                 questionForm.rubricRules = q.rubric_rules || '';
                 questionForm.rubricPoints = q.rubric_points || '';
                 questionForm.rubricScript = q.rubric_script || '';
+
+                // 从 rubric_points 或 standard_answer 中提取每个得分点的分值，计算实际总分
+                const scoreSource = [q.rubric_points || '', q.standard_answer || ''].join('\n');
+                const pointScores = [...scoreSource.matchAll(/[(（](\d+\.?\d*)\s*分/g)].map(m => parseFloat(m[1]));
+                if (pointScores.length > 0) {
+                    const sum = pointScores.reduce((a, b) => a + b, 0);
+                    if (sum > 0) questionForm.score = Math.round(sum * 10) / 10;
+                }
+
                 questionForm.title = q.title || '';
                 questionForm.knowledge = '';
                 questionForm.contentType = '简答题';
                 questionForm.aiRubric = '';
                 qualityScore.value = q.quality_score;
-                // 从 rubric JSON 补充字段
                 if (q.rubric) {
                     try {
                         const rubric = typeof q.rubric === 'string' ? JSON.parse(q.rubric) : q.rubric;
@@ -1790,7 +1873,6 @@ const app = createApp({
                         console.warn('解析 rubric JSON 失败', e);
                     }
                 }
-                console.log('题目已加载到表单', questionForm);
                 return q;
             } catch (e) {
                 console.error('加载题目失败', e);
@@ -1799,9 +1881,254 @@ const app = createApp({
             }
         };
 
-        // 查看题目（只读）
+        // 从题库选择加载到表单
+        const loadPickedQuestion = async () => {
+            if (!pickQuestionId.value) return;
+            viewMode.value = 'create';
+            editingQuestionId.value = null;
+            const q = await loadQuestionToForm(pickQuestionId.value);
+            if (q) {
+                ElMessage.success('已加载题目到表单，可编辑后保存为新题');
+            }
+        };
+
+        // 去重处理
+        const FIELD_DEFS = [
+            { key: 'question_number', label: '题号' },
+            { key: 'content', label: '题干' },
+            { key: 'original_text', label: '原题' },
+            { key: 'standard_answer', label: '标准答案' },
+            { key: 'rubric_rules', label: '评分规则' },
+            { key: 'rubric_points', label: '评分要点' },
+            { key: 'rubric_script', label: '评分脚本' },
+            { key: 'max_score', label: '分值' },
+            { key: 'quality_score', label: '质量评分' },
+        ];
+
+        const buildFieldRows = (group) => {
+            const s = group.suggestion;
+            // 构建 id -> {key: value} 映射，用截断数据
+            const qMap = {};
+            for (const q of group.questions) {
+                qMap[q.id] = q;
+            }
+            return FIELD_DEFS.map(fd => {
+                const sug = s[fd.key];
+                const fromId = sug ? sug.from_id : s.keep_as_base;
+                // 存储每个 id 的值（从 suggestion 的 value 和 questions 的截断值）
+                const sugValues = {};
+                if (sug) sugValues[sug.from_id] = sug.value;
+                for (const q of group.questions) {
+                    if (!sugValues[q.id] && q[fd.key] != null) {
+                        sugValues[q.id] = q[fd.key];
+                    }
+                }
+                return {
+                    key: fd.key,
+                    label: fd.label,
+                    selectedFromId: fromId,
+                    sugValues: sugValues,
+                };
+            });
+        };
+
+        const currentDedupGroup = Vue.computed(() => {
+            const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+            return list[dedupCurrentIndex.value] || null;
+        });
+
+        const dedupProgress = Vue.computed(() => {
+            const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+            if (list.length === 0) return 100;
+            return Math.round((dedupCurrentIndex.value / list.length) * 100);
+        });
+
+        const getFieldValue = (group, row) => {
+            const val = row.sugValues[row.selectedFromId];
+            if (val == null) return '-';
+            const str = String(val);
+            return str.length > 120 ? str.substring(0, 120) + '...' : str;
+        };
+
+        const findDuplicates = async () => {
+            dedupLoading.value = true;
+            try {
+                const res = await axios.post('/api/questions/find-duplicates');
+                if (!res.data.success) {
+                    ElMessage.error('扫描失败');
+                    return;
+                }
+                const groups = res.data.data;
+                const exactGroups = groups.filter(g => g.exact);
+                const similarGroups = groups.filter(g => !g.exact);
+                for (const g of similarGroups) {
+                    g.fieldRows = buildFieldRows(g);
+                }
+                dedupExactGroups.value = exactGroups;
+                dedupSimilarGroups.value = similarGroups;
+                dedupPhase.value = exactGroups.length > 0 ? 'exact' : 'similar';
+                dedupCurrentIndex.value = 0;
+                dedupDone.value = groups.length === 0;
+                exactKeepId.value = exactGroups.length > 0 ? exactGroups[0].suggestion.keep_as_base : null;
+                dedupDialogVisible.value = true;
+                if (groups.length === 0) {
+                    ElMessage.success('未发现重复题目');
+                } else {
+                    ElMessage.info(`发现 ${exactGroups.length} 组完全相同 + ${similarGroups.length} 组相似，共 ${res.data.total_duplicates} 道题目`);
+                }
+            } catch (e) {
+                ElMessage.error('扫描失败: ' + e.message);
+            } finally {
+                dedupLoading.value = false;
+            }
+        };
+
+        const confirmMerge = async () => {
+            const group = currentDedupGroup.value;
+            if (!group) return;
+
+            // 构建 update_fields: 从 fieldRows 中取当前选择的值
+            const updateFields = {};
+            for (const row of group.fieldRows) {
+                const val = row.sugValues[row.selectedFromId];
+                if (val != null) {
+                    updateFields[row.key] = val;
+                }
+            }
+
+            // 确定 keep_id: 从 fieldRows 中看谁的字段被选中最多
+            const keepId = group.suggestion.keep_as_base;
+            const deleteIds = group.questions.filter(q => q.id !== keepId).map(q => q.id);
+
+            if (deleteIds.length === 0) {
+                ElMessage.warning('没有需要删除的题目');
+                advanceToNext();
+                return;
+            }
+
+            // 逐题确认删除
+            for (const delId of deleteIds) {
+                const q = group.questions.find(q => q.id === delId);
+                const label = `#${delId}` + (q ? `「${(q.content || '').substring(0, 30)}」` : '');
+                try {
+                    await ElMessageBox.confirm(
+                        `确认删除题目 ${label}？关联的评分记录和测试用例将迁移到保留题目。此操作不可恢复。`,
+                        '确认删除',
+                        { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+                    );
+                } catch {
+                    return; // 用户取消
+                }
+            }
+
+            // 调用合并 API
+            try {
+                const res = await axios.post('/api/questions/merge', {
+                    keep_id: keepId,
+                    delete_ids: deleteIds,
+                    update_fields: updateFields,
+                });
+                if (res.data.success) {
+                    ElMessage.success(`合并成功，删除了 ${res.data.deleted} 道重复题目`);
+                    loadQuestions();
+                    loadStats();
+                    advanceToNext();
+                } else {
+                    ElMessage.error('合并失败: ' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('合并失败: ' + e.message);
+            }
+        };
+
+        const advanceToNext = () => {
+            const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+            if (dedupCurrentIndex.value >= list.length - 1) {
+                // 当前阶段结束，切换到下一阶段
+                if (dedupPhase.value === 'exact' && dedupSimilarGroups.value.length > 0) {
+                    dedupPhase.value = 'similar';
+                    dedupCurrentIndex.value = 0;
+                    ElMessage.info('完全相同题目已处理完毕，进入相似题目合并');
+                } else {
+                    dedupDone.value = true;
+                }
+            } else {
+                dedupCurrentIndex.value++;
+                // 更新 exact 默认保留选择
+                if (dedupPhase.value === 'exact') {
+                    const g = dedupExactGroups.value[dedupCurrentIndex.value];
+                    if (g) exactKeepId.value = g.suggestion.keep_as_base;
+                }
+            }
+        };
+
+        const confirmExactMerge = async () => {
+            const group = currentDedupGroup.value;
+            if (!group) return;
+            const keepId = exactKeepId.value;
+            if (!keepId) {
+                ElMessage.warning('请先选择要保留的题目');
+                return;
+            }
+            const deleteIds = group.questions.filter(q => q.id !== keepId).map(q => q.id);
+            if (deleteIds.length === 0) {
+                advanceToNext();
+                return;
+            }
+            // 逐题确认
+            for (const delId of deleteIds) {
+                const q = group.questions.find(q => q.id === delId);
+                const label = `#${delId}` + (q ? `「${(q.content || '').substring(0, 30)}」` : '');
+                try {
+                    await ElMessageBox.confirm(
+                        `确认删除题目 ${label}？此题与 #${keepId} 完全相同。此操作不可恢复。`,
+                        '确认删除',
+                        { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+                    );
+                } catch {
+                    return;
+                }
+            }
+            try {
+                const res = await axios.post('/api/questions/merge', {
+                    keep_id: keepId,
+                    delete_ids: deleteIds,
+                    update_fields: {},
+                });
+                if (res.data.success) {
+                    ElMessage.success(`已删除 ${res.data.deleted} 道相同题目`);
+                    loadQuestions();
+                    loadStats();
+                    advanceToNext();
+                } else {
+                    ElMessage.error('删除失败: ' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('删除失败: ' + e.message);
+            }
+        };
+
+        const skipExactGroup = () => {
+            advanceToNext();
+        };
+
+        const skipGroup = () => {
+            advanceToNext();
+        };
+
+        const closeDedupDialog = () => {
+            dedupDialogVisible.value = false;
+            dedupExactGroups.value = [];
+            dedupSimilarGroups.value = [];
+            dedupCurrentIndex.value = 0;
+            dedupPhase.value = 'exact';
+            dedupDone.value = false;
+            loadQuestions();
+            loadStats();
+        };
+
+        // 查看题目（只读模式）
         const viewQuestion = async (questionId) => {
-            // 先切换页面，再加载数据，确保 Vue 响应式生效
             currentPage.value = 'question-manage';
             viewMode.value = 'view';
             editingQuestionId.value = questionId;
@@ -1822,6 +2149,207 @@ const app = createApp({
             }
         };
 
+        // 查看题目详情（弹窗，题目列表页使用）
+        const viewQuestionDialog = async (questionId) => {
+            try {
+                const res = await axios.get('/api/questions/' + questionId);
+                if (!res.data.success) {
+                    ElMessage.error('加载题目失败');
+                    return;
+                }
+                viewDialogData.value = res.data.data;
+                viewDialogVisible.value = true;
+            } catch (e) {
+                ElMessage.error('加载题目失败: ' + e.message);
+            }
+        };
+
+        // 自动解析文本，分离题干、参考答案、评分规则
+        const autoParseText = () => {
+            const fullText = autoImportText.value.trim();
+            if (!fullText) return;
+            questionForm.originalText = fullText;
+            if (questionForm.subject === 'english') {
+                autoParseEnglish(fullText);
+            } else {
+                autoParseChinese(fullText);
+            }
+        };
+
+        const autoParseEnglish = (fullText) => {
+            let questionContent = '';
+            let answerContent = '';
+            let rubricContent = '';
+            let extractedMaxScore = null;
+            const scoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
+            const scoreMatch2 = fullText.match(scoreRegex);
+            if (scoreMatch2) extractedMaxScore = parseFloat(scoreMatch2[1]);
+            const rubricDividerRegex = /请严格按照以下规则对学生答案进行评分[：:]?\s*/;
+            const rubricMatch = rubricDividerRegex.exec(fullText);
+            if (rubricMatch) {
+                questionContent = fullText.slice(0, rubricMatch.index).trim();
+                rubricContent = fullText.slice(rubricMatch.index + rubricMatch[0].length).trim();
+            } else {
+                questionContent = fullText;
+            }
+            questionContent = questionContent.replace(/[（\(]\d+\.?\d*分[）\)]/g, '').trim();
+            if (rubricContent) {
+                const answerLines = [];
+                const answerExtractRegex = /参考答案[：:]\s*(.+)/g;
+                let m;
+                while ((m = answerExtractRegex.exec(rubricContent)) !== null) {
+                    const line = m[1].trim();
+                    if (line) answerLines.push(line);
+                }
+                if (answerLines.length > 0) {
+                    answerContent = answerLines.map((a, i) => `${i + 1}. ${a}`).join('\n');
+                }
+            }
+            if (questionContent) questionForm.content = questionContent;
+            if (extractedMaxScore && !isNaN(extractedMaxScore)) questionForm.score = extractedMaxScore;
+            if (answerContent) questionForm.standardAnswer = answerContent;
+            if (rubricContent) questionForm.rubricRules = rubricContent;
+            parseResult.value = { maxScore: extractedMaxScore || questionForm.score, points: 0, hasAnswer: !!answerContent };
+            let msg = '英语题自动识别完成';
+            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
+            if (answerContent) msg += `，提取 ${answerContent.split('\n').length} 道参考答案`;
+            ElMessage.success(msg);
+        };
+
+        const autoParseChinese = (fullText) => {
+            let questionContent = '';
+            let answerContent = '';
+            let rubricContent = '';
+            let aiPromptContent = '';
+            let extractedMaxScore = null;
+            const questionRegex = /(题目内容|命题示例)[：:]\s*/i;
+            const answerRegex = /(标准答案|参考答案|参考解答|标准解答)[：:]\s*/i;
+            const rubricRegex = /(评分标准|评分总则|评分规则|得分要点|给分标准|人工评分|人工规则|给分规则)[：:]\s*/i;
+            const aiRegex = /(AI评分提示|AI提示|AI评分|AI规则)[：:]\s*/i;
+            const scoreRegex = /(满分|总分|分值)[：:\s]*(\d+\.?\d*)/i;
+            const parenScoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
+            let currentSection = 'question';
+            let text = fullText;
+            while (text.length > 0) {
+                let found = false, earliestPos = Infinity, foundRegex = null, foundMatch = null;
+                const checkMatch = (regex) => {
+                    const match = regex.exec(text);
+                    if (match && match.index < earliestPos) { earliestPos = match.index; foundRegex = regex; foundMatch = match; found = true; }
+                };
+                checkMatch(answerRegex); checkMatch(rubricRegex); checkMatch(aiRegex); checkMatch(questionRegex);
+                if (found) {
+                    const before = text.slice(0, earliestPos).trim();
+                    if (before) {
+                        if (currentSection === 'question') questionContent += before + '\n';
+                        else if (currentSection === 'answer') answerContent += before + '\n';
+                        else if (currentSection === 'rubric') rubricContent += before + '\n';
+                        else if (currentSection === 'ai') aiPromptContent += before + '\n';
+                    }
+                    if (foundRegex === answerRegex) currentSection = 'answer';
+                    else if (foundRegex === rubricRegex) currentSection = 'rubric';
+                    else if (foundRegex === aiRegex) currentSection = 'ai';
+                    else if (foundRegex === questionRegex) currentSection = 'question';
+                    text = text.slice(foundMatch.index + foundMatch[0].length);
+                } else {
+                    if (text.trim()) {
+                        if (currentSection === 'question') questionContent += text.trim() + '\n';
+                        else if (currentSection === 'answer') answerContent += text.trim() + '\n';
+                        else if (currentSection === 'rubric') rubricContent += text.trim() + '\n';
+                        else if (currentSection === 'ai') aiPromptContent += text.trim() + '\n';
+                    }
+                    break;
+                }
+            }
+            const scoreMatch = fullText.match(scoreRegex);
+            if (scoreMatch) extractedMaxScore = parseFloat(scoreMatch[2]);
+            if (!extractedMaxScore) { const pm = fullText.match(parenScoreRegex); if (pm) extractedMaxScore = parseFloat(pm[1]); }
+            if (questionContent.trim()) questionForm.content = questionContent.trim();
+            if (extractedMaxScore && !isNaN(extractedMaxScore)) questionForm.score = extractedMaxScore;
+            if (answerContent.trim()) questionForm.standardAnswer = answerContent.trim();
+            if (questionForm.standardAnswer.trim()) {
+                let answerText = questionForm.standardAnswer.trim();
+                const segments = answerText.split(/(?:；\s*(?=\d+[、\.])|\n\s*(?=\d+[、\.]))/);
+                const parts = segments.length > 1 ? segments : answerText.split(/[；;]\s*/);
+                let extractedPoints = '', extractedCount = 0;
+                for (const part of parts) {
+                    const tp = part.trim();
+                    if (!tp) continue;
+                    const ruleMatch = tp.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                    if (ruleMatch) {
+                        let content = ruleMatch[1].trim();
+                        content = content.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
+                        if (content) {
+                            const sm = ruleMatch[2].match(/(\d+\.?\d*)\s*分/);
+                            if (sm) content += ` (${sm[1]}分)`;
+                            extractedPoints += content + '\n'; extractedCount++;
+                        }
+                    } else if (tp.match(/^\d+[、\.]/) && (tp.includes('分）') || tp.includes('分)'))) {
+                        let processed = tp.replace(/^\d+[、\.]\s*/, '');
+                        processed = processed.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, '($1分)');
+                        processed = processed.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, '($1分)');
+                        if (processed.trim()) { extractedPoints += processed + '\n'; extractedCount++; }
+                    } else {
+                        const cleaned = tp.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
+                        if (cleaned.trim()) { extractedPoints += cleaned + '\n'; extractedCount++; }
+                    }
+                }
+                if (extractedCount >= 1) questionForm.rubricPoints = extractedPoints.trim();
+            }
+            if (rubricContent.trim()) {
+                let rubricLines = rubricContent.trim().split('\n').map(l => l.trim()).filter(l => l);
+                let mergedLines = [];
+                for (let i = 0; i < rubricLines.length; i++) {
+                    let line = rubricLines[i];
+                    if (mergedLines.length > 0 && line.match(/^[（(]\d+\.?\d*分[)）]$/)) { mergedLines[mergedLines.length - 1] += line; }
+                    else { mergedLines.push(line); }
+                }
+                rubricLines = mergedLines;
+                let extractedPoints = '', extractedRules = '', extractedCount = 0, currentMode = 'rules';
+                for (const line of rubricLines) {
+                    const tl = line.trim();
+                    if (!tl) continue;
+                    const isRulesTitle = tl.match(/^(评分规则|评分总则|得分规则|扣分规则|记分规则|总则|规则)[：:\s]*/i);
+                    const isPointsTitle = tl.match(/^(得分要点|评分要点|分数分布|要点)[：:\s]*/i);
+                    if (isRulesTitle) { currentMode = 'rules'; extractedRules += tl + '\n'; continue; }
+                    else if (isPointsTitle) { currentMode = 'points'; extractedRules += tl + '\n'; continue; }
+                    if (currentMode === 'rules') { extractedRules += tl + '\n'; }
+                    else {
+                        const rm = tl.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                        if (rm) {
+                            const c = rm[1].trim(), r = rm[2].trim();
+                            if (c) { let p = c.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, ''); const sm = r.match(/(\d+\.?\d*)\s*分/); if (sm) p += ` (${sm[1]}分)`; extractedPoints += p + '\n'; const rt = r.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim(); if (rt) extractedRules += r + '\n'; extractedCount++; }
+                        } else if (tl.match(/^\d+[、\.]/) || tl.match(/^[一二三四五六七八九十]+、\s*/)) {
+                            let p = tl.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
+                            const rm2 = p.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
+                            if (rm2) { const c = rm2[1].trim(), r = rm2[2].trim(); if (c) { const sm = r.match(/(\d+\.?\d*)\s*分/); if (sm) c += ` (${sm[1]}分)`; extractedPoints += c + '\n'; const rt = r.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim(); if (rt) extractedRules += r + '\n'; extractedCount++; } }
+                            else if (p.includes('分）') || p.includes('分)')) { p = p.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, (m, p1) => { const rt = m.replace(/[（()）\d\s分]/g, '').trim(); if (rt) extractedRules += m + '\n'; return `(${p1}分)`; }); p = p.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, (m, p1) => { const rt = m.replace(/[()\d\s分]/g, '').trim(); if (rt) extractedRules += m + '\n'; return `(${p1}分)`; }); extractedPoints += p + '\n'; extractedCount++; }
+                            else if (p.length < 20) { extractedRules += tl + '\n'; }
+                            else { extractedPoints += p + '\n'; extractedCount++; }
+                        } else if (tl.length < 25 && (tl.includes('分') || tl.includes('分）') || tl.includes('分)'))) { extractedRules += tl + '\n'; }
+                        else if (!tl.includes('分') && tl.length < 15) { extractedRules += tl + '\n'; }
+                        else { let p = tl.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, ''); if (p.trim()) extractedPoints += p + '\n'; }
+                    }
+                }
+                if (extractedPoints.trim()) questionForm.rubricPoints = extractedPoints.trim();
+                if (extractedRules.trim()) { if (questionForm.rubricRules) questionForm.rubricRules += '\n' + extractedRules.trim(); else questionForm.rubricRules = extractedRules.trim(); }
+            }
+            if (aiPromptContent.trim()) questionForm.aiRubric = aiPromptContent.trim();
+            const points = questionForm.rubricPoints ? questionForm.rubricPoints.split('\n').filter(l => l.trim()).length : 0;
+            const hasAnswer = answerContent.trim() ? true : false;
+            parseResult.value = { maxScore: extractedMaxScore || questionForm.score, points, hasAnswer };
+            let msg = '自动识别完成';
+            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
+            if (hasAnswer) msg += `，提取参考答案`;
+            if (points > 0) msg += `，结构化 ${points} 个得分点`;
+            if (aiPromptContent) msg += `，提取评分提示词`;
+            ElMessage.success(msg);
+        };
+
+        const clearAutoImport = () => {
+            autoImportText.value = '';
+            parseResult.value = null;
+        };
+
         // 一键清除标准答案中的分数标注
         const cleanAnswerScores = () => {
             if (!questionForm.standardAnswer.trim()) {
@@ -1837,577 +2365,32 @@ const app = createApp({
             ElMessage.success('已清除所有分数标注，现在是纯标准答案');
         };
 
-        // 自动解析文本，分离题干、参考答案、评分规则
-        const autoParseText = () => {
-            const fullText = autoImportText.value.trim();
-            if (!fullText) return;
-
-            // 完整原始文本保存到原题
-            questionForm.originalText = fullText;
-
-            // 根据当前选择的科目走不同解析分支
-            if (questionForm.subject === 'english') {
-                autoParseEnglish(fullText);
-            } else {
-                autoParseChinese(fullText); // 思政和语文都走中文解析
-            }
-        };
-
-        // 英语题解析：英文材料 + 中文评分规则混合格式
-        const autoParseEnglish = (fullText) => {
-            let questionContent = '';
-            let answerContent = '';
-            let rubricContent = '';
-            let extractedMaxScore = null;
-
-            // 匹配总分
-            const scoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
-            const scoreMatch2 = fullText.match(scoreRegex);
-            if (scoreMatch2) extractedMaxScore = parseFloat(scoreMatch2[1]);
-
-            // 关键分隔符："请严格按照以下规则对学生答案进行评分"
-            const rubricDividerRegex = /请严格按照以下规则对学生答案进行评分[：:]?\s*/;
-            const rubricMatch = rubricDividerRegex.exec(fullText);
-
-            if (rubricMatch) {
-                // 分隔符之前 = 题目内容
-                questionContent = fullText.slice(0, rubricMatch.index).trim();
-                // 分隔符之后 = 评分规则
-                rubricContent = fullText.slice(rubricMatch.index + rubricMatch[0].length).trim();
-            } else {
-                // 没有分隔符，全部当题目
-                questionContent = fullText;
-            }
-
-            // 从题干中移除总分标注（如"（6分）"），分值由表单字段管理
-            questionContent = questionContent.replace(/[（\(]\d+\.?\d*分[）\)]/g, '').trim();
-
-            // 从评分规则中提取标准答案（每题的"参考答案："行）
-            if (rubricContent) {
-                const answerLines = [];
-                const answerExtractRegex = /参考答案[：:]\s*(.+)/g;
-                let m;
-                while ((m = answerExtractRegex.exec(rubricContent)) !== null) {
-                    const line = m[1].trim();
-                    if (line) answerLines.push(line);
-                }
-                if (answerLines.length > 0) {
-                    answerContent = answerLines.map((a, i) => `${i + 1}. ${a}`).join('\n');
-                }
-            }
-
-            // 赋值
-            if (questionContent) questionForm.content = questionContent;
-            if (extractedMaxScore && !isNaN(extractedMaxScore)) questionForm.score = extractedMaxScore;
-            if (answerContent) questionForm.standardAnswer = answerContent;
-            if (rubricContent) questionForm.rubricRules = rubricContent;
-
-            // 统计结果
-            parseResult.value = {
-                maxScore: extractedMaxScore || questionForm.score,
-                points: 0,
-                hasAnswer: !!answerContent
-            };
-
-            let msg = '英语题自动识别完成';
-            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
-            if (answerContent) msg += `，提取 ${answerContent.split('\n').length} 道参考答案`;
-            ElMessage.success(msg);
-        };
-
-        // 思政/语文题解析：中文 section 关键词分隔
-        const autoParseChinese = (fullText) => {
-            let questionContent = '';
-            let answerContent = '';
-            let rubricContent = '';
-            let aiPromptContent = '';
-            let extractedMaxScore = null;
-
-            // 正则 - 匹配各种section关键词（长词放前面，优先匹配）
-            // 关键词必须后面紧跟中文冒号或英文冒号，且冒号后有内容，才作为 section 分隔符
-            // 这样正文中的"标准答案""评分规则"等普通用法不会被误匹配
-            const questionRegex = /(题目内容|命题示例)[：:]\s*/i;
-            const answerRegex = /(标准答案|参考答案|参考解答|标准解答)[：:]\s*/i;
-            const rubricRegex = /(评分标准|评分总则|评分规则|得分要点|给分标准|人工评分|人工规则|给分规则)[：:]\s*/i;
-            const aiRegex = /(AI评分提示|AI提示|AI评分|AI规则)[：:]\s*/i;
-            // 匹配总分
-            const scoreRegex = /(满分|总分|分值)[：:\s]*(\d+\.?\d*)/i;
-            const parenScoreRegex = /[（\(](\d+\.?\d*)分[）\)]/;
-
-            // 从头到尾扫描，随时检查是否遇到section关键词
-            let currentSection = 'question';
-            let text = fullText;
-
-            // 循环查找所有section关键词
-            while (text.length > 0) {
-                let found = false;
-                let earliestPos = Infinity;
-                let foundRegex = null;
-                let foundMatch = null;
-
-                const checkMatch = (regex) => {
-                    const match = regex.exec(text);
-                    if (match && match.index < earliestPos) {
-                        earliestPos = match.index;
-                        foundRegex = regex;
-                        foundMatch = match;
-                        found = true;
-                    }
-                };
-
-                checkMatch(answerRegex);
-                checkMatch(rubricRegex);
-                checkMatch(aiRegex);
-                checkMatch(questionRegex);
-
-                if (found) {
-                    const before = text.slice(0, earliestPos).trim();
-                    if (before) {
-                        if (currentSection === 'question') questionContent += before + '\n';
-                        else if (currentSection === 'answer') answerContent += before + '\n';
-                        else if (currentSection === 'rubric') rubricContent += before + '\n';
-                        else if (currentSection === 'ai') aiPromptContent += before + '\n';
-                    }
-
-                    if (foundRegex === answerRegex) currentSection = 'answer';
-                    else if (foundRegex === rubricRegex) currentSection = 'rubric';
-                    else if (foundRegex === aiRegex) currentSection = 'ai';
-                    else if (foundRegex === questionRegex) currentSection = 'question';
-
-                    text = text.slice(foundMatch.index + foundMatch[0].length);
-                } else {
-                    if (text.trim()) {
-                        if (currentSection === 'question') questionContent += text.trim() + '\n';
-                        else if (currentSection === 'answer') answerContent += text.trim() + '\n';
-                        else if (currentSection === 'rubric') rubricContent += text.trim() + '\n';
-                        else if (currentSection === 'ai') aiPromptContent += text.trim() + '\n';
-                    }
-                    break;
-                }
-            }
-
-            // 提取总分 - 扫描所有内容
-            const scoreMatch = fullText.match(scoreRegex);
-            if (scoreMatch) {
-                extractedMaxScore = parseFloat(scoreMatch[2]);
-            }
-            if (!extractedMaxScore) {
-                const parenMatch = fullText.match(parenScoreRegex);
-                if (parenMatch) {
-                    extractedMaxScore = parseFloat(parenMatch[1]);
-                }
-            }
-
-            // 赋值
-            if (questionContent.trim()) {
-                questionForm.content = questionContent.trim();
-            }
-            if (extractedMaxScore && !isNaN(extractedMaxScore)) {
-                questionForm.score = extractedMaxScore;
-            }
-
-            // 标准答案
-            if (answerContent.trim()) {
-                questionForm.standardAnswer = answerContent.trim();
-            }
-
-            // 从标准答案中提取评分要点（不管有没有独立评分规则区域，都要提取）
-            if (questionForm.standardAnswer.trim()) {
-                // 先按编号模式拆分（处理分号分隔和换行分隔两种情况）
-                // 例如 "1、xxx（2分）；2、xxx（2分）" 或换行的 "1、xxx\n2、xxx"
-                let answerText = questionForm.standardAnswer.trim();
-                // 将分号+编号 或 换行+编号 的模式统一拆分为独立段落
-                const segments = answerText.split(/(?:；\s*(?=\d+[、\.])|\n\s*(?=\d+[、\.]))/);
-                // 如果拆分后只有一段，再尝试按分号拆分
-                const parts = segments.length > 1 ? segments : answerText.split(/[；;]\s*/);
-
-                let extractedPoints = '';
-                let extractedCount = 0;
-
-                for (const part of parts) {
-                    const trimmedPart = part.trim();
-                    if (!trimmedPart) continue;
-
-                    // 分离要点内容和括号中的评分说明
-                    // 例如："1、公有制为主体（2分，其中...不得分）" → "公有制为主体 (2分)" + "(2分，其中...不得分)"
-                    const ruleMatch = trimmedPart.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
-                    if (ruleMatch) {
-                        let content = ruleMatch[1].trim();
-                        const rule = ruleMatch[2].trim();
-                        // 去掉序号前缀
-                        content = content.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
-                        if (content) {
-                            const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
-                            if (scoreMatch) {
-                                content += ` (${scoreMatch[1]}分)`;
-                            }
-                            extractedPoints += content + '\n';
-                            extractedCount++;
-                        }
-                    } else if (trimmedPart.match(/^\d+[、\.]/) && (trimmedPart.includes('分）') || trimmedPart.includes('分)'))) {
-                        // 带编号且包含分值的整行
-                        let processed = trimmedPart.replace(/^\d+[、\.]\s*/, '');
-                        processed = processed.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, '($1分)');
-                        processed = processed.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, '($1分)');
-                        if (processed.trim()) {
-                            extractedPoints += processed + '\n';
-                            extractedCount++;
-                        }
-                    } else {
-                        const cleaned = trimmedPart.replace(/^\d+[、\.]\s*/, '').replace(/^[一二三四五六七八九十]+、\s*/, '');
-                        if (cleaned.trim()) {
-                            extractedPoints += cleaned + '\n';
-                            extractedCount++;
-                        }
-                    }
-                }
-
-                if (extractedCount >= 1) {
-                    questionForm.rubricPoints = extractedPoints.trim();
-                }
-            }
-
-            // 如果有独立评分标准区域，逐行处理，分离要点和规则
-            if (rubricContent.trim()) {
-                let rubricLines = rubricContent.trim().split('\n').map(line => line.trim()).filter(line => line);
-
-                // 预处理：如果一行只有括号(...)，合并到上一行（处理换行的分数标注）
-                let mergedLines = [];
-                for (let i = 0; i < rubricLines.length; i++) {
-                    let line = rubricLines[i];
-                    if (mergedLines.length > 0 && line.match(/^[（(]\d+\.?\d*分[)）]$/)) {
-                        // 当前行只有括号，合并到上一行
-                        mergedLines[mergedLines.length - 1] += line;
-                    } else {
-                        mergedLines.push(line);
-                    }
-                }
-                rubricLines = mergedLines;
-
-                let extractedPoints = '';
-                let extractedRules = '';
-                let extractedCount = 0;
-                let currentMode = 'rules'; // 'rules' 表示当前在评分规则区域，'points' 表示在评分要点区域
-
-                for (const line of rubricLines) {
-                    const trimmedLine = line.trim();
-                    if (!trimmedLine) continue;
-
-                    // 检查是否切换区域的标题
-                    const isRulesTitle = trimmedLine.match(/^(评分规则|评分总则|得分规则|扣分规则|记分规则|总则|规则)[：:\s]*/i);
-                    const isPointsTitle = trimmedLine.match(/^(得分要点|评分要点|分数分布|要点)[：:\s]*/i);
-
-                    if (isRulesTitle) {
-                        // 切换到评分规则模式
-                        currentMode = 'rules';
-                        extractedRules += trimmedLine + '\n';
-                        continue;
-                    } else if (isPointsTitle) {
-                        // 切换到评分要点模式
-                        currentMode = 'points';
-                        extractedRules += trimmedLine + '\n';
-                        continue;
-                    }
-
-                    // 根据当前模式决定放哪里
-                    if (currentMode === 'rules') {
-                        // 在评分规则区域，所有内容都放评分规则
-                        extractedRules += trimmedLine + '\n';
-                    } else {
-                        // 在评分要点区域，进行分离处理
-                        const ruleMatch = trimmedLine.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
-                        if (ruleMatch) {
-                            const content = ruleMatch[1].trim();
-                            const rule = ruleMatch[2].trim();
-                            if (content) {
-                                let processed = content.replace(/^\d+[、\.]\s*/, '');
-                                processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
-                                const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
-                                if (scoreMatch) {
-                                    processed += ` (${scoreMatch[1]}分)`;
-                                }
-                                extractedPoints += processed + '\n';
-                                const ruleText = rule.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim();
-                                if (ruleText) {
-                                    extractedRules += rule + '\n';
-                                }
-                                extractedCount++;
-                            }
-                        } else if (trimmedLine.match(/^\d+[、\.]/) || trimmedLine.match(/^[一二三四五六七八九十]+、\s*/)) {
-                            // 编号行，在评分要点区域
-                            let processed = trimmedLine.replace(/^\d+[、\.]\s*/, '');
-                            processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
-                            const ruleMatch2 = processed.match(/(.*?)([（(][^)）]*分[^)）]*[)）])/);
-                            if (ruleMatch2) {
-                                const content = ruleMatch2[1].trim();
-                                const rule = ruleMatch2[2].trim();
-                                if (content) {
-                                    const scoreMatch = rule.match(/(\d+\.?\d*)\s*分/);
-                                    if (scoreMatch) {
-                                        content += ` (${scoreMatch[1]}分)`;
-                                    }
-                                    extractedPoints += content + '\n';
-                                    const ruleText = rule.replace(/[（()）]/g, '').replace(/\d+\s*分/, '').trim();
-                                    if (ruleText) {
-                                        extractedRules += rule + '\n';
-                                    }
-                                    extractedCount++;
-                                }
-                            } else if (processed.includes('分）') || processed.includes('分)')) {
-                                processed = processed.replace(/（\s*(\d+\.?\d*)\s*分[^）]*）/g, (match, p1) => {
-                                    const ruleText = match.replace(/[（()）\d\s分]/g, '').trim();
-                                    if (ruleText) {
-                                        extractedRules += match + '\n';
-                                    }
-                                    return `(${p1}分)`;
-                                });
-                                processed = processed.replace(/\(\s*(\d+\.?\d*)\s*分[^\)]*\)/g, (match, p1) => {
-                                    const ruleText = match.replace(/[()\d\s分]/g, '').trim();
-                                    if (ruleText) {
-                                        extractedRules += match + '\n';
-                                    }
-                                    return `(${p1}分)`;
-                                });
-                                extractedPoints += processed + '\n';
-                                extractedCount++;
-                            } else if (processed.length < 20) {
-                                extractedRules += trimmedLine + '\n';
-                            } else {
-                                extractedPoints += processed + '\n';
-                                extractedCount++;
-                            }
-                        } else if (
-                            (trimmedLine.length < 25 && (trimmedLine.includes('分') || trimmedLine.includes('分）') || trimmedLine.includes('分)')))
-                        ) {
-                            extractedRules += trimmedLine + '\n';
-                        } else if (!trimmedLine.includes('分') && trimmedLine.length < 15) {
-                            extractedRules += trimmedLine + '\n';
-                        } else {
-                            let processed = trimmedLine.replace(/^\d+[、\.]\s*/, '');
-                            processed = processed.replace(/^[一二三四五六七八九十]+、\s*/, '');
-                            if (processed.trim()) {
-                                extractedPoints += processed + '\n';
-                            }
-                        }
-                    }
-                }
-
-                if (extractedPoints.trim()) {
-                    questionForm.rubricPoints = extractedPoints.trim();
-                }
-                if (extractedRules.trim()) {
-                    if (questionForm.rubricRules) {
-                        questionForm.rubricRules += '\n' + extractedRules.trim();
-                    } else {
-                        questionForm.rubricRules = extractedRules.trim();
-                    }
-                }
-            }
-
-            if (aiPromptContent.trim()) {
-                questionForm.aiRubric = aiPromptContent.trim();
-            }
-
-            // 统计结果
-            const points = questionForm.rubricPoints ? questionForm.rubricPoints.split('\n').filter(l => l.trim()).length : 0;
-            const hasAnswer = answerContent.trim() ? true : false;
-            parseResult.value = {
-                maxScore: extractedMaxScore || questionForm.score,
-                points: points,
-                hasAnswer: hasAnswer
-            };
-
-            let msg = '自动识别完成';
-            if (extractedMaxScore) msg += `，提取总分 ${extractedMaxScore} 分`;
-            if (hasAnswer) msg += `，提取参考答案`;
-            if (points > 0) msg += `，结构化 ${points} 个得分点`;
-            if (aiPromptContent) msg += `，提取评分提示词`;
-            ElMessage.success(msg);
-        };
-
-        const clearAutoImport = () => {
-            autoImportText.value = '';
-            parseResult.value = null;
-        };
-
-        // ============ 模型配置（管理员专用）============
-        const modelConfigs = ref([]);
-        const modelTestResults = ref([]);
-        const modelTestAllLoading = ref(false);
-        const showModelDialog = ref(false);
-        const editingModelConfig = ref(null);
-        const modelForm = reactive({
-            api_key: '',
-            base_url: '',
-            model: '',
-            enabled: false,
-            extra_config: {},
-        });
-
-        const loadModelConfigs = async () => {
-            try {
-                const resp = await fetch('/api/config/models');
-                const data = await resp.json();
-                modelConfigs.value = data.map(d => ({ ...d, testResult: undefined, testing: false }));
-            } catch (e) {
-                console.error('加载模型配置失败', e);
-            }
-        };
-
-        const toggleModelProvider = async (row) => {
-            try {
-                await fetch(`/api/config/models/${row.provider}/toggle`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: row.enabled }),
-                });
-            } catch (e) {
-                console.error('切换失败', e);
-                row.enabled = !row.enabled; // 回滚
-            }
-        };
-
-        const enableAllModels = async () => {
-            try {
-                await fetch('/api/config/models/toggle-all', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: true }),
-                });
-                modelConfigs.value.forEach(m => m.enabled = true);
-                ElMessage.success('已启用所有模型');
-            } catch (e) { ElMessage.error('操作失败'); }
-        };
-
-        const disableAllModels = async () => {
-            try {
-                await fetch('/api/config/models/toggle-all', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: false }),
-                });
-                modelConfigs.value.forEach(m => m.enabled = false);
-                ElMessage.success('已禁用所有模型');
-            } catch (e) { ElMessage.error('操作失败'); }
-        };
-
-        const toggleSingleModel = async (providerRow, modelItem, newVal) => {
-            try {
-                await fetch(`/api/config/models/${providerRow.provider}/toggle-model`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_id: modelItem.id, enabled: newVal }),
-                });
-                modelItem.model_enabled = newVal;
-            } catch (e) {
-                ElMessage.error('切换失败');
-            }
-        };
-
-        const editModelProvider = (row) => {
-            editingModelConfig.value = row;
-            modelForm.api_key = row.api_key;
-            modelForm.base_url = row.base_url;
-            modelForm.model = row.model;
-            modelForm.enabled = row.enabled;
-            modelForm.extra_config = { ...(row.extra_config || {}) };
-            showModelDialog.value = true;
-        };
-
-        const resetModelForm = () => {
-            editingModelConfig.value = null;
-        };
-
-        const saveModelConfig = async () => {
-            const provider = editingModelConfig.value.provider;
-            try {
-                const resp = await fetch(`/api/config/models/${provider}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(modelForm),
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    ElMessage.success(data.message);
-                    showModelDialog.value = false;
-                    loadModelConfigs();
-                }
-            } catch (e) {
-                ElMessage.error('保存失败');
-            }
-        };
-
-        const testSingleModel = async (row) => {
-            row.testing = true;
-            try {
-                const resp = await fetch(`/api/config/models/${row.provider}/test`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                });
-                const data = await resp.json();
-                row.testResult = data;
-                if (data.success) {
-                    ElMessage.success(`${data.name}: 正常 (${data.latency_ms}ms)`);
-                } else {
-                    ElMessage.error(`${data.name}: ${data.error}`);
-                }
-            } catch (e) {
-                row.testResult = { success: false, error: '请求失败' };
-            } finally {
-                row.testing = false;
-            }
-        };
-
-        const testAllModels = async () => {
-            modelTestAllLoading.value = true;
-            modelTestResults.value = [];
-            try {
-                const resp = await fetch('/api/config/models/test-all', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                });
-                const data = await resp.json();
-                modelTestResults.value = data;
-                // 同步更新表格中的状态
-                for (const r of data) {
-                    const row = modelConfigs.value.find(m => m.provider === r.provider);
-                    if (row) row.testResult = r;
-                }
-            } catch (e) {
-                ElMessage.error('批量测试请求失败');
-            } finally {
-                modelTestAllLoading.value = false;
-            }
-        };
-
         onMounted(() => {
             loadSubjects();
             loadStats();
             loadQuestions();
-            if (isAdmin.value) {
-                loadModelConfigs();
-            }
         });
 
         return {
-            currentPage, questions, stats, dashboard, qualityDistTable, subjectList, newSubjectName, questionForm, autoImportText, parseResult, generatingScript,
-            evaluatingQuality, qualityScore, viewMode, editingQuestionId, currentSubject, currentSubjectLabel, switchSubject,
+            currentPage, questions, stats, dashboard, qualityDistTable, subjectList, questionForm, autoImportText, parseResult, generatingScript,
+            evaluatingQuality, qualityScore, viewMode, editingQuestionId, editingQuestionNumber, viewDialogVisible, viewDialogData, pickQuestionId, loadingQuestions,
+            dedupLoading, dedupDialogVisible, dedupGroups, dedupTotalDuplicates, dedupFullscreen,
+            dedupCurrentIndex, dedupDone, dedupFontSize, dedupPhase, dedupExactGroups, dedupSimilarGroups, exactKeepId,
+            currentDedupGroup, dedupProgress,
+            currentSubject, currentSubjectLabel, switchSubject,
             filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions, exportLoading, exportRubricScripts,
-            importLoading, handleImportFile,
+            importLoading, handleImportFile, importPreviewVisible, importPreview, confirmImport,
+            enabledSheetCount, hasEnabledSheet, isColumnMapped, getMappedFieldLabel,
             syllabusForm, textbookForm, syllabusSaving, textbookSaving,
             showTestCaseDialog, showTestCaseForm, testCaseList, testCaseLoading, testCaseCount,
             verifyRunning, verifyProgress, verifyResults, testCaseForm, editingTestCaseId, tolerance,
             scriptHistoryVisible, scriptHistory, scriptHistoryLoading, scriptPreviewVisible, scriptPreviewText,
             autoGenSubject, autoGenCount, autoGenTestCases, autoGenRunning, autoGenProgress, autoGenStatus, autoGenResult,
-            isAdmin, userRole,
-            modelConfigs, modelTestResults, modelTestAllLoading, showModelDialog, editingModelConfig, modelForm,
-            loadModelConfigs, toggleModelProvider, enableAllModels, disableAllModels, toggleSingleModel, editModelProvider, resetModelForm, saveModelConfig, testSingleModel, testAllModels,
-            loadSubjects, saveSubjects, addSubject, deleteSubject, getSubjectLabel,
+            loadSubjects, saveSubjects, getSubjectLabel,
             handleMenuSelect, generateRubric, evaluateQuality, saveQuestion, resetForm, startGrading, deleteQuestion,
             autoParseText, clearAutoImport, cleanAnswerScores,
-            loadSyllabusContent, saveSyllabusContent, viewQuestion, editQuestion,
+            loadSyllabusContent, saveSyllabusContent, viewQuestion, editQuestion, viewQuestionDialog, loadPickedQuestion,
+            findDuplicates, confirmExactMerge, skipExactGroup, confirmMerge, skipGroup, closeDedupDialog, getFieldValue,
             openTestCaseDialog, loadTestCases, saveTestCase, editTestCase, deleteTestCase, resetTestCaseForm, runVerification,
             openScriptHistory, previewScriptVersion, rollbackScriptVersion,
             runAutoGenerate

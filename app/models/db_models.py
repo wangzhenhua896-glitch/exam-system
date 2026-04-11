@@ -70,6 +70,28 @@ def init_database():
         cursor.execute('ALTER TABLE questions ADD COLUMN quality_score REAL DEFAULT NULL')
     except Exception:
         pass
+    try:
+        cursor.execute('ALTER TABLE questions ADD COLUMN question_number TEXT DEFAULT NULL')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE questions ADD COLUMN difficulty TEXT DEFAULT NULL')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE questions ADD COLUMN exam_name TEXT DEFAULT NULL')
+    except Exception:
+        pass
+
+    # grading_records 新字段
+    try:
+        cursor.execute('ALTER TABLE grading_records ADD COLUMN student_name TEXT DEFAULT NULL')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE grading_records ADD COLUMN exam_name TEXT DEFAULT NULL')
+    except Exception:
+        pass
 
     # 评分记录表
     cursor.execute('''
@@ -231,10 +253,16 @@ def init_database():
             display_name TEXT,
             role TEXT DEFAULT 'teacher',
             subject TEXT DEFAULT NULL,
+            teacher_name TEXT DEFAULT NULL,
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 兼容旧库：如果 teacher_name 列不存在则添加
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN teacher_name TEXT DEFAULT NULL')
+    except Exception:
+        pass
     # 预置默认用户（幂等）
     default_users = [
         ('admin', '管理员', 'admin', None),
@@ -539,13 +567,13 @@ def update_script_version_result(question_id: int, version: int,
 
 
 # 题目操作
-def add_question(subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float = 10.0, quality_score: Optional[float] = None) -> int:
+def add_question(subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float = 10.0, quality_score: Optional[float] = None, question_number: Optional[str] = None, difficulty: Optional[str] = None, exam_name: Optional[str] = None) -> int:
     """添加题目"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO questions (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score)
+        'INSERT INTO questions (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name)
     )
     conn.commit()
     question_id = cursor.lastrowid
@@ -644,13 +672,14 @@ def delete_question(question_id: int) -> bool:
 # 评分记录操作
 def add_grading_record(question_id: int, student_answer: str, score: float,
                         details: str, model_used: str, confidence: float,
-                        grading_flags: str = None, student_id: str = None) -> int:
+                        grading_flags: str = None, student_id: str = None,
+                        student_name: str = None, exam_name: str = None) -> int:
     """添加评分记录"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id)
+        'INSERT INTO grading_records (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id, student_name, exam_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (question_id, student_answer, score, details, model_used, confidence, grading_flags, student_id, student_name, exam_name)
     )
     conn.commit()
     record_id = cursor.lastrowid
@@ -1022,7 +1051,7 @@ def add_user(username: str, display_name: str = '', role: str = 'teacher',
 
 def update_user(user_id: int, **kwargs) -> bool:
     """更新用户信息"""
-    allowed = {'username', 'display_name', 'role', 'subject', 'is_active'}
+    allowed = {'username', 'display_name', 'role', 'subject', 'teacher_name', 'is_active'}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
         return False

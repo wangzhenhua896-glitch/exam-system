@@ -327,9 +327,14 @@ scoring_items 规则：
 6. 评语需要逐个要点说明判断结果：要点1是否得分及原因，要点2是否得分及原因...（评语不超过150字）。
 
 输出格式（严格JSON，不要输出任何其他文字）：
-{"总分": X, "评语": "逐个要点说明判断结果和得分情况"}
-
-总分由各要点得分累加，不超过满分。如果触发反作弊规则或政治立场错误，总分=0，评语说明原因。"""
+{
+  "scoring_items": [
+    {"name": "要点1：XXX", "score": 2, "max_score": 2, "hit": true, "reason": "命中关键词", "quoted_text": "学生原文摘录"},
+    {"name": "要点2：XXX", "score": 0, "max_score": 2, "hit": false, "reason": "未提及", "quoted_text": ""}
+  ],
+  "评语": "逐个要点说明判断结果和得分情况"
+}
+总分由系统自动累加，你不需要输出总分。反作弊命中时所有要点 hit=false、score=0、quoted_text=""、评语说明原因。"""
 
     def _get_chinese_system_prompt(self) -> str:
         """语文科目专用系统提示词（古诗词鉴赏等）"""
@@ -347,8 +352,21 @@ scoring_items 规则：
 7. 评语需要逐个要点说明判断结果：该问是否得分、得多少分及原因。（评语不超过150字）
 
 输出格式（严格JSON，不要输出任何其他文字）：
-评分脚本中【输出格式要求】指定了输出格式，请严格按照该格式输出JSON。
-各问得分必须严格按逐项评分规则计算，总分由各问得分累加再减去错别字扣分。"""
+请忽略评分脚本中【输出格式要求】指定的格式，统一按以下 scoring_items 格式输出：
+{
+  "scoring_items": [
+    {"name": "第1问：题材类型", "score": 2, "max_score": 2, "hit": true, "reason": "回答\"边塞诗\"", "quoted_text": "边塞诗"},
+    {"name": "第2问：景物列举", "score": 3, "max_score": 4, "hit": true, "reason": "命中3种", "quoted_text": "青海、长云、雪山"},
+    {"name": "错别字扣分", "score": -0.5, "max_score": 0, "hit": false, "reason": "扣0.5分", "quoted_text": ""}
+  ],
+  "评语": "..."
+}
+规则：
+- 总分由系统自动累加，你不需要输出总分。
+- 每个采分点（或得分条件）对应一个独立的 scoring_item。
+- 错别字扣分作为独立 item，score 为负数，max_score 为 0。
+- 反作弊命中时该问所有要点 hit=false、score=0、quoted_text=""。
+- 只输出 JSON，不要输出任何其他文字。"""
 
     def _get_english_system_prompt(self) -> str:
         """英语科目专用系统提示词（阅读理解等）"""
@@ -365,8 +383,20 @@ scoring_items 规则：
 6. 评语需要逐个要点说明判断结果：该问是否得分、得多少分及原因。（评语不超过150字）
 
 输出格式（严格JSON，不要输出任何其他文字）：
-评分脚本中【输出格式要求】指定了输出格式，请严格按照该格式输出JSON。
-各问得分必须严格按逐项评分规则计算，总分由各问得分累加。"""
+请忽略评分脚本中【输出格式要求】指定的格式，统一按以下 scoring_items 格式输出：
+{
+  "scoring_items": [
+    {"name": "第1问：Spring Festival", "score": 2, "max_score": 2, "hit": true, "reason": "正确", "quoted_text": "Spring Festival"},
+    {"name": "第2问：谐音寓意", "score": 1, "max_score": 2, "hit": true, "reason": "命中采分点A", "quoted_text": "surplus"},
+    {"name": "第3问：烟花习俗", "score": 2, "max_score": 2, "hit": true, "reason": "全部命中", "quoted_text": "fireworks, scare away"}
+  ],
+  "评语": "..."
+}
+规则：
+- 总分由系统自动累加，你不需要输出总分。
+- 每个采分点（或得分条件）对应一个独立的 scoring_item。
+- 反作弊命中时该问所有要点 hit=false、score=0、quoted_text=""。
+- 只输出 JSON，不要输出任何其他文字。"""
 
     def _build_user_prompt(self, question: str, rubric: str, answer: str, max_score: float) -> str:
         """构建用户提示词"""
@@ -536,7 +566,15 @@ scoring_items 规则：
                 for item in scoring_items:
                     if isinstance(item, dict):
                         try:
-                            total += float(item.get("score", 0))
+                            s = float(item.get("score", 0))
+                            ms = float(item.get("max_score", 0))
+                            # 分值校验：非负且不超过 max_score（错别字扣分 max_score=0 跳过上限检查）
+                            if s < 0 and ms > 0:
+                                s = 0
+                            elif ms > 0 and s > ms:
+                                s = ms
+                            item["score"] = s
+                            total += s
                         except (ValueError, TypeError):
                             pass
                 parsed["总分"] = round(total, 2)
@@ -551,6 +589,11 @@ scoring_items 规则：
                         score = float(value["得分"])
                         max_s = float(value.get("满分", 0))
                         comment = str(value.get("评语", ""))
+                        # 分值校验：非负且不超过 max_score
+                        if score < 0 and max_s > 0:
+                            score = 0
+                        elif max_s > 0 and score > max_s:
+                            score = max_s
                         question_scores.append(score)
                         scoring_items.append({
                             "name": key,

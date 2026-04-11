@@ -57,6 +57,13 @@ def register_routes(app: Flask):
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-bank.html')
         return send_file(template_path, mimetype='text/html')
 
+    # 管理后台 - 管理员专属（科目管理、模型配置、Bug 清单）
+    @app.route("/admin")
+    def admin():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'admin.html')
+        return send_file(template_path, mimetype='text/html')
+
     # 根路径跳转到登录页
     @app.route("/")
     def index():
