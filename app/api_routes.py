@@ -1675,6 +1675,122 @@ def generate_rubric_script():
         return jsonify({'success': False, 'error': f'生成失败：{str(e)}'}), 500
 
 
+@api_bp.route('/self-check-rubric', methods=['POST'])
+def self_check_rubric():
+    """评分约定自查：让 AI 检查现有评分脚本并给出问题和完善建议"""
+    data = request.json
+    content = data.get('content', '').strip()
+    score = data.get('score', 10)
+    standard_answer = data.get('standardAnswer', '').strip()
+    rubric_script = data.get('rubricScript', '').strip()
+
+    if not content:
+        return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
+    if not standard_answer:
+        return jsonify({'success': False, 'error': '标准答案不能为空'}), 400
+    if not rubric_script:
+        return jsonify({'success': False, 'error': '评分约定内容不能为空'}), 400
+
+    system_prompt = """你是一位资深教育测评专家，专门负责审查评分脚本的质量。
+
+你的任务：仔细审查提供的评分脚本，找出所有问题，并给出完善后的版本。
+
+审查要点：
+1. **自包含性**：评分脚本是否包含了所有必要的评分信息？阅卷模型只看到脚本和答案，没有题目原文。
+2. **确定性语言**：是否还存在"酌情给分"、"视情况"、"适当给分"、"根据质量"等模糊表述？
+3. **分值明确**：每个得分点是否有明确的分值（不能有范围值如"1-2分"）？
+4. **关键词完整性**：关键词列表是否覆盖了标准答案中的核心概念？是否有遗漏的重要等价表述？
+5. **反作弊规则**：是否包含复制题干、空白作答、答非所问等判0分条件？
+6. **输出格式**：是否指定了清晰的 JSON 输出格式？
+7. **逻辑矛盾**：各评分规则之间是否存在矛盾或冲突？
+8. **边界情况**：是否考虑了部分作答、口语化表达、字数很少等边界情况？
+
+请严格按以下 JSON 格式输出（不要输出其他内容）：
+```json
+{
+  "issues": [
+    {
+      "category": "问题分类",
+      "description": "具体问题描述",
+      "location": "问题所在位置（如第X行/第X段）"
+    }
+  ],
+  "issue_count": 问题总数,
+  "improved_script": "完善后的评分脚本全文（如果没有问题则返回原文）"
+}
+```"""
+
+    user_prompt = f"""【题目内容】
+{content}
+
+【满分】
+{score} 分
+
+【标准答案】
+{standard_answer}
+
+【待审查的评分约定】
+{rubric_script}
+
+请仔细审查以上评分约定，找出所有问题，并给出完善后的版本。"""
+
+    try:
+        response = grading_engine.client.chat.completions.create(
+            model=grading_engine.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            max_tokens=4096,
+        )
+        raw = response.choices[0].message.content.strip()
+
+        # 提取 JSON
+        import json as _json
+        import re as _re
+        result = None
+        # 尝试直接解析
+        try:
+            result = _json.loads(raw)
+        except _json.JSONDecodeError:
+            # 从 ```json ... ``` 中提取
+            m = _re.search(r'```json\s*(.*?)\s*```', raw, _re.DOTALL)
+            if m:
+                try:
+                    result = _json.loads(m.group(1))
+                except _json.JSONDecodeError:
+                    pass
+            if result is None:
+                # 尝试找 { ... } 块
+                m = _re.search(r'\{[\s\S]*\}', raw)
+                if m:
+                    try:
+                        result = _json.loads(m.group(0))
+                    except _json.JSONDecodeError:
+                        pass
+
+        if result is None:
+            return jsonify({'success': False, 'error': 'AI 返回结果解析失败，请重试'}), 500
+
+        issues = result.get('issues', [])
+        issue_count = result.get('issue_count', len(issues))
+        improved_script = result.get('improved_script', rubric_script)
+
+        logger.info(f"约定自查完成，发现问题 {issue_count} 个")
+        return jsonify({
+            'success': True,
+            'data': {
+                'issues': issues,
+                'issue_count': issue_count,
+                'improved_script': improved_script
+            }
+        })
+    except Exception as e:
+        logger.error(f"约定自查失败：{e}")
+        return jsonify({'success': False, 'error': f'自查失败：{str(e)}'}), 500
+
+
 @api_bp.route('/bugs', methods=['GET'])
 def get_bugs():
     """获取 bug 日志列表"""

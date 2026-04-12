@@ -114,7 +114,7 @@
                                 <el-row :gutter="16">
                                     <el-col :span="12">
                                         <el-card shadow="never" style="text-align:center;">
-                                            <div style="font-size:14px;color:#606266;margin-bottom:8px;">评分脚本</div>
+                                            <div style="font-size:14px;color:#606266;margin-bottom:8px;">评分约定</div>
                                             <el-progress type="circle" :percentage="dashboard.overview?.total_questions ? Math.round(dashboard.rubric_coverage?.has_script / dashboard.overview.total_questions * 100) : 0" :width="90" />
                                             <div style="font-size:12px;color:#909399;margin-top:4px;">{{ dashboard.rubric_coverage?.has_script || 0 }} 已覆盖 / {{ dashboard.rubric_coverage?.no_script || 0 }} 未覆盖</div>
                                         </el-card>
@@ -270,8 +270,8 @@
                         <el-form label-position="top" :disabled="viewMode === 'view'">
 
                             <!-- 基本信息 -->
-                            <div style="margin-bottom: 24px;">
-                                <el-collapse :model-value="viewMode === 'create' ? ['1'] : []" style="margin-bottom: 12px;">
+                            <div style="margin-bottom: 8px;">
+                                <el-collapse :model-value="viewMode === 'create' ? ['1'] : []" style="margin-bottom: 4px;">
                                     <el-collapse-item title="基本信息" name="1">
                                         <el-row :gutter="16">
                                             <el-col :span="5"><el-form-item label="分值"><el-input-number v-model="questionForm.score" :min="1" :max="100" style="width: 100%;" data-consistency-field="score"></el-input-number></el-form-item></el-col>
@@ -284,8 +284,8 @@
                             </div>
 
                             <!-- 题目内容 -->
-                            <div style="margin-bottom: 24px;">
-                                <el-collapse :model-value="viewMode === 'create' ? ['orig'] : []" style="margin-bottom: 12px;">
+                            <div style="margin-bottom: 8px;">
+                                <el-collapse :model-value="viewMode === 'create' ? ['orig'] : []" style="margin-bottom: 4px;">
                                     <el-collapse-item name="orig">
                                         <template #title>
                                             <span>原题（原始未处理）</span>
@@ -320,8 +320,8 @@
                             </div>
 
                             <!-- 评分规则 -->
-                            <div style="margin-bottom: 24px;">
-                                <el-collapse :model-value="viewMode === 'create' ? ['rubric'] : []" style="margin-bottom: 12px;">
+                            <div style="margin-bottom: 8px;">
+                                <el-collapse :model-value="viewMode === 'create' ? ['rubric'] : []" style="margin-bottom: 4px;">
                                     <el-collapse-item title="评分规则" name="rubric">
                                         <el-form-item label="评分规则">
                                             <el-input v-model="questionForm.rubricRules" type="textarea" :rows="8" placeholder="整体评分规则，例如：本题满分8分，有错别字扣1分，未答出核心概念不得分" :style="{ fontSize: formFontSize + 'px' }" data-consistency-field="rubricRules"></el-input>
@@ -345,18 +345,45 @@
                                             </el-col>
                                         </el-row>
                                         <el-form-item label="评分约定">
-                                            <el-input v-model="questionForm.rubricScript" type="textarea" :rows="12" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定" :style="{ fontSize: formFontSize + 'px' }"></el-input>
+                                            <el-input ref="rubricScriptRef" v-model="questionForm.rubricScript" type="textarea" :rows="12" placeholder="结构化的评分逻辑，确保大模型理解无歧义、逻辑严密、评分准确一致稳定" :style="{ fontSize: formFontSize + 'px' }"></el-input>
                                             <div style="margin-top: 8px; display: flex; gap: 8px;">
                                                 <el-button type="primary" plain size="small" @click="generateRubric" :loading="generatingScript">
-                                                    <el-icon><MagicStick /></el-icon>AI 生成评分脚本
+                                                    <el-icon><MagicStick /></el-icon>AI 生成约定
+                                                </el-button>
+                                                <el-button type="warning" plain size="small" @click="selfCheckRubric" :loading="selfChecking" :disabled="!questionForm.rubricScript.trim()">
+                                                    <el-icon><Search /></el-icon>约定自查
                                                 </el-button>
                                                 <el-button type="success" plain size="small" @click="openTestCaseDialog" :disabled="!editingQuestionId">
-                                                    <el-icon><CircleCheck /></el-icon>验证脚本
+                                                    <el-icon><CircleCheck /></el-icon>验证约定
                                                     <span v-if="testCaseCount > 0">（{{testCaseCount}}个用例）</span>
                                                 </el-button>
                                                 <el-button type="info" plain size="small" @click="openScriptHistory" :disabled="!editingQuestionId">
                                                     <el-icon><Clock /></el-icon>版本历史
                                                 </el-button>
+                                            </div>
+                                            <!-- 自查结果 -->
+                                            <div v-if="selfCheckResult" style="margin-top: 8px; padding: 12px; background: #fdf6ec; border: 1px solid #e6a23c; border-radius: 4px;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                    <span style="font-weight: 600; color: #e6a23c;">
+                                                        <el-icon><Warning /></el-icon> 自查结果：发现 {{ selfCheckResult.issue_count }} 个问题
+                                                    </span>
+                                                    <div style="display: flex; gap: 8px;">
+                                                        <el-button size="small" type="primary" plain @click="applyImprovedScript">应用完善版本</el-button>
+                                                        <el-button size="small" @click="selfCheckResult = null">关闭</el-button>
+                                                    </div>
+                                                </div>
+                                                <div v-if="selfCheckResult.issues.length > 0" style="margin-bottom: 8px;">
+                                                    <div v-for="(issue, idx) in selfCheckResult.issues" :key="idx" style="padding: 6px 0; border-bottom: 1px solid #faecd8; font-size: 13px; line-height: 1.6;">
+                                                        <span style="color: #e6a23c; font-weight: 600;">[{{ issue.category }}]</span>
+                                                        {{ issue.description }}
+                                                        <span v-if="issue.location" style="color: #909399;">（{{ issue.location }}）</span>
+                                                    </div>
+                                                </div>
+                                                <el-collapse v-if="selfCheckResult.improved_script">
+                                                    <el-collapse-item title="查看完善后的约定">
+                                                        <div style="padding: 8px; background: #fff; border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;">{{ selfCheckResult.improved_script }}</div>
+                                                    </el-collapse-item>
+                                                </el-collapse>
                                             </div>
                                         </el-form-item>
                                     </el-collapse-item>
@@ -413,11 +440,11 @@
                             <el-button size="small" type="primary" plain @click="findSameNumber" :loading="mergeLoading">
                                 <el-icon><Connection /></el-icon> 合并同题
                             </el-button>
-                            <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
-                                <el-icon><Download /></el-icon> 导出评分脚本
-                            </el-button>
                             <el-button size="small" type="warning" plain @click="batchConsistencyCheck" :loading="batchCheckLoading">
                                 <el-icon><CircleCheck /></el-icon> 一致检查
+                            </el-button>
+                            <el-button size="small" type="success" plain @click="exportRubricScripts" :loading="exportLoading">
+                                <el-icon><Download /></el-icon> 导出评分约定
                             </el-button>
                         </div>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table">
@@ -467,32 +494,32 @@
                     </div>
 
                     <!-- 查看题目详情弹窗 -->
-                    <el-dialog v-model="viewDialogVisible" title="题目详情" width="700px" :close-on-click-modal="true">
-                        <div v-if="viewDialogData" style="max-height: 60vh; overflow-y: auto;">
+                    <el-dialog v-model="viewDialogVisible" title="题目详情" width="800px" :close-on-click-modal="true">
+                        <div v-if="viewDialogData" style="max-height: 70vh; overflow-y: auto;">
                             <el-descriptions :column="3" border size="small">
                                 <el-descriptions-item label="题号">{{ viewDialogData.question_number || '-' }}</el-descriptions-item>
                                 <el-descriptions-item label="学科">{{ getSubjectLabel(viewDialogData.subject) }}</el-descriptions-item>
                                 <el-descriptions-item label="分值">{{ viewDialogData.max_score }}分</el-descriptions-item>
                             </el-descriptions>
-                            <div style="margin-top: 16px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">题干</div>
-                                <div style="padding: 10px; background: #f5f7fa; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.content }}</div>
+                            <div style="margin-top: 8px;">
+                                <div style="font-weight: 600; margin-bottom: 3px;">题干</div>
+                                <div style="padding: 6px 10px; background: #f5f7fa; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.content }}</div>
                             </div>
-                            <div v-if="viewDialogData.standard_answer" style="margin-top: 12px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">标准答案</div>
-                                <div style="padding: 10px; background: #ecfdf5; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.standard_answer }}</div>
+                            <div v-if="viewDialogData.standard_answer" style="margin-top: 6px;">
+                                <div style="font-weight: 600; margin-bottom: 3px;">标准答案</div>
+                                <div style="padding: 6px 10px; background: #ecfdf5; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.standard_answer }}</div>
                             </div>
-                            <div v-if="viewDialogData.rubric_rules" style="margin-top: 12px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">评分规则</div>
-                                <div style="padding: 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_rules }}</div>
+                            <div v-if="viewDialogData.rubric_rules" style="margin-top: 6px;">
+                                <div style="font-weight: 600; margin-bottom: 3px;">评分规则</div>
+                                <div style="padding: 6px 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_rules }}</div>
                             </div>
-                            <div v-if="viewDialogData.rubric_points" style="margin-top: 12px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">评分要点</div>
-                                <div style="padding: 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_points }}</div>
+                            <div v-if="viewDialogData.rubric_points" style="margin-top: 6px;">
+                                <div style="font-weight: 600; margin-bottom: 3px;">评分要点</div>
+                                <div style="padding: 6px 10px; background: #fefce8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">{{ viewDialogData.rubric_points }}</div>
                             </div>
-                            <div v-if="viewDialogData.rubric_script" style="margin-top: 12px;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">评分脚本</div>
-                                <div style="padding: 10px; background: #f0f9ff; border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 12px;">{{ viewDialogData.rubric_script }}</div>
+                            <div v-if="viewDialogData.rubric_script" style="margin-top: 6px;">
+                                <div style="font-weight: 600; margin-bottom: 3px;">评分约定</div>
+                                <div style="padding: 6px 10px; background: #f0f9ff; border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 12px;">{{ viewDialogData.rubric_script }}</div>
                             </div>
                         </div>
                     </el-dialog>
@@ -678,7 +705,7 @@
                     <div class="page-card">
                         <div class="page-header">
                             <div class="page-title">AI 批量出题</div>
-                            <div class="page-desc">选择科目和数量，系统自动调用大模型生成完整题目（含评分脚本和测试用例），生成后可直接在题目列表中查看和编辑。</div>
+                            <div class="page-desc">选择科目和数量，系统自动调用大模型生成完整题目（含评分约定和测试用例），生成后可直接在题目列表中查看和编辑。</div>
                         </div>
 
                         <!-- 配置区 -->
@@ -704,7 +731,7 @@
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 20px;">
-                            预估 {{ autoGenCount * 3 }} 次 LLM 调用（每道题 = 出题 + 评分脚本 + 测试用例）
+                            预估 {{ autoGenCount * 3 }} 次 LLM 调用（每道题 = 出题 + 评分约定 + 测试用例）
                         </div>
 
                         <!-- 进度 -->
@@ -719,7 +746,7 @@
                             <el-table :data="autoGenResult.questions" stripe size="small">
                                 <el-table-column prop="question_id" label="ID" width="60"></el-table-column>
                                 <el-table-column prop="title" label="标题"></el-table-column>
-                                <el-table-column label="评分脚本" width="100">
+                                <el-table-column label="评分约定" width="100">
                                     <template #default="scope">
                                         <el-tag :type="scope.row.has_rubric_script ? 'success' : 'warning'" size="small">
                                             {{ scope.row.has_rubric_script ? '已生成' : '失败' }}
@@ -818,7 +845,7 @@
         </div>
 
         <!-- 测试用例验证 Dialog -->
-        <el-dialog v-model="showTestCaseDialog" title="评分脚本验证" width="900px" :close-on-click-modal="false">
+        <el-dialog v-model="showTestCaseDialog" title="评分约定验证" width="900px" :close-on-click-modal="false">
             <!-- 测试用例列表 -->
             <div style="margin-bottom: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -960,7 +987,7 @@
         </el-dialog>
 
         <!-- 评分脚本版本历史 Dialog -->
-        <el-dialog v-model="scriptHistoryVisible" title="评分脚本版本历史" width="800px" :close-on-click-modal="false">
+        <el-dialog v-model="scriptHistoryVisible" title="评分约定版本历史" width="800px" :close-on-click-modal="false">
             <el-table :data="scriptHistory" v-loading="scriptHistoryLoading" stripe size="small" max-height="460">
                 <el-table-column prop="version" label="版本" width="60" align="center">
                     <template #default="scope">
@@ -996,7 +1023,7 @@
         </el-dialog>
 
         <!-- 版本预览 Dialog -->
-        <el-dialog v-model="scriptPreviewVisible" title="评分脚本预览" width="700px">
+        <el-dialog v-model="scriptPreviewVisible" title="评分约定预览" width="700px">
             <div style="background:#f5f7fa;padding:16px;border-radius:4px;white-space:pre-wrap;font-size:13px;line-height:1.6;max-height:400px;overflow-y:auto;">{{scriptPreviewText}}</div>
         </el-dialog>
 
@@ -1077,7 +1104,7 @@
 </div>
 
 <script>
-const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
 const { ElMessage, ElMessageBox } = ElementPlus;
 
 const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
@@ -1165,6 +1192,20 @@ const app = createApp({
             rubricPoints: '',
             rubricScript: '',
             aiRubric: '请严格按照评分要点给分，每个要点单独判断，部分答对给对应部分分数，总分不超过满分。'
+        });
+
+        // 评分脚本 textarea ref（内容变更后滚动到顶部）
+        const rubricScriptRef = ref(null);
+        watch(() => questionForm.rubricScript, () => {
+            nextTick(() => {
+                const el = rubricScriptRef.value;
+                if (el) {
+                    const textarea = el.$el?.querySelector('textarea') || el;
+                    if (textarea && typeof textarea.scrollTop === 'number') {
+                        textarea.scrollTop = 0;
+                    }
+                }
+            });
         });
 
         // 考试大纲 / 教材 表单
@@ -1322,6 +1363,8 @@ const app = createApp({
         const generatingScript = ref(false);
         const generatingPoints = ref(false);
         const consistencyLoading = ref(false);
+        const selfChecking = ref(false);
+        const selfCheckResult = ref(null);
         const evaluatingQuality = ref(false);
         const qualityScore = ref(null);
 
@@ -1428,7 +1471,7 @@ const app = createApp({
             a.click();
             document.body.removeChild(a);
             setTimeout(() => { exportLoading.value = false; }, 1500);
-            ElMessage.success('正在导出「' + getSubjectLabel(subject) + '」评分脚本...');
+            ElMessage.success('正在导出「' + getSubjectLabel(subject) + '」评分约定...');
         }
 
         // 批量一致检查
@@ -1830,14 +1873,60 @@ const app = createApp({
                 });
                 if (res.data.success) {
                     questionForm.rubricScript = res.data.data.rubricScript;
-                    ElMessage.success('AI 已生成评分脚本');
-                } else {
+                    ElMessage.success('AI 已生成评分约定');                } else {
                     ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('生成评分脚本失败：' + (e.response?.data?.error || e.message));
+                ElMessage.error('生成评分约定失败：' + (e.response?.data?.error || e.message));
             } finally {
                 generatingScript.value = false;
+            }
+        };
+
+        // 约定自查
+        const selfCheckRubric = async () => {
+            if (!questionForm.content.trim()) {
+                ElMessage.warning('请先填写题干内容');
+                return;
+            }
+            if (!questionForm.standardAnswer.trim()) {
+                ElMessage.warning('请先填写标准答案');
+                return;
+            }
+            if (!questionForm.rubricScript.trim()) {
+                ElMessage.warning('请先填写评分约定');
+                return;
+            }
+            selfChecking.value = true;
+            selfCheckResult.value = null;
+            try {
+                const res = await axios.post('/api/self-check-rubric', {
+                    content: questionForm.content,
+                    score: questionForm.score,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricScript: questionForm.rubricScript
+                });
+                if (res.data.success) {
+                    selfCheckResult.value = res.data.data;
+                    if (res.data.data.issue_count === 0) {
+                        ElMessage.success('自查通过，未发现问题');
+                    }
+                } else {
+                    ElMessage.error('自查失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) {
+                ElMessage.error('自查失败：' + (e.response?.data?.error || e.message));
+            } finally {
+                selfChecking.value = false;
+            }
+        };
+
+        // 应用自查完善后的约定
+        const applyImprovedScript = () => {
+            if (selfCheckResult.value?.improved_script) {
+                questionForm.rubricScript = selfCheckResult.value.improved_script;
+                selfCheckResult.value = null;
+                ElMessage.success('已应用完善后的评分约定，请记得保存');
             }
         };
 
@@ -2642,6 +2731,8 @@ const app = createApp({
 
         return {
             currentPage, questions, stats, dashboard, qualityDistTable, subjectList, questionForm, autoImportText, parseResult, generatingScript,
+            rubricScriptRef,
+            selfChecking, selfCheckResult, selfCheckRubric, applyImprovedScript,
             evaluatingQuality, qualityScore, viewMode, editingQuestionId, editingQuestionNumber, viewDialogVisible, viewDialogData, pickQuestionId, loadingQuestions,
             dedupLoading, dedupDialogVisible, dedupGroups, dedupTotalDuplicates, dedupFullscreen,
             dedupCurrentIndex, dedupDone, dedupFontSize, dedupPhase, dedupExactGroups, dedupSimilarGroups, exactKeepId,

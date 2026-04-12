@@ -8,7 +8,7 @@ import { useHistory } from './useHistory.js';
 import { useAntiCheat } from './useAntiCheat.js';
 
 export function useApp() {
-    const { ref } = Vue;
+    const { ref, watch, nextTick } = Vue;
 
     // ========== 共享 ref（多模块需要读写） ==========
     const currentPage = ref('single');
@@ -18,6 +18,8 @@ export function useApp() {
     const studentAnswer = ref('');
     const scriptVersion = ref(0);
     const scriptVersionCount = ref(0);
+    const rubricFontSize = ref(14);
+    const rubricTextareaRef = ref(null);
 
     // ========== 模型选择 ==========
     const model = useModel();
@@ -69,6 +71,26 @@ export function useApp() {
                 grading.gradeAnswer();
             }
         }
+    });
+
+    // ========== 字号切换 ==========
+    function toggleRubricFontSize() {
+        const sizes = [12, 14, 16];
+        const idx = sizes.indexOf(rubricFontSize.value);
+        rubricFontSize.value = sizes[(idx + 1) % sizes.length];
+    }
+
+    // ========== 评分脚本内容变更后滚动到顶部 ==========
+    watch(() => question.selectedQuestion.value, () => {
+        nextTick(() => {
+            const el = rubricTextareaRef.value;
+            if (el) {
+                const textarea = el.$el?.querySelector('textarea') || el;
+                if (textarea && typeof textarea.scrollTop === 'number') {
+                    textarea.scrollTop = 0;
+                }
+            }
+        });
     });
 
     // ========== 页面切换 ==========
@@ -136,6 +158,9 @@ export function useApp() {
         saveAsTestCase: testSet.saveAsTestCase,
 
         // 评分脚本编辑
+        rubricTextareaRef,
+        rubricFontSize,
+        toggleRubricFontSize,
         rubricFullscreen: rubric.rubricFullscreen,
         rubricEditing: rubric.rubricEditing,
         rubricEditValue: rubric.rubricEditValue,

@@ -95,7 +95,7 @@
                 <template v-if="currentPage === 'single'">
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
                         <!-- 左侧输入区 -->
-                        <div :style="{ width: inputCollapsed ? '0' : (grading || gradeResult ? '400px' : '100%'), overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
+                        <div :style="{ width: inputCollapsed ? '0' : ((grading || gradeResult) && !resultCollapsed ? '400px' : '100%'), overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
                             <div class="page-card" style="margin-bottom: 0;">
                                 <!-- 选题后：评分脚本 + 题目/答案折叠 -->
                                 <template v-if="selectedQuestion">
@@ -120,6 +120,10 @@
                                                 <el-button size="small" text style="font-size: 12px; color: #909399;" @click="copyRubricScript">
                                                     <el-icon><CopyDocument /></el-icon> 复制
                                                 </el-button>
+                                                <el-button size="small" text style="font-size: 12px; color: #909399;" @click="toggleRubricFontSize">
+                                                    <span style="font-weight: 700;">A</span>
+                                                    <span style="font-size: 10px; margin-left: 1px;">{{ rubricFontSize }}px</span>
+                                                </el-button>
                                                 <el-button size="small" text style="font-size: 12px; color: #909399;" @click="toggleRubricFullscreen">
                                                     <el-icon v-if="!rubricFullscreen"><FullScreen /></el-icon>
                                                     <el-icon v-else><CloseBold /></el-icon>
@@ -131,16 +135,16 @@
                                             </div>
                                         </div>
                                         <!-- 只读模式 -->
-                                        <el-input v-if="!rubricEditing" type="textarea" :model-value="selectedQuestion.rubric_script || '(未生成评分脚本)'"
+                                        <el-input ref="rubricTextareaRef" v-if="!rubricEditing" type="textarea" :model-value="selectedQuestion.rubric_script || '(未生成评分脚本)'"
                                             :readonly="true"
                                             :rows="rubricFullscreen ? 25 : 10" size="small"
-                                            :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '120px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: '14px', lineHeight: '1.7', color: '#303133' }">
+                                            :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '120px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: rubricFontSize + 'px', lineHeight: '1.7', color: '#303133' }">
                                         </el-input>
                                         <!-- 编辑模式 -->
                                         <template v-if="rubricEditing">
                                             <el-input v-model="rubricEditValue" type="textarea"
                                                 :rows="rubricFullscreen ? 25 : 12" size="small"
-                                                :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '160px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: '14px', lineHeight: '1.7', color: '#303133' }">
+                                                :input-style="{ resize: 'vertical', minHeight: rubricFullscreen ? '500px' : '160px', maxHeight: rubricFullscreen ? '90vh' : '600px', fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: rubricFontSize + 'px', lineHeight: '1.7', color: '#303133' }">
                                             </el-input>
                                             <div style="margin-top: 8px; display: flex; gap: 8px;">
                                                 <el-button size="small" type="primary" @click="saveRubricEdit">保存</el-button>
