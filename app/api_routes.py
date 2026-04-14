@@ -1599,11 +1599,9 @@ async def grade_answer():
     student_name = data.get('student_name', '')
     exam_name = data.get('exam_name', '')
 
-    # 支持前端指定 provider 和 model
+    # 支持前端指定 provider 和 model（不修改全局状态，每次请求独立）
     provider = data.get('provider')
     model = data.get('model')
-    if provider:
-        grading_engine.set_provider(provider, model)
 
     # 如果传了 question_id，优先从数据库加载题目信息
     question_text = data.get('question', '')
@@ -1779,6 +1777,8 @@ async def grade_answer():
         subject=subject,
         question_answers=question_answers_list,
         strategy=scoring_strategy,
+        provider=provider,
+        model=model,
     )
     result = grade_result['llm_result']
     layer_scores = grade_result['layer_scores']

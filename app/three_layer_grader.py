@@ -130,6 +130,8 @@ async def three_layer_grade(
     subject: str,
     question_answers: List[Dict],
     strategy: str = 'avg',
+    provider: str = None,
+    model: str = None,
 ) -> Dict[str, Any]:
     """
     三层并行评分
@@ -143,6 +145,8 @@ async def three_layer_grade(
         subject: 科目
         question_answers: 满分答案列表（从 question_answers 表查）
         strategy: 取分策略 max/min/avg/median
+        provider: 指定服务商
+        model: 指定子模型
 
     Returns:
         {
@@ -202,6 +206,8 @@ async def three_layer_grade(
             rubric=rubric,
             max_score=max_score,
             subject=subject,
+            provider=provider,
+            model=model,
         )
 
     # 并行执行第2层和第3层

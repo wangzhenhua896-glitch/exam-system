@@ -110,6 +110,8 @@ class QwenGradingEngine:
         rubric: Dict[str, Any],
         max_score: float,
         subject: str = "general",
+        provider: str = None,
+        model: str = None,
     ) -> QwenGradingResult:
         """
         对学生答案进行评分
@@ -119,12 +121,30 @@ class QwenGradingEngine:
             answer: 学生答案
             rubric: 评分标准（包含 points 等信息）
             max_score: 满分
+            subject: 科目标识
+            provider: 指定服务商（不修改全局状态，每次请求独立）
+            model: 指定子模型
+            max_score: 满分
             subject: 科目标识（politics/chinese/english 等），后续用于分科评分策略
 
         Returns:
             QwenGradingResult
         """
         try:
+            # 确定本次请求使用的 client 和 model（不修改全局状态，线程安全）
+            if provider:
+                client, use_model, _ = self._init_client(provider, model)
+                if not client:
+                    return QwenGradingResult(
+                        final_score=None, confidence=0, strategy="qwen_engine",
+                        total_score=max_score, error=f"服务商 {provider} 不可用",
+                        comment=f'指定的模型服务商 {provider} 不可用，请检查配置',
+                        needs_review=True
+                    )
+            else:
+                client = self.client
+                use_model = self.model
+
             # 格式化评分标准
             rubric_text = self._format_rubric(rubric, max_score, subject)
 
@@ -163,8 +183,8 @@ class QwenGradingEngine:
 
             for attempt in range(max_retries):
                 try:
-                    response = self.client.chat.completions.create(
-                        model=self.model,
+                    response = client.chat.completions.create(
+                        model=use_model,
                         messages=messages,
                         temperature=0.0,  # 评分需要确定性
                         max_tokens=4096,  # 足够空间容纳逐问 JSON 输出
