@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "playwright": "^1.59.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4",
+    "globals": "^17.5.0"
+  }
+}

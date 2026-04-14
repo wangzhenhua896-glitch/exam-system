@@ -80,10 +80,8 @@ export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer
                     results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: result.error || '评分失败', comment: '' });
                 }
             } catch (e) {
-                let errMsg = '评分服务暂时不可用，请稍后再试';
+                let errMsg = handleApiError(e, '评分失败', { showElMessage: false });
                 if (e.code === 'ERR_NETWORK') errMsg = '网络连接失败，请检查网络后重试';
-                else if (e.response?.status === 500) errMsg = '评分服务异常，请联系管理员';
-                else if (e.response?.data?.error) errMsg = e.response.data.error;
                 results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: errMsg, comment: '' });
             }
         }

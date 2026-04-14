@@ -48,6 +48,7 @@ static/vendor/
 *.bak2
 *.docx
 app.pid
+app-*.pid
 deploy.sh
 
 # PDF & screenshots (can regenerate from .md)
