@@ -3,31 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能评分系统 - 单题评分</title>
+    <title>AI 命题系统 - 单题评分</title>
     <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
     <script src="/static/vendor/vue.global.prod.js"></script>
     <script src="/static/vendor/element-plus.js"></script>
     <script src="/static/vendor/element-plus-icons.js"></script>
     <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/vendor/dompurify.min.js"></script>
+    <script src="/static/js/shared.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
-        .layout { height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
-        .subtitle { font-size: 12px; color: #909399; }
-        .header-right { display: flex; align-items: center; gap: 15px; }
-        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .main-container { display: flex; flex: 1; overflow: hidden; }
         .sidebar { width: 220px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; display: flex; flex-direction: column; transition: width 0.25s ease, opacity 0.25s ease; }
         .sidebar.collapsed { width: 0; overflow: hidden; opacity: 0; }
         .sidebar-nav { flex: 1; }
         .sidebar-footer { padding: 12px 16px; border-top: 1px solid #e4e7ed; }
         .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
-        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
         .result-score { font-size: 56px; font-weight: 700; color: #409EFF; text-align: center; }
         .result-score .unit { font-size: 20px; color: #909399; font-weight: 400; }
         .score-bar-wrap { margin: 16px auto 0; max-width: 400px; }
@@ -43,7 +36,7 @@
                 <el-button text @click="sidebarCollapsed = !sidebarCollapsed" style="font-size: 18px; padding: 4px 8px;">
                     <el-icon><Fold /></el-icon>
                 </el-button>
-                <div class="logo">📝 AI 评分系统</div>
+                <div class="logo">📝 AI 命题系统</div>
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
@@ -69,7 +62,13 @@
                     <div style="padding: 12px 16px;">
                         <div style="font-size: 12px; color: #909399; margin-bottom: 6px;">当前题目</div>
                         <el-select v-model="selectedQuestionId" filterable clearable placeholder="-- 手动输入 --" size="small" style="width: 100%;" :loading="loadingQuestions" @change="onQuestionSelect">
-                            <el-option v-for="q in questionList" :key="q.id" :label="'#' + q.id + ' ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
+                            <template v-for="q in questionList" :key="q.id">
+                                <el-option-group v-if="q._isParent && q._children && q._children.length > 0" :label="q.title || (q.content || '').substring(0, 30)">
+                                    <el-option :label="'#' + q.id + ' [' + getSubjectLabel(q.subject) + '] ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
+                                    <el-option v-for="c in q._children" :key="c.id" :label="'  └ #' + c.id + ' [' + getSubjectLabel(c.subject) + '] ' + (c.title || (c.content || '').substring(0, 30))" :value="c.id"></el-option>
+                                </el-option-group>
+                                <el-option v-else-if="!q._isChild" :label="'#' + q.id + ' [' + getSubjectLabel(q.subject) + '] ' + (q.title || (q.content || '').substring(0, 30))" :value="q.id"></el-option>
+                            </template>
                         </el-select>
                         <div v-if="selectedQuestion" style="font-size: 12px; color: #409EFF; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedQuestion.title || selectedQuestion.content.substring(0, 40) }}</div>
                     </div>
@@ -93,6 +92,14 @@
             <div class="content">
                 <!-- ========== 单题评分 ========== -->
                 <template v-if="currentPage === 'single'">
+                    <!-- 从测试集载入用例的提示条 -->
+                    <div v-if="loadedTestCaseInfo" style="padding: 8px 16px; background: #fdf6ec; border: 1px solid #faecd8; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; color: #e6a23c;">
+                            已载入测试用例（期望分 {{ loadedTestCaseInfo.expected_score }}）
+                            <span v-if="loadedTestCaseInfo.description" style="color: #909399;"> — {{ loadedTestCaseInfo.description }}</span>
+                        </span>
+                        <el-button size="small" text @click="loadedTestCaseInfo = null; handleMenuSelect('testset')">返回测试集</el-button>
+                    </div>
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
                         <!-- 左侧输入区 -->
                         <div :style="{ width: inputCollapsed ? '0' : ((grading || gradeResult) && !resultCollapsed ? '400px' : '100%'), overflow: 'hidden', transition: 'width 0.25s', flexShrink: 0 }">
@@ -150,13 +157,29 @@
                                                 <el-button size="small" type="primary" @click="saveRubricEdit">保存</el-button>
                                                 <el-button size="small" @click="cancelRubricEdit">取消</el-button>
                                             </div>
+                                            <div style="margin-top: 8px; padding: 10px 12px; background: #f0f9ff; border-radius: 6px; font-size: 12px; color: #909399; line-height: 1.8;">
+                                                <div style="font-weight: 600; color: #606266; margin-bottom: 4px;">评分脚本格式提示</div>
+                                                按以下结构编写，每个得分点用 <b>【得分点1】</b> 或 <b>Scoring Point 1</b> 开头，系统会自动解析分段展示：<br>
+                                                1.【题目信息】— 题目复述和满分值<br>
+                                                2.【标准答案要点】— 每个要点含核心含义 + 关键词<br>
+                                                3.【逐项评分规则】— 每个得分点的得分/不得分条件<br>
+                                                4.【反作弊规则】— 复制题干、空白等判0分条件<br>
+                                                5.【总分计算】— 总分 = 各项之和，范围 [0, 满分]
+                                            </div>
                                         </template>
                                     </div>
+                                    <!-- 父题阅读材料（子题时显示） -->
+                                    <div v-if="selectedQuestion.parent_id && parentPassage" style="margin-bottom: 16px; padding: 12px; background: #fdf6ec; border: 1px solid #faecd8; border-radius: 6px;">
+                                        <div style="font-size: 12px; font-weight: 600; color: #e6a23c; margin-bottom: 6px;">📖 阅读材料</div>
+                                        <div style="font-size: 13px; color: #606266; line-height: 1.8; white-space: pre-wrap; max-height: 2400px; overflow-y: auto;">{{ parentPassage }}</div>
+                                    </div>
+
                                     <el-collapse style="margin-bottom: 20px;">
                                         <el-collapse-item title="题目 / 答案">
                                             <div style="margin-bottom: 10px;">
-                                                <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">题目内容</div>
-                                                <div style="padding: 12px; background: #fafafa; border-radius: 4px; font-size: 14px; color: #303133; line-height: 1.8; white-space: pre-wrap; max-height: 2400px; overflow-y: auto;">{{ selectedQuestion.content }}</div>
+                                                <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">{{ selectedQuestion.parent_id ? '小题内容' : '题目内容' }}</div>
+                                                <div v-if="selectedQuestion.content_html" style="padding: 12px; background: #fafafa; border-radius: 4px; font-size: 14px; color: #303133; line-height: 1.8; max-height: 2400px; overflow-y: auto;" v-html="sanitizeHtml(selectedQuestion.content_html)"></div>
+                                                <div v-else style="padding: 12px; background: #fafafa; border-radius: 4px; font-size: 14px; color: #303133; line-height: 1.8; white-space: pre-wrap; max-height: 2400px; overflow-y: auto;">{{ selectedQuestion.content }}</div>
                                             </div>
                                             <div>
                                                 <div style="font-size: 12px; color: #c0c4cc; margin-bottom: 4px;">标准答案</div>
@@ -168,8 +191,12 @@
 
                                 <!-- 手动输入（未选题时显示） -->
                                 <template v-if="!selectedQuestionId">
+                                    <div style="padding: 16px; background: #f0f9ff; border: 1px solid #b3d8ff; border-radius: 8px; margin-bottom: 16px; text-align: center;">
+                                        <div style="font-size: 15px; color: #303133; margin-bottom: 6px;">请先从上方下拉框选择一道题目</div>
+                                        <div style="font-size: 13px; color: #909399;">选择题目后将自动加载评分脚本和标准答案，无需手动填写</div>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                                        <span style="font-size: 14px; font-weight: 600; color: #303133;">手动输入</span>
+                                        <span style="font-size: 14px; font-weight: 600; color: #303133;">或者手动输入</span>
                                         <el-button size="small" text @click="inputCollapsed = true" style="font-size: 12px; color: #909399;">
                                             <el-icon><DArrowLeft /></el-icon> 折叠
                                         </el-button>
@@ -179,12 +206,32 @@
                                         <el-input v-model="manualQuestion" type="textarea" :rows="3" placeholder="请输入简答题题目..."></el-input>
                                     </div>
                                     <div style="margin-bottom: 16px;">
-                                        <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">评分规则 <span style="color: #c0c4cc; font-weight: 400;">(JSON格式)</span></div>
-                                        <el-input v-model="manualRubric" type="textarea" :rows="3" placeholder='{"points": [{"description": "要点1", "score": 5}]}'></el-input>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <div style="font-size: 12px; font-weight: 500; color: #909399; letter-spacing: 0.5px;">评分得分点</div>
+                                            <el-button size="small" text type="primary" @click="manualRubricPoints.push({ description: '', score: 0 })">
+                                                + 添加得分点
+                                            </el-button>
+                                        </div>
+                                        <div v-for="(pt, idx) in manualRubricPoints" :key="idx" style="display: flex; gap: 8px; margin-bottom: 6px; align-items: center;">
+                                            <el-input v-model="pt.description" placeholder="得分点描述（如：答出计算机科学）" style="flex: 1;"></el-input>
+                                            <el-input-number v-model="pt.score" :min="0" :max="100" :step="0.5" size="small" style="width: 100px;" placeholder="分值"></el-input-number>
+                                            <el-button size="small" text type="danger" @click="manualRubricPoints.splice(idx, 1)" :disabled="manualRubricPoints.length <= 1">
+                                                <el-icon><Delete /></el-icon>
+                                            </el-button>
+                                        </div>
                                     </div>
                                     <div style="margin-bottom: 16px;">
                                         <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">满分</div>
                                         <el-input-number v-model="manualMaxScore" :min="1" :max="100" style="width: 100%;"></el-input-number>
+                                    </div>
+                                    <div style="margin-bottom: 16px;">
+                                        <div style="font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 6px; letter-spacing: 0.5px;">科目</div>
+                                        <el-select v-model="manualSubject" style="width: 100%;">
+                                            <el-option label="思想政治" value="politics"></el-option>
+                                            <el-option label="语文" value="chinese"></el-option>
+                                            <el-option label="英语" value="english"></el-option>
+                                            <el-option label="通用" value="general"></el-option>
+                                        </el-select>
                                     </div>
                                 </template>
 
@@ -197,21 +244,23 @@
                                         </el-button>
                                     </div>
                                     <el-input v-model="studentAnswer" type="textarea" :rows="6" placeholder="请输入学生的答案..."></el-input>
-                                    <div class="answer-count">{{ studentAnswer.length }} 字</div>
+                                    <div class="answer-count">{{ selectedQuestion?.subject === 'english' ? (studentAnswer.trim().split(/\s+/).filter(Boolean).length + ' words') : (studentAnswer.length + ' 字') }}</div>
                                 </div>
 
                                 <div style="display: flex; gap: 8px; align-items: center;">
-                                    <el-select v-model="gradeModelIds" multiple collapse-tags collapse-tags-tooltip placeholder="全部模型" size="default" style="width: 280px; flex-shrink: 0;">
-                                        <template #header>
-                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
-                                                <span style="font-size: 12px; color: #909399;">选择模型（{{ gradeModelIds.length }}/{{ providers.length }}）</span>
-                                                <el-button size="small" text type="primary" @click="gradeModelIds = gradeModelIds.length === providers.length ? [] : providers.map(p => p.id)">
-                                                    {{ gradeModelIds.length === providers.length ? '取消全选' : '全选' }}
-                                                </el-button>
-                                            </div>
-                                        </template>
-                                        <el-option v-for="p in providers" :key="p.id" :label="p.name + ' · ' + p.display_name" :value="p.id"></el-option>
-                                    </el-select>
+                                    <div style="display: none;">
+                                        <el-select v-model="gradeModelIds" multiple collapse-tags collapse-tags-tooltip placeholder="全部模型" size="default" style="width: 280px; flex-shrink: 0;">
+                                            <template #header>
+                                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                                                    <span style="font-size: 12px; color: #909399;">选择模型（{{ gradeModelIds.length }}/{{ providers.length }}）</span>
+                                                    <el-button size="small" text type="primary" @click="gradeModelIds = gradeModelIds.length === providers.length ? [] : providers.map(p => p.id)">
+                                                        {{ gradeModelIds.length === providers.length ? '取消全选' : '全选' }}
+                                                    </el-button>
+                                                </div>
+                                            </template>
+                                            <el-option v-for="p in providers" :key="p.id" :label="p.name + ' · ' + p.display_name" :value="p.id"></el-option>
+                                        </el-select>
+                                    </div>
                                     <el-button type="primary" style="flex: 1;" :loading="grading" @click="gradeAnswer">
                                         <el-icon><Promotion /></el-icon> 开始评分
                                         <span style="font-size: 12px; opacity: 0.8; margin-left: 4px;">(Ctrl+Enter)</span>
@@ -265,7 +314,7 @@
                                             </template>
                                             <template v-else>
                                                 <span style="font-size: 28px; font-weight: 700; color: #409EFF;">{{ gradeResult.score }}</span>
-                                                <span style="font-size: 13px; color: #909399;">/ {{ currentMaxScore }} 分</span>
+                                                <span style="font-size: 13px; color: #909399;">/ {{ currentMaxScore }}{{ selectedQuestion?.subject === 'english' ? ' pts' : ' 分' }}</span>
                                                 <div style="flex: 1; max-width: 160px;">
                                                     <el-progress :percentage="Math.round(gradeResult.score / currentMaxScore * 100)" :stroke-width="6" :color="scoreColor" :show-text="false"></el-progress>
                                                 </div>
@@ -274,6 +323,37 @@
                                                 </el-tag>
                                             </template>
                                         </div>
+
+                                        <!-- 三层得分（技术细节，默认折叠） -->
+                                        <el-collapse v-if="gradeResult.layer_scores" style="margin-bottom: 12px;">
+                                            <el-collapse-item>
+                                                <template #title>
+                                                    <span style="font-size: 12px; color: #909399;">评分过程详情</span>
+                                                </template>
+                                                <div style="padding: 10px 14px; background: #f5f7fa; border-radius: 6px;">
+                                                    <div style="display: flex; gap: 16px;">
+                                                        <div style="flex: 1; text-align: center;">
+                                                            <div style="font-size: 11px; color: #909399; margin-bottom: 2px;">{{ selectedQuestion?.subject === 'english' ? '采分点匹配' : '关键词匹配' }}</div>
+                                                            <div style="font-size: 18px; font-weight: 600;" :style="{ color: gradeResult.layer_scores.keyword !== null ? '#67c23a' : '#c0c4cc' }">
+                                                                {{ gradeResult.layer_scores.keyword !== null ? gradeResult.layer_scores.keyword : '-' }}
+                                                            </div>
+                                                        </div>
+                                                        <div style="flex: 1; text-align: center; border-left: 1px solid #e4e7ed; border-right: 1px solid #e4e7ed;">
+                                                            <div style="font-size: 11px; color: #909399; margin-bottom: 2px;">向量匹配</div>
+                                                            <div style="font-size: 18px; font-weight: 600;" :style="{ color: gradeResult.layer_scores.vector !== null ? '#e6a23c' : '#c0c4cc' }">
+                                                                {{ gradeResult.layer_scores.vector !== null ? gradeResult.layer_scores.vector : '-' }}
+                                                            </div>
+                                                        </div>
+                                                        <div style="flex: 1; text-align: center;">
+                                                            <div style="font-size: 11px; color: #909399; margin-bottom: 2px;">LLM 评分</div>
+                                                            <div style="font-size: 18px; font-weight: 600;" :style="{ color: gradeResult.layer_scores.llm !== null ? '#409EFF' : '#c0c4cc' }">
+                                                                {{ gradeResult.layer_scores.llm !== null ? gradeResult.layer_scores.llm : '-' }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </el-collapse-item>
+                                        </el-collapse>
 
                                         <!-- 预警 -->
                                         <el-alert v-if="gradeResult.warning" :title="gradeResult.warning" type="warning" show-icon :closable="false" style="margin-bottom: 8px;"></el-alert>
@@ -287,6 +367,28 @@
                                                       show-icon :closable="false" style="margin-bottom: 4px;">
                                             </el-alert>
                                         </template>
+
+                                        <!-- 取分策略 -->
+                                        <div v-if="gradeResult.scoring_strategy" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                                            <span style="font-size: 12px; color: #909399;">取分策略：</span>
+                                            <el-tag size="small" :type="gradeResult.scoring_strategy === 'max' ? 'success' : gradeResult.scoring_strategy === 'min' ? 'danger' : 'info'">
+                                                {{ gradeResult.scoring_strategy }}
+                                            </el-tag>
+                                            <span v-if="gradeResult.layer_details && gradeResult.layer_details.keyword && gradeResult.layer_details.keyword.method" style="font-size: 11px; color: #c0c4cc;">
+                                                | {{ gradeResult.layer_details.keyword.method === 'english_scoring_point' ? '采分点匹配' : gradeResult.layer_details.keyword.method }}
+                                            </span>
+                                        </div>
+
+                                        <!-- 采分点命中汇总（英语科目） -->
+                                        <div v-if="gradeResult.layer_details && gradeResult.layer_details.keyword && gradeResult.layer_details.keyword.total_hits !== undefined" style="margin-bottom: 12px; padding: 10px 14px; background: #fdf6ec; border-radius: 6px; border: 1px solid #faecd8;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 13px; font-weight: 600; color: #e6a23c;">命中汇总</span>
+                                                <el-tag size="small" :type="gradeResult.layer_details.keyword.total_hits > 0 ? 'success' : 'danger'">
+                                                    命中 {{ gradeResult.layer_details.keyword.total_hits }} 个采分点
+                                                </el-tag>
+                                            </div>
+                                            <div v-if="gradeResult.layer_details.keyword.comment" style="font-size: 12px; color: #909399; margin-top: 4px;">{{ gradeResult.layer_details.keyword.comment }}</div>
+                                        </div>
 
                                         <!-- 分项得分 -->
                                         <div v-if="gradeResult.details && gradeResult.details.scoring_items && gradeResult.details.scoring_items.length > 0" style="margin-bottom: 16px;">
@@ -304,7 +406,10 @@
                                                     <div style="flex: 1; min-width: 0;">
                                                         <div style="font-size: 13px; color: #303133; font-weight: 500;">{{ item.name }}</div>
                                                         <div v-if="item.reason" style="font-size: 12px; color: #909399; margin-top: 2px;">{{ item.reason }}</div>
-                                                        <div v-if="item.quoted_text" style="font-size: 12px; color: #409EFF; margin-top: 2px; padding: 4px 8px; background: #ecf5ff; border-radius: 4px; border-left: 3px solid #409EFF;">
+                                                        <div v-if="item.matched_by && item.hit" style="font-size: 12px; color: #409EFF; margin-top: 2px; padding: 4px 8px; background: #ecf5ff; border-radius: 4px; border-left: 3px solid #409EFF;">
+                                                            <span style="color: #909399;">匹配：</span>{{ item.matched_by }}
+                                                        </div>
+                                                        <div v-else-if="item.quoted_text && item.hit" style="font-size: 12px; color: #409EFF; margin-top: 2px; padding: 4px 8px; background: #ecf5ff; border-radius: 4px; border-left: 3px solid #409EFF;">
                                                             <span style="color: #909399;">引用：</span>{{ item.quoted_text }}
                                                         </div>
                                                     </div>
@@ -388,7 +493,27 @@
 
                                     <!-- 底部信息 + 操作（仅单模型） -->
                                     <div v-if="!gradeResult.multi" style="display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-size: 12px; color: #c0c4cc;">引擎: {{ gradeResult.model_used || 'qwen-agent' }} · 记录ID: {{ gradeResult.record_id }}</span>
+                                        <span style="font-size: 12px; color: #909399;">
+                                            <template v-if="gradeResult.model_used === 'scoring_point_match'">
+                                                <el-tag type="success" size="small" style="margin-right: 4px;">采分点匹配</el-tag>确定性评分，未调用AI
+                                            </template>
+                                            <template v-else-if="gradeResult.model_used === 'english_fallback'">
+                                                <el-tag type="warning" size="small" style="margin-right: 4px;">AI语义判断</el-tag>精确匹配未命中，LLM兜底评分
+                                            </template>
+                                            <template v-else-if="gradeResult.model_used === 'sensitive_filter'">
+                                                <el-tag type="danger" size="small" style="margin-right: 4px;">敏感词拦截</el-tag>命中敏感词，直接0分
+                                            </template>
+                                            <template v-else-if="gradeResult.model_used === 'precheck'">
+                                                <el-tag type="info" size="small" style="margin-right: 4px;">空答案</el-tag>未作答
+                                            </template>
+                                            <template v-else-if="gradeResult.model_used === 'fallback'">
+                                                <el-tag type="danger" size="small" style="margin-right: 4px;">评分异常</el-tag>评分过程出现问题，得分可能不准确
+                                            </template>
+                                            <template v-else>
+                                                <el-tag type="primary" size="small" style="margin-right: 4px;">AI评分</el-tag>{{ gradeResult.model_used || 'qwen-agent' }}
+                                            </template>
+                                            <span style="color: #c0c4cc; margin-left: 8px;">记录#{{ gradeResult.record_id }}</span>
+                                        </span>
                                         <el-button v-if="selectedQuestionId" type="success" size="small" @click="saveAsTestCase">
                                             <el-icon><FolderAdd /></el-icon> 保存为测试用例
                                         </el-button>
@@ -437,10 +562,10 @@
                             <el-table v-else :data="testCases" style="width: 100%;" @selection-change="onCaseSelectionChange">
                                 <el-table-column type="selection" width="40"></el-table-column>
                                 <el-table-column prop="description" label="描述" show-overflow-tooltip min-width="150"></el-table-column>
-                                <el-table-column label="类型" width="70">
+                                <el-table-column label="类型" width="80">
                                     <template #default="scope">
-                                        <el-tag :type="scope.row.case_type === 'real' ? 'success' : 'warning'" size="small">
-                                            {{ scope.row.case_type === 'real' ? '真实' : '模拟' }}
+                                        <el-tag :type="scope.row.case_type === 'real' ? 'success' : scope.row.case_type === 'ai_generated' ? 'info' : 'warning'" size="small">
+                                            {{ scope.row.case_type === 'real' ? '真实' : scope.row.case_type === 'ai_generated' ? 'AI生成' : '人工模拟' }}
                                         </el-tag>
                                     </template>
                                 </el-table-column>
@@ -470,6 +595,9 @@
                                         <el-button size="small" type="primary" link @click="runSingleCase(scope.row.id)" title="运行">
                                             <el-icon><VideoPlay /></el-icon>
                                         </el-button>
+                                        <el-button v-if="scope.row.last_actual_score !== null && scope.row.last_actual_score !== undefined" size="small" type="primary" link @click="showTestCaseDetail(scope.row)" title="查看详情">
+                                            <el-icon><View /></el-icon>
+                                        </el-button>
                                         <el-button size="small" type="danger" link @click="deleteTestCase(scope.row.id)" title="删除">
                                             <el-icon><Delete /></el-icon>
                                         </el-button>
@@ -488,35 +616,30 @@
                     <!-- 自动生成参数对话框 -->
                     <el-dialog v-model="showGenDialog" title="自动生成测试用例" width="520px" :close-on-click-modal="false">
                         <div style="margin-bottom: 16px;">
-                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">生成数量</div>
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">生成数量 <span style="font-size: 12px; color: #909399;">（推荐 7-10 个以覆盖各分数段）</span></div>
                             <el-slider v-model="genCount" :min="3" :max="20" show-input></el-slider>
                         </div>
                         <div style="margin-bottom: 16px;">
-                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">分数分布策略</div>
+                            <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">模拟哪些水平的学生</div>
                             <el-radio-group v-model="genDist">
                                 <el-radio value="gradient">
-                                    <div><strong>梯度分布</strong><div style="font-size: 12px; color: #909399;">满分→中等→低分→零分</div></div>
+                                    <div><strong>各水平均覆盖</strong><div style="font-size: 12px; color: #909399;">从高分到低分，模拟各水平学生</div></div>
                                 </el-radio>
                                 <el-radio value="edge">
-                                    <div><strong>边界为主</strong><div style="font-size: 12px; color: #909399;">重点覆盖满分/零分/临界分</div></div>
+                                    <div><strong>重点测极端情况</strong><div style="font-size: 12px; color: #909399;">满分、零分、临界分</div></div>
                                 </el-radio>
                                 <el-radio value="middle">
-                                    <div><strong>中段为主</strong><div style="font-size: 12px; color: #909399;">重点覆盖中等水平作答</div></div>
+                                    <div><strong>重点测中等水平</strong><div style="font-size: 12px; color: #909399;">大部分学生的典型作答</div></div>
                                 </el-radio>
                                 <el-radio value="uniform">
-                                    <div><strong>均匀分布</strong><div style="font-size: 12px; color: #909399;">各分数段均匀覆盖</div></div>
+                                    <div><strong>均匀分布</strong><div style="font-size: 12px; color: #909399;">各分数段等量覆盖</div></div>
                                 </el-radio>
                             </el-radio-group>
                         </div>
                         <div style="margin-bottom: 16px;">
                             <div style="font-size: 13px; color: #606266; margin-bottom: 6px;">模拟作答风格（可多选）</div>
                             <el-checkbox-group v-model="genStyles">
-                                <el-checkbox value="标准规范">标准规范</el-checkbox>
-                                <el-checkbox value="口语化">口语化</el-checkbox>
-                                <el-checkbox value="要点遗漏">要点遗漏</el-checkbox>
-                                <el-checkbox value="偏题跑题">偏题跑题</el-checkbox>
-                                <el-checkbox value="复制原文">复制原文</el-checkbox>
-                                <el-checkbox value="空白作答">空白作答</el-checkbox>
+                                <el-checkbox v-for="opt in genStyleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</el-checkbox>
                             </el-checkbox-group>
                         </div>
                         <div style="margin-bottom: 16px;">
@@ -527,6 +650,36 @@
                             <el-button @click="showGenDialog = false">取消</el-button>
                             <el-button type="primary" :loading="genRunning" @click="autoGenerateTestCases">开始生成</el-button>
                         </template>
+                    </el-dialog>
+
+                    <!-- 测试用例评分详情对话框 -->
+                    <el-dialog v-model="testCaseDetailVisible" title="测试用例评分详情" width="600px" :close-on-click-modal="true">
+                        <div v-if="testCaseDetail">
+                            <div style="margin-bottom: 12px;">
+                                <span style="font-size: 13px; color: #909399;">期望分：</span>
+                                <strong style="font-size: 18px;">{{ testCaseDetail.expected_score }}</strong>
+                                <span style="margin: 0 8px; color: #c0c4cc;">|</span>
+                                <span style="font-size: 13px; color: #909399;">实际分：</span>
+                                <strong style="font-size: 18px;" :style="{ color: Math.abs(testCaseDetail.actual_score - testCaseDetail.expected_score) > 1 ? '#f56c6c' : '#67c23a' }">{{ testCaseDetail.actual_score }}</strong>
+                            </div>
+                            <div style="margin-bottom: 12px; padding: 10px; background: #fafafa; border-radius: 6px; max-height: 150px; overflow-y: auto;">
+                                <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">考生答案</div>
+                                <div style="font-size: 13px; color: #303133; white-space: pre-wrap;">{{ testCaseDetail.answer }}</div>
+                            </div>
+                            <div v-if="testCaseDetail.scoring_items && testCaseDetail.scoring_items.length > 0" style="margin-bottom: 12px;">
+                                <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">评分明细</div>
+                                <div v-for="(item, idx) in testCaseDetail.scoring_items" :key="idx" style="margin-bottom: 6px; padding: 8px 10px; background: #f5f7fa; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="font-size: 13px;">{{ item.description || item.item || '得分点' + (idx+1) }}</span>
+                                        <span style="font-size: 13px; font-weight: 600;">{{ item.score }} / {{ item.max_score || '?' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="testCaseDetail.comment" style="padding: 10px; background: #fdf6ec; border-radius: 6px;">
+                                <div style="font-size: 12px; color: #e6a23c; margin-bottom: 4px;">评语</div>
+                                <div style="font-size: 13px; color: #303133;">{{ testCaseDetail.comment }}</div>
+                            </div>
+                        </div>
                     </el-dialog>
 
                     <!-- 评分脚本版本历史对话框 -->
@@ -686,11 +839,13 @@ const app = createApp({
     setup() {
         const appData = useApp();
 
+        const sanitizeHtml = window.SharedApp.sanitizeHtml;
+
         onMounted(() => {
             appData.init();
         });
 
-        return appData;
+        return { ...appData, sanitizeHtml };
     }
 });
 

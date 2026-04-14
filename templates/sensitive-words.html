@@ -3,28 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能评分系统 - 敏感词管理</title>
+    <title>AI 命题系统 - 敏感词管理</title>
     <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
     <script src="/static/vendor/vue.global.prod.js"></script>
     <script src="/static/vendor/element-plus.js"></script>
     <script src="/static/vendor/element-plus-icons.js"></script>
     <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
-        .layout { height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
-        .subtitle { font-size: 12px; color: #909399; }
-        .header-right { display: flex; align-items: center; gap: 15px; }
-        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
         .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
-        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
         .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .toolbar-right { display: flex; gap: 10px; align-items: center; }
-        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
-        .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
     </style>
 </head>
 <body>
@@ -33,7 +25,7 @@
             <!-- Header -->
             <div class="header">
                 <div class="header-left">
-                    <span class="logo">AI 智能评分系统</span>
+                    <span class="logo">AI 命题系统</span>
                     <span class="subtitle">敏感词管理</span>
                 </div>
                 <div class="header-right">
@@ -181,12 +173,10 @@
                 const form = ref({ word: '', category: 'politics', severity: 'high' });
                 const batchForm = ref({ text: '', category: 'politics', severity: 'high' });
 
-                const currentSubject = ref(localStorage.getItem('ai_grading_current_subject') || '');
-                const isAdmin = ref(localStorage.getItem('ai_grading_role') === 'admin');
+                const currentSubject = ref(localStorage.getItem(window.SharedApp.CURRENT_SUBJECT_KEY) || '');
+                const isAdmin = ref(localStorage.getItem(window.SharedApp.ROLE_KEY) === 'admin');
 
-                const subjectLabels = {
-                    politics: '思想政治', chinese: '语文', english: '英语',
-                };
+                const subjectLabels = window.SharedApp.SUBJECT_LABELS;
                 const categoryLabels = { politics: '政治敏感', other: '其他' };
                 const severityLabels = { high: '高危', medium: '中危', low: '低危' };
 

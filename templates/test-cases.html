@@ -3,33 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能评分系统 - 测试集管理</title>
+    <title>AI 命题系统 - 测试集管理</title>
     <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
     <script src="/static/vendor/vue.global.prod.js"></script>
     <script src="/static/vendor/element-plus.js"></script>
     <script src="/static/vendor/element-plus-icons.js"></script>
     <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
-        .layout { height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); height: 60px; z-index: 10; }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .logo { font-size: 20px; font-weight: bold; color: #409EFF; }
-        .subtitle { font-size: 12px; color: #909399; }
-        .header-right { display: flex; align-items: center; gap: 15px; }
-        .status-badge { display: flex; align-items: center; gap: 5px; padding: 4px 12px; background: #f0f9eb; border-radius: 12px; font-size: 12px; color: #67c23a; }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
-        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
         .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
         .stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
         .stat-value { font-size: 28px; font-weight: bold; }
         .stat-label { font-size: 13px; color: #909399; margin-top: 8px; }
         .section-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; }
-        .footer { background: #fff; padding: 15px 20px; text-align: center; font-size: 12px; color: #909399; border-top: 1px solid #e4e7ed; }
-        .footer a { color: #409EFF; text-decoration: none; margin: 0 10px; }
         .answer-preview { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #606266; font-size: 12px; }
         .back-btn { cursor: pointer; color: #409EFF; font-size: 14px; display: flex; align-items: center; gap: 4px; margin-bottom: 15px; }
         .back-btn:hover { color: #66b1ff; }
@@ -50,7 +40,7 @@
                 <a href="/" style="display: flex; align-items: center; gap: 4px; text-decoration: none; color: #409EFF; font-size: 14px;">
                     <el-icon><ArrowLeft /></el-icon> 返回首页
                 </a>
-                <div class="logo">AI 评分系统</div>
+                <div class="logo">AI 命题系统</div>
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
@@ -122,7 +112,11 @@
                         @selection-change="handleOverviewSelectionChange">
                         <el-table-column type="selection" width="45" />
                         <el-table-column prop="title" label="题目标题" min-width="240" show-overflow-tooltip />
-                        <el-table-column prop="subject" label="科目" width="100" />
+                        <el-table-column label="科目" width="100">
+                            <template #default="{ row }">
+                                {{ getSubjectLabel(row.subject) }}
+                            </template>
+                        </el-table-column>
                         <el-table-column label="用例/脚本" width="180">
                             <template #default="{ row }">
                                 <div style="line-height: 1.4;">
@@ -181,7 +175,7 @@
                         <div class="page-card" style="padding: 15px 20px;">
                             <div class="question-header" style="margin-bottom: 0;">
                                 <div class="question-header-item">题目：<span>{{ detailQuestion.title }}</span></div>
-                                <div class="question-header-item">科目：<span>{{ detailQuestion.subject }}</span></div>
+                                <div class="question-header-item">科目：<span>{{ getSubjectLabel(detailQuestion.subject) }}</span></div>
                                 <div class="question-header-item">满分：<span>{{ detailQuestion.max_score }} 分</span></div>
                                 <div class="question-header-item">
                                     评分脚本：
@@ -331,7 +325,7 @@
 
         <!-- 底部 -->
         <div class="footer">
-            <span>AI 智能评分系统 v2.0</span>
+            <span>AI 命题系统 v2.0</span>
             <a href="/">首页</a>
             <a href="/management">题库管理</a>
             <a href="/grading" target="_blank">评分工具</a>
@@ -382,8 +376,7 @@ const { ElMessage, ElMessageBox } = ElementPlus;
 const app = createApp({
     setup() {
         // ---- 角色/科目感知 ----
-        const ROLE_KEY = 'ai_grading_role';
-        const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
+        const { ROLE_KEY, CURRENT_SUBJECT_KEY } = window.SharedApp;
         const userRole = ref(localStorage.getItem(ROLE_KEY) || 'teacher');
         const isAdmin = computed(() => userRole.value === 'admin');
         const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
@@ -717,9 +710,12 @@ const app = createApp({
             loadOverview();
         });
 
+        // getSubjectLabel 已从 window.SharedApp 提供
+        const getSubjectLabel = window.SharedApp.getSubjectLabel;
+
         return {
             currentView,
-            userRole, isAdmin, currentSubject,
+            userRole, isAdmin, currentSubject, getSubjectLabel,
             // overview
             overviewData, loadingOverview, filterSubject, filterStatus, searchKeyword,
             subjects, filteredOverview, overviewStats, loadOverview, formatTime,

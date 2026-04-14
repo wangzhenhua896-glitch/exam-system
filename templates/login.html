@@ -9,6 +9,7 @@
     <script src="/static/vendor/element-plus.js"></script>
     <script src="/static/vendor/element-plus-icons.js"></script>
     <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -88,17 +89,7 @@
 
 <script>
 const { createApp, ref, onMounted } = Vue;
-
-const DEFAULT_SUBJECTS = [
-    { label: '思想政治', value: 'politics' },
-    { label: '语文', value: 'chinese' },
-    { label: '英语', value: 'english' },
-];
-
-const SUBJECT_STORAGE_KEY = 'ai_grading_subjects';
-const CURRENT_SUBJECT_KEY = 'ai_grading_current_subject';
-const ROLE_KEY = 'ai_grading_role';
-const TEACHER_NAME_KEY = 'ai_grading_teacher_name';
+const { DEFAULT_SUBJECTS, SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, ROLE_KEY, TEACHER_NAME_KEY } = window.SharedApp;
 
 createApp({
     setup() {
@@ -182,7 +173,7 @@ createApp({
             localStorage.setItem(ROLE_KEY, 'teacher');
             localStorage.setItem(CURRENT_SUBJECT_KEY, selectedSubject.value);
             localStorage.setItem(TEACHER_NAME_KEY, name);
-            window.location.href = '/management';
+            window.location.href = '/management?t=' + Date.now();
         };
 
         const goAdmin = () => {

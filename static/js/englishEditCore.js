@@ -92,7 +92,9 @@
     var pageLoading = ref(false);
     var currentParentId = ref(null);  // 父题 ID
     var parentTitle = ref('');
-    var parentContent = ref('');       // 阅读材料
+    var parentContent = ref('');       // 阅读材料（纯文本）
+    var parentContentHtml = ref('');   // 阅读材料（HTML 格式，来自 original_text）
+    var parentContentEditing = ref(false); // 是否处于编辑模式
     var parentMaxScore = ref(6);
     var parentSubject = ref('english');
     var isStateA = ref(false);         // true=有子题(166-169), false=仅脚本(170-177)
@@ -186,6 +188,14 @@
       return true;
     }
 
+    function collapseAllSubQuestions() {
+      subQuestions.value.forEach(function (sq) {
+        if (sq.status !== 'completed') {
+          sq.expanded = false;
+        }
+      });
+    }
+
     function completeCurrentQuestion() {
       var sq = subQuestions.value[activeQuestionIndex.value];
       if (!sq || !isQuestionComplete(sq)) return;
@@ -195,10 +205,23 @@
       // 推进到下一题
       if (activeQuestionIndex.value < subQuestions.value.length - 1) {
         activeQuestionIndex.value++;
+        collapseAllSubQuestions();
         subQuestions.value[activeQuestionIndex.value].status = 'in_progress';
         subQuestions.value[activeQuestionIndex.value].expanded = true;
       } else {
         // 全部完成
+        markStepCompleted('per_question');
+      }
+      saveWorkflowStatus();
+    }
+
+    function confirmSubQuestion(qi) {
+      var sq = subQuestions.value[qi];
+      if (!sq || !isQuestionComplete(sq)) return;
+      sq.status = 'completed';
+      sq.expanded = false;
+      // 检查是否全部完成
+      if (allQuestionsCompleted()) {
         markStepCompleted('per_question');
       }
       saveWorkflowStatus();
@@ -212,6 +235,7 @@
           subQuestions.value[i].status = 'pending';
           subQuestions.value[i].expanded = false;
         }
+        collapseAllSubQuestions();
         activeQuestionIndex.value = index;
         subQuestions.value[index].status = 'in_progress';
         subQuestions.value[index].expanded = true;
@@ -246,6 +270,8 @@
 
         // 解析阅读材料
         parentContent.value = extractReadingMaterial(parent.content || '');
+        // 保留 HTML 格式的原始材料（来自 original_text 或 content_html）
+        parentContentHtml.value = parent.original_text || parent.content_html || '';
 
         // 恢复 workflow_status
         if (parent.workflow_status) {
@@ -317,6 +343,10 @@
         if (workflowStatus.value && workflowStatus.value.question_status) {
           sq.status = workflowStatus.value.question_status[String(child.id)] || 'pending';
         }
+        // 数据完整性校验：如果 workflow 认为已完成但数据不完整，重置为 pending
+        if (sq.status === 'completed' && !isQuestionComplete(sq)) {
+          sq.status = 'pending';
+        }
         sq.expanded = (sq.status === 'in_progress');
         loaded.push(sq);
       }
@@ -330,6 +360,21 @@
         var idx = loaded.findIndex(function (sq) { return sq.status !== 'completed'; });
         activeQuestionIndex.value = idx >= 0 ? idx : 0;
       }
+      // 确保活跃题索引指向一个非 completed 的题
+      if (loaded[activeQuestionIndex.value] && loaded[activeQuestionIndex.value].status === 'completed') {
+        var fixIdx = loaded.findIndex(function (sq) { return sq.status !== 'completed'; });
+        activeQuestionIndex.value = fixIdx >= 0 ? fixIdx : 0;
+      }
+
+      // 确保活跃题处于 in_progress 状态且展开，其他题折叠
+      loaded.forEach(function (sq, i) {
+        if (i === activeQuestionIndex.value && sq.status !== 'completed') {
+          sq.status = 'in_progress';
+          sq.expanded = true;
+        } else if (sq.status !== 'completed') {
+          sq.expanded = false;
+        }
+      });
 
       // 恢复 currentStep
       if (workflowStatus.value && workflowStatus.value.current_step) {
@@ -916,6 +961,8 @@
       currentParentId: currentParentId,
       parentTitle: parentTitle,
       parentContent: parentContent,
+      parentContentHtml: parentContentHtml,
+      parentContentEditing: parentContentEditing,
       parentMaxScore: parentMaxScore,
       isStateA: isStateA,
       rubricScript: rubricScript,
@@ -946,6 +993,7 @@
       loadQuestion: loadQuestion,
       goToStep: goToStep,
       completeCurrentQuestion: completeCurrentQuestion,
+      confirmSubQuestion: confirmSubQuestion,
       goToQuestion: goToQuestion,
       extractFromPaste: extractFromPaste,
       addSubQuestion: addSubQuestion,

@@ -611,10 +611,18 @@
                         <div v-else-if="englishEdit.currentStep === 'extract'">
                             <el-card shadow="never" style="margin-bottom: 20px;">
                                 <template #header>
-                                    <span style="font-weight: 600;">阅读材料</span>
-                                    <el-tag type="info" size="small" style="margin-left: 8px;">总分: {{ englishEdit.parentMaxScore }} 分</el-tag>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span style="font-weight: 600;">阅读材料</span>
+                                            <el-tag type="info" size="small" style="margin-left: 8px;">总分: {{ englishEdit.parentMaxScore }} 分</el-tag>
+                                        </div>
+                                        <el-button size="small" text type="primary" @click="englishEdit.parentContentEditing = !englishEdit.parentContentEditing">
+                                            {{ englishEdit.parentContentEditing ? '收起编辑' : '编辑文本' }}
+                                        </el-button>
+                                    </div>
                                 </template>
-                                <el-input v-model="englishEdit.parentContent" type="textarea" :rows="6" placeholder="阅读材料内容..." />
+                                <div v-if="!englishEdit.parentContentEditing && englishEdit.parentContentHtml" style="padding: 12px; background: #f5f7fa; border-radius: 4px; line-height: 1.8; max-height: 400px; overflow-y: auto; border: 1px solid #dcdfe6; font-family: 'Times New Roman', serif;" v-html="sanitizeHtml(englishEdit.parentContentHtml)"></div>
+                                <el-input v-else v-model="englishEdit.parentContent" type="textarea" :rows="6" placeholder="阅读材料内容..." />
                             </el-card>
 
                             <el-card shadow="never">
@@ -876,8 +884,8 @@
                                             <div v-else></div>
                                             <div style="display: flex; gap: 8px;">
                                                 <el-button type="danger" text @click="englishEdit.removeSubQuestion(qi)">删除此子题</el-button>
-                                                <el-button type="primary" :disabled="!englishEdit.isQuestionComplete(sq)" @click="englishEdit.completeCurrentQuestion()">
-                                                    Q{{ qi + 1 }} 确认完成 →
+                                                <el-button type="primary" :disabled="!englishEdit.isQuestionComplete(sq)" @click="englishEdit.confirmSubQuestion(qi)">
+                                                    {{ sq.status === 'completed' ? '重新确认' : 'Q' + (qi + 1) + ' 确认完成 →' }}
                                                 </el-button>
                                             </div>
                                         </div>
@@ -1683,6 +1691,7 @@ const app = createApp({
     setup() {
         // 英语编辑器（通过 window.EnglishEditCore 全局暴露）
         const englishEdit = Vue.reactive(window.EnglishEditCore.useEnglishEdit());
+        window._englishEdit = englishEdit; // debug hook
 
         const sidebarCollapsed = ref(true);
         const currentPage = ref('question-list');
