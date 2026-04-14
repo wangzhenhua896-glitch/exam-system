@@ -8,9 +8,9 @@ export function useRubric({ selectedQuestion, scriptVersion, scriptVersionCount 
         if (!selectedQuestion.value || !selectedQuestion.value.rubric_script) return [];
         const script = selectedQuestion.value.rubric_script;
         const byIndex = {};
-        const parts = script.split(/(?=得分点\d+|第\d+问)/);
+        const parts = script.split(/(?=得分点\d+|第\d+问|Scoring [Pp]oint\s*\d+|Criterion\s*\d+|Part\s*\d+|Section\s*[A-Z]|第[一二三四五六七八九十]+[问题]|\n?\([a-zA-Z]\))/);
         for (const part of parts) {
-            const match = part.match(/^(得分点|第)\s*(\d+)[^：:]*[：:]/);
+            const match = part.match(/^(得分点|第|Scoring\s*[Pp]oint|Criterion|Part|Section)\s*(\d+|[A-Z]|[一二三四五六七八九十]+)[^：:]*[：:]|^\(?[a-zA-Z]\)?[：:.\s]/);
             if (match) {
                 const idx = parseInt(match[2]);
                 const content = part.trim();
@@ -59,7 +59,7 @@ export function useRubric({ selectedQuestion, scriptVersion, scriptVersionCount 
                 ElMessage.success('评分脚本已保存');
             }
         } catch (e) {
-            ElMessage.error('保存失败');
+            window.SharedApp.handleApiError(e, '保存评分脚本');
         }
     }
 
@@ -85,12 +85,19 @@ export function useRubric({ selectedQuestion, scriptVersion, scriptVersionCount 
                 historyDialogVisible.value = true;
             }
         } catch (e) {
-            ElMessage.error('获取版本历史失败');
+            window.SharedApp.handleApiError(e, '获取版本历史');
         }
     }
 
     async function rollbackScriptVersion(version) {
         if (!selectedQuestion.value) return;
+        try {
+            await ElMessageBox.confirm(
+                '当前评分脚本将被替换为版本 v' + version + ' 的内容，此操作可再次回滚撤销。确定继续？',
+                '确认回滚',
+                { type: 'warning', confirmButtonText: '确定回滚', cancelButtonText: '取消' }
+            );
+        } catch { return; }
         try {
             const { data } = await axios.post(API_BASE + '/api/questions/' + selectedQuestion.value.id + '/script-rollback', {
                 version: version
@@ -110,7 +117,7 @@ export function useRubric({ selectedQuestion, scriptVersion, scriptVersionCount 
                 ElMessage.success('已回滚到版本 v' + version);
             }
         } catch (e) {
-            ElMessage.error('回滚失败');
+            window.SharedApp.handleApiError(e, '回滚评分脚本');
         }
     }
 

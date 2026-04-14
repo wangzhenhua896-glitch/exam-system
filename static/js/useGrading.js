@@ -1,6 +1,6 @@
 import { API_BASE } from './api.js';
 // 评分核心模块
-export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer, manualQuestion, manualRubric, manualMaxScore, currentMaxScore, providers, currentModelId, splitModelId }) {
+export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer, manualQuestion, manualRubric, manualMaxScore, manualSubject, manualRubricPoints, currentMaxScore, providers, currentModelId, splitModelId }) {
     const { ref, computed } = Vue;
     const { ElMessage } = ElementPlus;
 
@@ -44,7 +44,7 @@ export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer
             const mdl = (mid.indexOf('/') > 0) ? mid.substring(mid.indexOf('/') + 1) : (p.model || '');
 
             let requestBody;
-            const studentId = localStorage.getItem('ai_grading_username') || '';
+            const studentId = localStorage.getItem('ai_grading_teacher_name') || '';
             if (selectedQuestionId.value) {
                 requestBody = { question_id: selectedQuestionId.value, answer: studentAnswer.value.trim(), student_id: studentId, provider: prov, model: mdl };
             } else {
@@ -54,11 +54,22 @@ export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer
                     return;
                 }
                 let rubric = {};
-                if (manualRubric.value.trim()) {
+                // 从表单化得分点构建 rubric
+                const validPoints = (manualRubricPoints.value || []).filter(p => p.description.trim());
+                if (validPoints.length > 0) {
+                    rubric = {
+                        points: validPoints.map(p => ({
+                            description: p.description.trim(),
+                            score: parseFloat(p.score) || 0
+                        }))
+                    };
+                } else if (manualRubric.value.trim()) {
+                    // 兼容：手动 JSON 输入
                     try { rubric = JSON.parse(manualRubric.value); }
                     catch (e) { ElMessage.error('评分规则JSON格式错误'); grading.value = false; return; }
                 }
-                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), student_id: studentId, rubric, max_score: manualMaxScore.value, provider: prov, model: mdl };
+                const subj = selectedQuestion.value?.subject || manualSubject.value || 'general';
+                requestBody = { question: manualQuestion.value, answer: studentAnswer.value.trim(), student_id: studentId, rubric, max_score: manualMaxScore.value, subject: subj, provider: prov, model: mdl };
             }
 
             try {
@@ -69,7 +80,11 @@ export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer
                     results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: result.error || '评分失败', comment: '' });
                 }
             } catch (e) {
-                results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: '后端服务未启动', comment: '' });
+                let errMsg = '评分服务暂时不可用，请稍后再试';
+                if (e.code === 'ERR_NETWORK') errMsg = '网络连接失败，请检查网络后重试';
+                else if (e.response?.status === 500) errMsg = '评分服务异常，请联系管理员';
+                else if (e.response?.data?.error) errMsg = e.response.data.error;
+                results.push({ model_id: mid, model_name: p.name || prov, display_name: p.display_name || mdl, score: null, confidence: 0, error: errMsg, comment: '' });
             }
         }
 

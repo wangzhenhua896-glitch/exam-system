@@ -126,7 +126,7 @@ class QwenGradingEngine:
         """
         try:
             # 格式化评分标准
-            rubric_text = self._format_rubric(rubric, max_score)
+            rubric_text = self._format_rubric(rubric, max_score, subject)
 
             # 构建 Prompt（按科目走不同提示词）
             if subject == 'politics':
@@ -134,10 +134,11 @@ class QwenGradingEngine:
             elif subject == 'chinese':
                 system_prompt = self._get_chinese_system_prompt()
             elif subject == 'english':
-                system_prompt = self._get_english_system_prompt()
+                from app.english_prompts import GRADING_SYSTEM_PROMPT_EN
+                system_prompt = GRADING_SYSTEM_PROMPT_EN
             else:
                 system_prompt = self._get_system_prompt()
-            user_prompt = self._build_user_prompt(question, rubric_text, answer, max_score)
+            user_prompt = self._build_user_prompt(question, rubric_text, answer, max_score, subject)
 
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -368,41 +369,14 @@ scoring_items 规则：
 - 反作弊命中时该问所有要点 hit=false、score=0、quoted_text=""。
 - 只输出 JSON，不要输出任何其他文字。"""
 
-    def _get_english_system_prompt(self) -> str:
-        """英语科目专用系统提示词（阅读理解等）"""
-        return """你是一位专业的英语阅卷老师，必须严格按照评分脚本给学生答案打分。
-
-评分流程（必须严格按此顺序执行）：
-1. 先检查反作弊规则：如果评分脚本中包含【反作弊规则】，必须先执行反作弊检查。
-   命中反作弊条件（如复制阅读材料原文、复制题干、空白未作答、答非所问）→ 该问直接判0分，跳过逐项评分。
-   注意：如果考生引用了材料原文后补充了自己的回答，且补充内容命中得分要点，应正常按要点给分。
-2. 再逐项评分：严格按照评分脚本中的【逐项评分规则】逐一判断给分，每一项独立计分。
-3. 分值必须完全按照评分脚本中标注的分值执行，不可自行调整。
-4. 语言规则：英语题目要求用英语作答，用拼音或中文作答一律判0分。
-5. 等价表述按评分脚本中的等价表述表匹配。大小写不敏感。
-6. 评语需要逐个要点说明判断结果：该问是否得分、得多少分及原因。（评语不超过150字）
-
-输出格式（严格JSON，不要输出任何其他文字）：
-请忽略评分脚本中【输出格式要求】指定的格式，统一按以下 scoring_items 格式输出：
-{
-  "scoring_items": [
-    {"name": "第1问：Spring Festival", "score": 2, "max_score": 2, "hit": true, "reason": "正确", "quoted_text": "Spring Festival"},
-    {"name": "第2问：谐音寓意", "score": 1, "max_score": 2, "hit": true, "reason": "命中采分点A", "quoted_text": "surplus"},
-    {"name": "第3问：烟花习俗", "score": 2, "max_score": 2, "hit": true, "reason": "全部命中", "quoted_text": "fireworks, scare away"}
-  ],
-  "评语": "..."
-}
-规则：
-- 总分由系统自动累加，你不需要输出总分。
-- 每个采分点（或得分条件）对应一个独立的 scoring_item。
-- 反作弊命中时该问所有要点 hit=false、score=0、quoted_text=""。
-- 只输出 JSON，不要输出任何其他文字。"""
-
-    def _build_user_prompt(self, question: str, rubric: str, answer: str, max_score: float) -> str:
+    def _build_user_prompt(self, question: str, rubric: str, answer: str, max_score: float, subject: str = 'general') -> str:
         """构建用户提示词"""
         import hashlib, time
         # 用答案内容+时间戳生成随机标记，打破大模型 API 的服务端缓存
         cache_buster = hashlib.md5(f"{answer}:{time.time()}".encode()).hexdigest()[:8]
+        if subject == 'english':
+            from app.english_prompts import build_user_prompt_en
+            return build_user_prompt_en(question, rubric, answer, max_score, cache_buster)
         return f"""# 题目
 {question}
 
@@ -418,7 +392,7 @@ scoring_items 规则：
 请评分，并按要求输出 JSON：
 <!-- req:{cache_buster} -->"""
 
-    def _format_rubric(self, rubric: Dict[str, Any], max_score: float) -> str:
+    def _format_rubric(self, rubric: Dict[str, Any], max_score: float, subject: str = 'general') -> str:
         """格式化评分标准为文本
         优先使用评分脚本，如果评分脚本存在，直接使用，保证确定性和一致性
         """
@@ -431,6 +405,10 @@ scoring_items 规则：
             return rubricScript.strip()
 
         # 如果没有评分脚本，按照规则+要点方式格式化
+        if subject == 'english':
+            from app.english_prompts import format_rubric_en
+            return format_rubric_en(rubric, max_score)
+
         parts = []
 
         # 先输出整体评分规则
@@ -496,11 +474,11 @@ scoring_items 规则：
             if points:
                 return points
 
-        # 2. 从 rubricScript 解析 "要点N（X分）：内容" 格式（比 rubricPoints 结构更好）
+        # 2. 从 rubricScript 解析 "要点N（X分）：内容" 或 "Point N (X points): content" 格式
         rubric_script = rubric.get("rubricScript", "")
         if rubric_script and rubric_script.strip():
-            for m in re.finditer(r'要点\d+[（(]\d+分[)）][:：]\s*(.+)', rubric_script):
-                desc = m.group(1).strip()
+            for m in re.finditer(r'(?:要点|Point)\s*\d+[（(]\d+\s*(分|points?|marks?)[)）][:：]\s*(.+)', rubric_script, re.IGNORECASE):
+                desc = m.group(2).strip()
                 if desc:
                     kws = self._keywords_from_text(desc)
                     points.append({"description": desc, "keywords": kws})
@@ -514,8 +492,8 @@ scoring_items 规则：
                 line = line.strip()
                 if not line:
                     continue
-                # 去掉末尾的 (X分) 标记
-                desc = re.sub(r'\s*[\(（]\s*\d+\s*分\s*[\)）]\s*$', '', line).strip()
+                # 去掉末尾的 (X分) 或 (X points) 标记
+                desc = re.sub(r'\s*[\(（]\s*\d+\s*(分|points?|marks?)\s*[\)）]\s*$', '', line, flags=re.IGNORECASE).strip()
                 if desc:
                     kws = self._keywords_from_text(desc)
                     points.append({"description": desc, "keywords": kws})
@@ -528,17 +506,21 @@ scoring_items 规则：
     def _keywords_from_text(text: str) -> List[str]:
         """从评分要点文本中提取关键词
 
-        按顿号、逗号、"和"、"及" 等切分，过滤掉太短和太长的词。
+        按顿号、逗号、"和"、"及" 等切分（中英文通用），过滤掉太短和太长的词。
         """
         # 去掉括号内容
         clean = re.sub(r'[（(][^)）]*[)）]', '', text)
-        # 按分隔符切分
-        parts = re.split(r'[、，,；;和及]', clean)
+        # 按分隔符切分（含 / 用于英语 and/or）
+        parts = re.split(r'[、，,；;和及/]', clean)
         keywords = []
         for p in parts:
             p = p.strip()
-            # 只保留 2~12 字的关键词（太短如"的"无意义，太长如整句不适合作为关键词）
-            if 2 <= len(p) <= 12:
+            # 中文：2~12字；英文：按词数过滤 1~8 词
+            if not p:
+                continue
+            word_count = len(p.split())
+            char_count = len(p)
+            if (2 <= char_count <= 12) or (1 <= word_count <= 8 and char_count >= 3):
                 keywords.append(p)
         # 如果切分后关键词太少，把整句也加入（作为语义匹配的锚点）
         if len(keywords) < 2 and len(text) >= 4:

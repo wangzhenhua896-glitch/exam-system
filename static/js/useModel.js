@@ -36,7 +36,7 @@ export function useModel() {
                 if (active) currentModelId.value = active.id;
             }
         } catch (e) {
-            console.error('加载模型列表失败', e);
+            window.SharedApp.handleApiError(e, '加载模型列表');
         }
     }
 

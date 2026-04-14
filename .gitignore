@@ -27,6 +27,7 @@ logs/
 # Temporary
 temp_*/
 *.tmp
+_tmp_*
 .DS_Store
 
 # Node (if any)

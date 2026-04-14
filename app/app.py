@@ -5,6 +5,11 @@ Flask 应用工厂
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 from loguru import logger
+import os
+import sys
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def create_app() -> Flask:
@@ -17,6 +22,20 @@ def create_app() -> Flask:
     
     # 配置
     app.config["SECRET_KEY"] = "ai-grading-system-secret-key"
+    
+    # Swagger配置
+    try:
+        from swagger_config import SWAGGER_CONFIG
+        app.config['SWAGGER'] = SWAGGER_CONFIG
+        
+        # 初始化Flasgger
+        from flasgger import Swagger
+        swagger = Swagger(app)
+        logger.info("Swagger文档系统初始化成功")
+    except ImportError as e:
+        logger.warning(f"Swagger依赖未安装: {e}")
+    except Exception as e:
+        logger.error(f"Swagger初始化失败: {e}")
     
     # 扩展
     CORS(app)
@@ -48,14 +67,18 @@ def register_routes(app: Flask):
     def login():
         from flask import send_file
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'login.html')
-        return send_file(template_path, mimetype='text/html')
+        resp = send_file(template_path, mimetype='text/html')
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
 
     # 题库管理 - Vue 完整界面（直接发送文件，避免 Jinja2 解析 Vue {{ }} 语法冲突）
     @app.route("/management")
     def management():
         from flask import send_file
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-bank.html')
-        return send_file(template_path, mimetype='text/html')
+        resp = send_file(template_path, mimetype='text/html')
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
 
     # 管理后台 - 管理员专属（科目管理、模型配置、Bug 清单）
     @app.route("/admin")

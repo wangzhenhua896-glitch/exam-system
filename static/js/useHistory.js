@@ -2,7 +2,7 @@ import { API_BASE } from './api.js';
 // 历史记录模块
 export function useHistory({ selectedQuestion }) {
     const { ref } = Vue;
-    const { ElMessage } = ElementPlus;
+    const { ElMessage, ElMessageBox } = ElementPlus;
 
     const history = ref([]);
 
@@ -37,7 +37,14 @@ export function useHistory({ selectedQuestion }) {
         }
     }
 
-    function clearHistory() {
+    async function clearHistory() {
+        try {
+            await ElMessageBox.confirm(
+                '确定清空所有评分历史记录？此操作不可恢复。',
+                '确认清空',
+                { type: 'warning', confirmButtonText: '确定清空', cancelButtonText: '取消' }
+            );
+        } catch { return; }
         history.value = [];
         localStorage.removeItem('grading-history');
         ElMessage.success('历史已清空');

@@ -1,7 +1,7 @@
 import { API_BASE } from './api.js';
 // 测试集管理模块
-export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, splitModelId, currentPage }) {
-    const { ref } = Vue;
+export function useTestSet({ selectedQuestionId, selectedQuestion, studentAnswer, gradeResult, splitModelId, currentPage, loadedTestCaseInfo }) {
+    const { ref, computed } = Vue;
     const { ElMessage, ElMessageBox } = ElementPlus;
 
     const testCases = ref([]);
@@ -12,10 +12,45 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
     const showGenDialog = ref(false);
     const genCount = ref(7);
     const genDist = ref('gradient');
-    const genStyles = ref(['标准规范', '口语化', '要点遗漏']);
+    const genStyles = ref([]);
     const genExtra = ref('');
     const genRunning = ref(false);
     const genAnswerLoading = ref(false);
+    const testCaseDetail = ref(null); // { answer, expected_score, actual_score, comment, scoring_items }
+    const testCaseDetailVisible = ref(false);
+
+    // 根据科目动态切换风格选项
+    const genStyleOptions = computed(() => {
+        const subj = selectedQuestion?.value?.subject;
+        if (subj === 'english') {
+            return [
+                { label: 'Formal', value: 'formal' },
+                { label: 'Colloquial', value: 'colloquial' },
+                { label: 'Incomplete', value: 'incomplete' },
+                { label: 'Off-topic', value: 'off-topic' },
+                { label: 'Verbatim copy', value: 'verbatim copy' },
+                { label: 'Blank', value: 'blank' },
+            ];
+        }
+        return [
+            { label: '标准规范', value: '标准规范' },
+            { label: '口语化', value: '口语化' },
+            { label: '要点遗漏', value: '要点遗漏' },
+            { label: '偏题跑题', value: '偏题跑题' },
+            { label: '复制原文', value: '复制原文' },
+            { label: '空白作答', value: '空白作答' },
+        ];
+    });
+
+    // 科目切换时重置默认风格
+    const { watch } = Vue;
+    watch(() => selectedQuestion?.value?.subject, (subj) => {
+        if (subj === 'english') {
+            genStyles.value = ['formal', 'colloquial', 'incomplete'];
+        } else {
+            genStyles.value = ['标准规范', '口语化', '要点遗漏'];
+        }
+    }, { immediate: true });
 
     async function saveAsTestCase() {
         if (!selectedQuestionId.value || !gradeResult.value) {
@@ -26,7 +61,7 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
             const { data } = await axios.post(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases', {
                 answer_text: studentAnswer.value.trim(),
                 expected_score: gradeResult.value.score,
-                description: '来自评分页面 ' + new Date().toLocaleString('zh-CN'),
+                description: '来自评分页面 ' + new Date().toISOString(),
                 case_type: 'real'
             });
             if (data.success) {
@@ -35,7 +70,7 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
                 ElMessage.error(data.error || '保存失败');
             }
         } catch (e) {
-            ElMessage.error('保存失败：' + e.message);
+            window.SharedApp.handleApiError(e, '保存测试用例');
         }
     }
 
@@ -57,7 +92,7 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
                 ElMessage.error(data.error || '生成失败');
             }
         } catch (e) {
-            ElMessage.error('生成失败：' + e.message);
+            window.SharedApp.handleApiError(e, '生成模拟答案');
         }
         genAnswerLoading.value = false;
     }
@@ -68,7 +103,7 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
             const { data } = await axios.get(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases');
             if (data.success) testCases.value = data.data || [];
         } catch (e) {
-            console.error('加载测试用例失败', e);
+            window.SharedApp.handleApiError(e, '加载测试用例');
         }
     }
 
@@ -80,7 +115,9 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
         studentAnswer.value = tc.answer_text;
         gradeResult.value = null;
         currentPage.value = 'single';
-        ElMessage.info('已载入测试用例答案：' + (tc.description || '期望分 ' + tc.expected_score));
+        if (loadedTestCaseInfo) {
+            loadedTestCaseInfo.value = { description: tc.description || '', expected_score: tc.expected_score };
+        }
     }
 
     async function runSingleCase(caseId) {
@@ -102,15 +139,32 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
                 await axios.put(API_BASE + '/api/questions/' + selectedQuestionId.value + '/test-cases/' + caseId, {
                     last_actual_score: actualScore, last_error: error, last_run_at: new Date().toISOString()
                 });
+                // 保存最新评分详情供查看
+                tc._lastResult = {
+                    actual_score: actualScore,
+                    comment: result.data.comment || '',
+                    scoring_items: result.data.details?.scoring_items || [],
+                };
                 ElMessage.success('测试用例运行完成：' + actualScore + ' 分');
             } else {
                 ElMessage.error('评分失败：' + (result.data?.comment || '未知错误'));
             }
         } catch (e) {
-            ElMessage.error('运行失败：' + e.message);
+            window.SharedApp.handleApiError(e, '运行测试用例');
         }
         testSetRunning.value = false;
         loadTestCases();
+    }
+
+    function showTestCaseDetail(tc) {
+        testCaseDetail.value = {
+            answer: tc.answer_text,
+            expected_score: tc.expected_score,
+            actual_score: tc.last_actual_score,
+            comment: tc._lastResult?.comment || '',
+            scoring_items: tc._lastResult?.scoring_items || [],
+        };
+        testCaseDetailVisible.value = true;
     }
 
     async function runSelectedCases() {
@@ -148,7 +202,7 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
             ElMessage.success('已删除');
             loadTestCases();
         } catch (e) {
-            // 用户取消
+            window.SharedApp.handleApiError(e, '删除测试用例');
         }
     }
 
@@ -174,16 +228,17 @@ export function useTestSet({ selectedQuestionId, studentAnswer, gradeResult, spl
                 ElMessage.error('生成失败：' + (data.error || '未知错误'));
             }
         } catch (e) {
-            ElMessage.error('生成失败：' + e.message);
+            window.SharedApp.handleApiError(e, '生成测试用例');
         }
         genRunning.value = false;
     }
 
     return {
         testCases, selectedCaseIds, testSetRunning, testSetProgress, testSetText,
-        showGenDialog, genCount, genDist, genStyles, genExtra, genRunning, genAnswerLoading,
+        showGenDialog, genCount, genDist, genStyles, genStyleOptions, genExtra, genRunning, genAnswerLoading,
+        testCaseDetail, testCaseDetailVisible,
         saveAsTestCase, generateAnswer, loadTestCases, onCaseSelectionChange,
         gradeTestCase, runSingleCase, runSelectedCases, runAllCases, deleteTestCase,
-        autoGenerateTestCases
+        showTestCaseDetail, autoGenerateTestCases
     };
 }

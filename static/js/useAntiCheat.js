@@ -12,9 +12,22 @@ export function useAntiCheat({ selectedQuestion, selectedQuestionId, splitModelI
     const anicheatScenarios = [
         { name: '复制原文', generate: (q) => q.standard_answer || q.content },
         { name: '复制题干', generate: (q) => q.content },
-        { name: '复制题干+无作答', generate: (q) => '答：\n' + (q.content || '') },
+        { name: '中文翻译作答', generate: (q) => {
+            if (q.subject !== 'english') return null;
+            // 英语题用中文回答（可能抄袭了翻译）
+            return '李明在北京的一所职业学校学习计算机科学。他每天坐地铁上学，大约需要30分钟。周末他经常去看望爷爷奶奶。';
+        }},
+        { name: '复制题干+无作答', generate: (q) => {
+            const isEnglish = q.subject === 'english';
+            return (isEnglish ? 'Answer:\n' : '答：\n') + (q.content || '');
+        }},
         { name: '空白作答', generate: () => '' },
-        { name: '答非所问', generate: () => '今天天气真好，阳光明媚，适合出门散步。我觉得这个问题和我没有太大关系。' },
+        { name: '答非所问', generate: (q) => {
+            const isEnglish = q.subject === 'english';
+            return isEnglish
+                ? 'The weather is really nice today. I think this question has nothing to do with me.'
+                : '今天天气真好，阳光明媚，适合出门散步。我觉得这个问题和我没有太大关系。';
+        }},
     ];
 
     function anicheatRowClass({ row }) {
@@ -37,6 +50,7 @@ export function useAntiCheat({ selectedQuestion, selectedQuestionId, splitModelI
             anicheatProgress.value = Math.round((i + 1) / anicheatScenarios.length * 100);
 
             const answer = scenario.generate(q);
+            if (answer === null) continue; // 场景不适用于当前科目
             const result = { scenario: scenario.name, answerPreview: (answer || '(空白)').substring(0, 80), score: null, passed: false, comment: '', error: '' };
 
             const { provider: prov4, model: mdl4 } = splitModelId();

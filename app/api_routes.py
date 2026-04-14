@@ -1446,7 +1446,128 @@ import asyncio
 
 @api_bp.route('/grade', methods=['POST'])
 async def grade_answer():
-    """评分答案 - 使用 Qwen-Agent GradingAgent"""
+    """
+    单题智能评分
+    ---
+    tags:
+      - 评分
+    summary: 对单个学生答案进行智能评分
+    description: |
+      使用AI模型对主观题答案进行自动评分。
+      
+      支持两种模式：
+      1. 通过question_id从数据库加载题目和评分脚本
+      2. 直接传入题目内容和评分标准
+      
+      评分过程包括：
+      - 采分点匹配
+      - 语义理解
+      - 置信度评估
+      - 人工复核建议
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - answer
+          properties:
+            question_id:
+              type: integer
+              description: 题目ID（可选，传了则从DB加载题目）
+              example: 5
+            answer:
+              type: string
+              description: 学生答案文本
+              example: "在社会主义初级阶段，我国坚持以公有制为主体、多种所有制经济共同发展的生产资料所有制。"
+            question:
+              type: string
+              description: 题目内容（question_id为空时必填）
+              example: "简述我国社会主义初级阶段的基本经济制度。"
+            max_score:
+              type: number
+              format: float
+              description: 满分值（默认10）
+              example: 8.0
+            subject:
+              type: string
+              description: 科目（politics/chinese/english/general）
+              example: "politics"
+            rubric:
+              type: object
+              description: 自定义评分标准（可选）
+            provider:
+              type: string
+              description: 指定模型服务商（可选）
+              example: "doubao"
+            model:
+              type: string
+              description: 指定子模型（可选）
+              example: "deepseek-v3"
+            student_id:
+              type: string
+              description: 学生ID（可选）
+              example: "001"
+            student_name:
+              type: string
+              description: 学生姓名（可选）
+              example: "张三"
+            exam_name:
+              type: string
+              description: 考试名称（可选）
+              example: "期中考试"
+    responses:
+      200:
+        description: 评分成功
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                record_id:
+                  type: integer
+                  description: 评分记录ID
+                  example: 123
+                score:
+                  type: number
+                  format: float
+                  description: 评分结果
+                  example: 6.0
+                confidence:
+                  type: number
+                  format: float
+                  description: 置信度（0-1）
+                  example: 0.85
+                comment:
+                  type: string
+                  description: 评语
+                  example: "答案基本正确，但表述不够完整。"
+                model_used:
+                  type: string
+                  description: 使用的模型
+                  example: "qwen-agent"
+                needs_review:
+                  type: boolean
+                  description: 是否需要人工复核
+                  example: false
+                warning:
+                  type: string
+                  description: 警告信息
+                  example: null
+      400:
+        description: 请求参数错误
+      500:
+        description: 服务器内部错误
+    """
     data = request.json
     question_id = data.get('question_id') or data.get('questionId')
     student_answer = data.get('answer', '')

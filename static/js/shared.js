@@ -48,6 +48,27 @@
   }
 
   /**
+   * 统一 API 错误处理
+   * @param {Error} e - catch 捕获的异常
+   * @param {string} prefix - 操作描述，如 '加载题目列表'
+   * @param {object} [opts] - 可选配置
+   * @param {boolean} [opts.showElMessage=true] - 是否弹出 ElMessage 提示
+   * @returns {string} 错误消息文本
+   */
+  function handleApiError(e, prefix, opts) {
+    opts = opts || {};
+    var showMsg = opts.showElMessage !== false;
+    // ElMessageBox.confirm 取消时抛出 'cancel'，不提示
+    if (e === 'cancel' || e?.message === 'cancel') return '';
+    var msg = prefix + '：' + (e.response?.data?.error || e.response?.data?.message || e.message || '未知错误');
+    if (showMsg && typeof ElMessage !== 'undefined') {
+      ElMessage.error(msg);
+    }
+    console.error(prefix, e);
+    return msg;
+  }
+
+  /**
    * HTML 消毒（需要 DOMPurify 已加载）
    */
   function sanitizeHtml(html) {
@@ -66,6 +87,7 @@
     DEFAULT_SUBJECTS: DEFAULT_SUBJECTS,
     SUBJECT_LABELS: SUBJECT_LABELS,
     getSubjectLabel: getSubjectLabel,
+    handleApiError: handleApiError,
     sanitizeHtml: sanitizeHtml,
   };
 })();

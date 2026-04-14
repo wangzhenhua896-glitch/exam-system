@@ -20,6 +20,7 @@ export function useApp() {
     const scriptVersionCount = ref(0);
     const rubricFontSize = ref(14);
     const rubricTextareaRef = ref(null);
+    const loadedTestCaseInfo = ref(null); // { description, expected_score }
 
     // ========== 模型选择 ==========
     const model = useModel();
@@ -38,6 +39,8 @@ export function useApp() {
         manualQuestion: question.manualQuestion,
         manualRubric: question.manualRubric,
         manualMaxScore: question.manualMaxScore,
+        manualSubject: question.manualSubject,
+        manualRubricPoints: question.manualRubricPoints,
         currentMaxScore: question.currentMaxScore,
         providers: model.providers,
         currentModelId: model.currentModelId,
@@ -50,10 +53,12 @@ export function useApp() {
     // ========== 测试集 ==========
     const testSet = useTestSet({
         selectedQuestionId: question.selectedQuestionId,
+        selectedQuestion: question.selectedQuestion,
         studentAnswer,
         gradeResult: grading.gradeResult,
         splitModelId: model.splitModelId,
-        currentPage
+        currentPage,
+        loadedTestCaseInfo
     });
 
     // ========== 反作弊 ==========
@@ -75,7 +80,7 @@ export function useApp() {
 
     // ========== 字号切换 ==========
     function toggleRubricFontSize() {
-        const sizes = [12, 14, 16];
+        const sizes = [12, 14, 16, 18, 20];
         const idx = sizes.indexOf(rubricFontSize.value);
         rubricFontSize.value = sizes[(idx + 1) % sizes.length];
     }
@@ -135,10 +140,15 @@ export function useApp() {
         manualQuestion: question.manualQuestion,
         manualRubric: question.manualRubric,
         manualMaxScore: question.manualMaxScore,
+        manualSubject: question.manualSubject,
+        manualRubricPoints: question.manualRubricPoints,
         currentMaxScore: question.currentMaxScore,
+        parentPassage: question.parentPassage,
+        getSubjectLabel: question.getSubjectLabel,
 
         // 学生答案
         studentAnswer,
+        loadedTestCaseInfo,
 
         // 评分
         grading: grading.grading,
@@ -195,12 +205,16 @@ export function useApp() {
         runSelectedCases: testSet.runSelectedCases,
         runAllCases: testSet.runAllCases,
         deleteTestCase: testSet.deleteTestCase,
+        testCaseDetail: testSet.testCaseDetail,
+        testCaseDetailVisible: testSet.testCaseDetailVisible,
+        showTestCaseDetail: testSet.showTestCaseDetail,
 
         // 自动生成
         showGenDialog: testSet.showGenDialog,
         genCount: testSet.genCount,
         genDist: testSet.genDist,
         genStyles: testSet.genStyles,
+        genStyleOptions: testSet.genStyleOptions,
         genExtra: testSet.genExtra,
         genRunning: testSet.genRunning,
         autoGenerateTestCases: testSet.autoGenerateTestCases,
