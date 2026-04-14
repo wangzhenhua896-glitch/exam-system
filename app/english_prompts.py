@@ -43,8 +43,12 @@ Requirements:
 
 ## Consistency
 - Use keyword match + semantic match dual judgment
-- List [Required Keywords] for fast check (at least 2 per point)
-- List [Equivalent Expressions] for semantic match (at least 3 per point)
+- List [Required Keywords] for fast check (at least 2 per point, prioritize domain-specific terms)
+- List [Equivalent Expressions] for semantic match (at least 5 per point, covering:
+  - Synonyms (e.g., "analyze" → "examine", "evaluate")
+  - Paraphrases (e.g., "improve efficiency" → "make things work better")
+  - Partial matches (e.g., "economic growth" → "growth" alone counts)
+  - Related concepts (e.g., "supply and demand" → "market forces"))
 - Clearly state "must satisfy ALL" vs "satisfy ANY ONE"
 - Keyword match takes priority over semantic match
 
@@ -254,7 +258,7 @@ Generate the structured grading script ensuring:
 1. Self-contained — all grading info in the script
 2. Item-by-item scoring with explicit point values
 3. Deterministic language, no ambiguity
-4. Keywords and equivalent expressions for each point
+4. Each scoring point must include [Required Keywords] (at least 2) and [Equivalent Expressions] (at least 5, covering synonyms/paraphrases/partial matches/related concepts)
 5. JSON output format: {"scoring_items": [{"name": "Point 1: XXX", "score": X, "max_score": X, "hit": true/false, "reason": "...", "quoted_text": "..."}], "comment": "..."}
 6. Output the script directly, no explanations"""
     return prompt
@@ -693,7 +697,7 @@ Requirements:
 
 Output the grading script as structured text. Include:
 - Question information and max score
-- Key answer points with keywords and equivalent expressions
+- Key answer points with [Required Keywords] (at least 2) and [Equivalent Expressions] (at least 5, covering synonyms/paraphrases/partial matches/related concepts)
 - Item-by-item scoring rules (full/partial/no credit)
 - Anti-cheat rules (copy question = 0, blank = 0, off-topic = 0)
 - Output format requirement (JSON with scoring_items)
