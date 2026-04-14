@@ -220,6 +220,15 @@
       if (!sq || !isQuestionComplete(sq)) return;
       sq.status = 'completed';
       sq.expanded = false;
+
+      // 如果确认的是当前活跃题，推进到下一题
+      if (qi === activeQuestionIndex.value && activeQuestionIndex.value < subQuestions.value.length - 1) {
+        activeQuestionIndex.value++;
+        collapseAllSubQuestions();
+        subQuestions.value[activeQuestionIndex.value].status = 'in_progress';
+        subQuestions.value[activeQuestionIndex.value].expanded = true;
+      }
+
       // 检查是否全部完成
       if (allQuestionsCompleted()) {
         markStepCompleted('per_question');
@@ -361,9 +370,15 @@
         activeQuestionIndex.value = idx >= 0 ? idx : 0;
       }
       // 确保活跃题索引指向一个非 completed 的题
-      if (loaded[activeQuestionIndex.value] && loaded[activeQuestionIndex.value].status === 'completed') {
+      var activeSq = loaded[activeQuestionIndex.value];
+      if (!activeSq || activeSq.status === 'completed') {
         var fixIdx = loaded.findIndex(function (sq) { return sq.status !== 'completed'; });
         activeQuestionIndex.value = fixIdx >= 0 ? fixIdx : 0;
+      }
+      // 如果没有任何 completed 的题，从第一题开始
+      var hasAnyCompleted = loaded.some(function (sq) { return sq.status === 'completed'; });
+      if (!hasAnyCompleted && activeQuestionIndex.value > 0) {
+        activeQuestionIndex.value = 0;
       }
 
       // 确保活跃题处于 in_progress 状态且展开，其他题折叠
