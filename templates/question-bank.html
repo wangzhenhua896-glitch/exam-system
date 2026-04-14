@@ -745,9 +745,40 @@
                                                 <div>
                                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                                         <span style="font-size: 12px; color: #909399;">同义词（关键词未命中时检查）:</span>
-                                                        <el-button size="small" text type="primary" :loading="englishEdit.synonymLoadingMap[sq.tempId + '_' + si]" @click="englishEdit.suggestSynonyms(sq, si)">
-                                                            AI补全
-                                                        </el-button>
+                                                        <el-popover
+                                                            :visible="englishEdit.synonymSuggestions.length > 0 && englishEdit.synonymTargetKey === (sq.tempId + '_' + si)"
+                                                            placement="left"
+                                                            :width="300"
+                                                            trigger="manual"
+                                                        >
+                                                            <template #reference>
+                                                                <el-button size="small" text type="primary" :loading="englishEdit.synonymLoadingMap[sq.tempId + '_' + si]" @click="englishEdit.suggestSynonyms(sq, si)">
+                                                                    AI补全
+                                                                </el-button>
+                                                            </template>
+                                                            <div>
+                                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                                    <span style="font-weight: 600; font-size: 13px;">AI 建议同义词（点击添加）</span>
+                                                                    <el-button size="small" text @click="englishEdit.clearSynonymSuggestions()">关闭</el-button>
+                                                                </div>
+                                                                <div v-for="(sug, sgi) in englishEdit.synonymSuggestions" :key="sgi"
+                                                                    :style="{
+                                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                        padding: '6px 8px', marginBottom: '4px', borderRadius: '4px',
+                                                                        cursor: sug.disabled ? 'default' : 'pointer',
+                                                                        background: sug.disabled ? '#f5f7fa' : '#ecf5ff',
+                                                                        opacity: sug.disabled ? 0.5 : 1
+                                                                    }"
+                                                                    @click="englishEdit.addSynonymSuggestion(sp, sug)"
+                                                                >
+                                                                    <span style="font-size: 13px;">{{ sug.term }}</span>
+                                                                    <span style="font-size: 11px; color: #909399;">{{ sug.confidence ? Math.round(sug.confidence * 100) + '%' : '' }}</span>
+                                                                </div>
+                                                                <div style="margin-top: 8px; text-align: right;">
+                                                                    <el-button size="small" type="primary" plain @click="englishEdit.addAllSynonymSuggestions()">全部添加</el-button>
+                                                                </div>
+                                                            </div>
+                                                        </el-popover>
                                                     </div>
                                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center;">
                                                         <el-tag v-for="(syn, ski) in sp.synonyms" :key="ski" type="success" closable size="small" @close="englishEdit.removeTag(sp.synonyms, ski)">{{ syn }}</el-tag>
@@ -781,7 +812,40 @@
                                         <div style="margin-bottom: 16px;">
                                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                                 <span style="font-size: 13px; color: #606266;">排除词表（命中任一词得0分）</span>
-                                                <el-button size="small" text type="primary" :loading="englishEdit.excludeLoading" @click="englishEdit.suggestExclude(sq)">AI建议排除词</el-button>
+                                                <el-popover
+                                                    :visible="englishEdit.excludeSuggestions.length > 0 && englishEdit.excludeTargetSqId === sq.tempId"
+                                                    placement="left"
+                                                    :width="320"
+                                                    trigger="manual"
+                                                >
+                                                    <template #reference>
+                                                        <el-button size="small" text type="primary" :loading="englishEdit.excludeLoading" @click="englishEdit.suggestExclude(sq)">AI建议排除词</el-button>
+                                                    </template>
+                                                    <div>
+                                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                            <span style="font-weight: 600; font-size: 13px;">AI 建议排除词（点击添加）</span>
+                                                            <el-button size="small" text @click="englishEdit.clearExcludeSuggestions()">关闭</el-button>
+                                                        </div>
+                                                        <div v-for="(sug, sgi) in englishEdit.excludeSuggestions" :key="sgi"
+                                                            :style="{
+                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                padding: '6px 8px', marginBottom: '4px', borderRadius: '4px',
+                                                                cursor: sug.disabled ? 'default' : 'pointer',
+                                                                background: sug.disabled ? '#f5f7fa' : '#fef0f0',
+                                                                opacity: sug.disabled ? 0.5 : 1
+                                                            }"
+                                                            @click="englishEdit.addExcludeSuggestion(sq, sug)"
+                                                        >
+                                                            <div>
+                                                                <span style="font-size: 13px; font-weight: 500;">{{ sug.term }}</span>
+                                                                <div v-if="sug.reason" style="font-size: 11px; color: #909399; margin-top: 2px;">{{ sug.reason }}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div style="margin-top: 8px; text-align: right;">
+                                                            <el-button size="small" type="danger" plain @click="englishEdit.addAllExcludeSuggestions()">全部添加</el-button>
+                                                        </div>
+                                                    </div>
+                                                </el-popover>
                                             </div>
                                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center;">
                                                 <el-tag v-for="(ex, ei) in sq.excludeList" :key="ei" type="danger" closable size="small" @close="englishEdit.removeTag(sq.excludeList, ei)">{{ ex }}</el-tag>
@@ -1822,7 +1886,10 @@ const app = createApp({
             } catch (e) {
                 console.error('加载统计失败', e);
                 ElMessage.error('加载统计失败：' + (e.response?.data?.error || e.message));
-            } = async () => {
+            }
+        };
+
+        const loadDashboard = async () => {
             try {
                 const params = {};
                 if (currentSubject.value) {

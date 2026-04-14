@@ -121,6 +121,14 @@
     var excludeLoading = ref(false);
     var scriptGenerating = ref(false);
 
+    // ---- AI 建议结果（UI 弹出面板用） ----
+    var synonymSuggestions = ref([]);   // [{term, confidence, disabled}]
+    var synonymTargetKey = ref('');     // 当前建议的目标 key: sq.tempId + '_' + spIndex
+    var synonymTargetSp = ref(null);    // 当前建议的目标 scoringPoint
+    var excludeSuggestions = ref([]);   // [{term, reason, disabled}]
+    var excludeTargetSqId = ref(0);     // 当前建议的目标子题 tempId
+    var excludeTargetSq = ref(null);    // 当前建议的目标 subQuestion
+
     // ============================================================
     // 计算属性
     // ============================================================
@@ -508,6 +516,9 @@
       if (!sp || sp.keywords.length === 0) return;
       var spKey = sq.tempId + '_' + spIndex;
       synonymLoadingMap.value[spKey] = true;
+      synonymSuggestions.value = [];
+      synonymTargetKey.value = spKey;
+      synonymTargetSp.value = sp;
       try {
         var allExisting = sp.keywords.concat(sp.synonyms);
         var res = await axios.post(API_BASE + '/api/english/suggest-synonyms', {
@@ -517,7 +528,13 @@
           existing_synonyms: allExisting,
         });
         if (res.data.success) {
-          return res.data.data; // 返回建议列表供 UI 展示
+          var suggestions = res.data.data || [];
+          // 标记已存在的词
+          synonymSuggestions.value = suggestions.map(function (s) {
+            var termLower = (s.term || '').toLowerCase();
+            var exists = allExisting.some(function (e) { return e.toLowerCase() === termLower; });
+            return { term: s.term, confidence: s.confidence, disabled: exists };
+          });
         }
       } catch (e) {
         console.error('同义词补全失败', e);
@@ -525,7 +542,29 @@
       } finally {
         synonymLoadingMap.value[spKey] = false;
       }
-      return [];
+    }
+
+    function addSynonymSuggestion(sp, suggestion) {
+      if (suggestion.disabled) return;
+      if (addTag(sp.synonyms, suggestion.term)) {
+        suggestion.disabled = true;
+      }
+    }
+
+    function addAllSynonymSuggestions() {
+      var sp = synonymTargetSp.value;
+      if (!sp) return;
+      synonymSuggestions.value.forEach(function (s) {
+        if (!s.disabled) {
+          if (addTag(sp.synonyms, s.term)) s.disabled = true;
+        }
+      });
+    }
+
+    function clearSynonymSuggestions() {
+      synonymSuggestions.value = [];
+      synonymTargetSp.value = null;
+      synonymTargetKey.value = '';
     }
 
     async function suggestExclude(sq) {
@@ -537,6 +576,9 @@
         allSynonyms = allSynonyms.concat(sp.synonyms);
       });
       excludeLoading.value = true;
+      excludeSuggestions.value = [];
+      excludeTargetSqId.value = sq.tempId;
+      excludeTargetSq.value = sq;
       try {
         var res = await axios.post(API_BASE + '/api/english/suggest-exclude', {
           question_text: sq.text,
@@ -545,7 +587,13 @@
           context: parentContent.value,
         });
         if (res.data.success) {
-          return res.data.data;
+          var suggestions = res.data.data || [];
+          // 标记已存在的词
+          excludeSuggestions.value = suggestions.map(function (s) {
+            var termLower = (s.term || '').toLowerCase();
+            var exists = sq.excludeList.some(function (e) { return e.toLowerCase() === termLower; });
+            return { term: s.term, reason: s.reason, disabled: exists };
+          });
         }
       } catch (e) {
         console.error('排除词建议失败', e);
@@ -553,7 +601,29 @@
       } finally {
         excludeLoading.value = false;
       }
-      return [];
+    }
+
+    function addExcludeSuggestion(sq, suggestion) {
+      if (suggestion.disabled) return;
+      if (addTag(sq.excludeList, suggestion.term)) {
+        suggestion.disabled = true;
+      }
+    }
+
+    function addAllExcludeSuggestions() {
+      var sq = excludeTargetSq.value;
+      if (!sq) return;
+      excludeSuggestions.value.forEach(function (s) {
+        if (!s.disabled) {
+          if (addTag(sq.excludeList, s.term)) s.disabled = true;
+        }
+      });
+    }
+
+    function clearExcludeSuggestions() {
+      excludeSuggestions.value = [];
+      excludeTargetSq.value = null;
+      excludeTargetSqId.value = 0;
     }
 
     async function extractScoringPoints(sq) {
@@ -861,6 +931,10 @@
       synonymLoadingMap: synonymLoadingMap,
       excludeLoading: excludeLoading,
       scriptGenerating: scriptGenerating,
+      synonymSuggestions: synonymSuggestions,
+      synonymTargetKey: synonymTargetKey,
+      excludeSuggestions: excludeSuggestions,
+      excludeTargetSqId: excludeTargetSqId,
       // 计算属性
       canEnterStep: canEnterStep,
       stepIndex: stepIndex,
@@ -881,7 +955,13 @@
       addScoringRule: addScoringRule,
       removeScoringRule: removeScoringRule,
       suggestSynonyms: suggestSynonyms,
+      addSynonymSuggestion: addSynonymSuggestion,
+      addAllSynonymSuggestions: addAllSynonymSuggestions,
+      clearSynonymSuggestions: clearSynonymSuggestions,
       suggestExclude: suggestExclude,
+      addExcludeSuggestion: addExcludeSuggestion,
+      addAllExcludeSuggestions: addAllExcludeSuggestions,
+      clearExcludeSuggestions: clearExcludeSuggestions,
       extractScoringPoints: extractScoringPoints,
       generateScript: generateScript,
       validateAll: validateAll,
