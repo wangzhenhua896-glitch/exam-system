@@ -1,5 +1,21 @@
 # AI 智能评分系统 — CLAUDE.md
 
+## 多 Agent 协作规则（必读）
+
+本项目有多个 Agent 在不同电脑上同时工作，还有一台测试电脑。**每次开始工作前必须执行以下步骤：**
+
+1. `git pull` 拉取最新代码
+2. 查看 `WORKING.md`，了解其他 Agent 正在改哪些文件
+3. 把自己要改的文件写进 `WORKING.md` 的"正在进行"栏，然后 `git push`
+4. 完成后把自己的记录从"正在进行"删掉，再 `git push`
+
+**文件归属（避免冲突）：**
+- 英语相关文件（`english_prompts.py`、`englishEditCore.js`、`/english/` 接口）→ 英语 Agent 负责
+- 后端其余文件（`api_routes.py` 非英语部分、`db_models.py` 等）→ 后端 Agent 负责
+- `templates/question-bank.html` → 改之前先协商
+
+**语言要求：和王老师沟通全程用中文，解释要简单易懂。**
+
 ## 产品定位
 基于大语言模型的**主观题（简答题）自动评分引擎**。
 可通过 API 对外提供评分服务，供第三方考试/教务系统集成调用。
