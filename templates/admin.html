@@ -242,7 +242,7 @@
 
 <script>
 const { createApp, ref, reactive, computed, onMounted } = Vue;
-const { DEFAULT_SUBJECTS, SUBJECT_STORAGE_KEY, ROLE_KEY, CURRENT_SUBJECT_KEY } = window.SharedApp;
+const { DEFAULT_SUBJECTS, SUBJECT_STORAGE_KEY, ROLE_KEY, CURRENT_SUBJECT_KEY, handleApiError } = window.SharedApp;
 
 const app = createApp({
     setup() {
@@ -343,7 +343,7 @@ const app = createApp({
                 const data = await resp.json();
                 modelConfigs.value = data.map(d => ({ ...d, testResult: undefined, testing: false }));
             } catch (e) {
-                console.error('加载模型配置失败', e);
+                handleApiError(e, '加载模型配置失败');
             }
         };
 
@@ -355,7 +355,7 @@ const app = createApp({
                     body: JSON.stringify({ enabled: row.enabled }),
                 });
             } catch (e) {
-                console.error('切换失败', e);
+                handleApiError(e, '切换失败');
                 row.enabled = !row.enabled;
             }
         };
@@ -369,7 +369,7 @@ const app = createApp({
                 });
                 modelConfigs.value.forEach(m => m.enabled = true);
                 ElMessage.success('已启用所有模型');
-            } catch (e) { ElMessage.error('操作失败'); }
+            } catch (e) { handleApiError(e, '启用所有模型失败'); }
         };
 
         const disableAllModels = async () => {
@@ -381,7 +381,7 @@ const app = createApp({
                 });
                 modelConfigs.value.forEach(m => m.enabled = false);
                 ElMessage.success('已禁用所有模型');
-            } catch (e) { ElMessage.error('操作失败'); }
+            } catch (e) { handleApiError(e, '禁用所有模型失败'); }
         };
 
         const toggleSingleModel = async (providerRow, modelItem, newVal) => {
@@ -393,7 +393,7 @@ const app = createApp({
                 });
                 modelItem.model_enabled = newVal;
             } catch (e) {
-                ElMessage.error('切换失败');
+                handleApiError(e, '切换失败');
             }
         };
 
@@ -426,7 +426,7 @@ const app = createApp({
                     loadModelConfigs();
                 }
             } catch (e) {
-                ElMessage.error('保存失败');
+                handleApiError(e, '保存配置失败');
             }
         };
 
@@ -446,7 +446,7 @@ const app = createApp({
                     if (row) row.testResult = r;
                 }
             } catch (e) {
-                ElMessage.error('批量测试请求失败');
+                handleApiError(e, '批量测试请求失败');
             } finally {
                 modelTestAllLoading.value = false;
             }
@@ -480,7 +480,7 @@ const app = createApp({
                     bugByModel.value = data.by_model || [];
                 }
             } catch (e) {
-                console.error('加载 Bug 日志失败', e);
+                handleApiError(e, '加载 Bug 日志失败');
             }
         }
 
