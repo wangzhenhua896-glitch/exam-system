@@ -610,10 +610,10 @@ class BaseModelClient(ABC):
 | GET | `/api/dashboard` | 题库总览 | `?subject=xxx` |
 | GET | `/api/export-rubric-scripts` | 导出评分脚本 | `?subject=xxx` |
 | GET | `/api/models/available` | 获取所有可用模型 | - |
-| POST | `/api/generate-rubric-script` | AI 生成评分脚本 | `{content, score, standardAnswer}` |
-| POST | `/api/evaluate-question` | AI 命题质量评估 | `{content, standardAnswer}` |
-| POST | `/api/verify-rubric` | 验证评分脚本 | `{question_id, tolerance}` |
-| POST | `/api/auto-generate` | AI 自动出题 | `{subject, count, testcase_count}` |
+| POST | `/api/generate-rubric-script` | AI 生成评分脚本（传 subject 切换中/英文） | `{content, score, standardAnswer, subject}` |
+| POST | `/api/evaluate-question` | AI 命题质量评估（传 subject 切换标准） | `{content, standardAnswer, subject}` |
+| POST | `/api/verify-rubric` | 验证评分脚本（自动获取 subject） | `{question_id, tolerance}` |
+| POST | `/api/auto-generate` | AI 自动出题（传 subject 切换语言） | `{subject, count, testcase_count}` |
 | POST | `/api/generate-answer` | 生成模拟答案 | `{question_id}` |
 | GET | `/api/bugs` | 获取 bug 日志 | `?bug_type=xxx` |
 
@@ -1142,28 +1142,34 @@ get_previous_grade(student_id, question_id) → 一致性校验
 
 **系统提示词** (`_get_english_system_prompt()`):
 
+- 全英文提示词，输出 JSON 键名用 `comment` 而非 `评语`
 - 反作弊优先：复制阅读材料原文/题干 → 该问0分
 - 逐项按 rubric_script 的【逐项评分规则】判断
-- **语言规则**：用拼音或中文作答一律判0分（英语 rubric_script 关键规则）
+- **语言规则**：用拼音或中文作答一律判0分
 - 等价表述匹配，大小写不敏感
-- 输出格式：按 rubric_script 的【输出格式要求】执行
+- 输出格式：强制 `scoring_items` 格式（忽略 rubric_script 中可能存在的旧格式要求）
 
-**输出格式示例**（由 rubric_script 定义）:
+**输出格式**（统一 scoring_items）:
 
 ```json
 {
-  "第1问": {"得分": 2, "满分": 2, "评语": "正确回答 Spring Festival"},
-  "第2问": {"得分": 2, "满分": 2, "评语": "正确回答鱼与余的谐音寓意"},
-  "第3问": {"得分": 1, "满分": 2, "评语": "答出烟花但未提及守岁"},
-  "总分": 5,
-  "评语": "整体..."
+  "scoring_items": [
+    {"name": "Point 1: Spring Festival", "score": 2, "max_score": 2, "hit": true, "reason": "Correct", "quoted_text": "Spring Festival"},
+    {"name": "Point 2: Homophone meaning", "score": 1, "max_score": 2, "hit": true, "reason": "Hit partial", "quoted_text": "surplus"}
+  ],
+  "comment": "Overall comment..."
 }
 ```
 
 **关键差异**:
 - 中文/拼音作答 → 全题0分（语义校验也跳过英语科目）
 - 无错别字扣分
+- 向量层跳过：`three_layer_grader` 中英语科目不执行 text2vec 向量匹配（中文模型对英文不可靠）
 - 语义校验跳过：`semantic_checker` 使用中文 text2vec 模型，不适用于英文
+- 评分脚本生成使用 `RUBRIC_SCRIPT_SYSTEM_PROMPT_EN`（全英文）
+- 子题评分时自动注入父题阅读材料作为 `[Reading Material]` 前缀
+- 短答案高分检测按词数（<5词）而非字数判断
+- 前端 UI 自动适配：科目标签、测试集风格选项、placeholder 文本均随科目动态切换
 
 ### 12.5 分支路由
 
@@ -1262,6 +1268,7 @@ cp data/exam_system.db.bak.20260410 data/exam_system.db
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.3.0 | 2026-04-12 | 英语科目全面适配：向量层跳过、阅读材料注入、英文提示词（评分/生成/自查/评估）、前端动态化（科目标签/风格选项/placeholder）、短答案检测按词数、一致性检查支持英文分值格式 |
 | v2.2.0 | 2026-04-10 | 语文/英语专用评分流程 + 英语语义校验跳过 |
 | v2.1.0 | 2026-04-10 | 用户管理系统 + student_id 追踪 + 一致性校验 + 判别Agent(P2/P3) + 思政专用评分流程 |
 | v2.0.0 | 2026-04-09 | 反作弊测试页面 + 多模型子模型选择修复 |
