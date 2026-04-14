@@ -49,6 +49,24 @@ git push gitea --tags
 - **仓库**: Macbook/question-bank
 - **认证**: Token 认证（已嵌入 remote URL）
 
+## 推送流程（含 rebase）
+
+如果远程有新提交（push rejected），需要先 pull 再 push：
+
+```bash
+# 1. 有未提交改动时先 stash
+git stash
+
+# 2. 拉取远程最新并 rebase 本地提交
+git pull gitea multi-fullscore-answers --rebase
+
+# 3. 恢复 stash
+git stash pop
+
+# 4. 推送
+git push gitea multi-fullscore-answers
+```
+
 ## 注意事项
 
 - Gitea remote URL 中包含令牌，不要泄露 `.git/config` 文件
@@ -57,3 +75,4 @@ git push gitea --tags
   ```bash
   git remote set-url gitea http://Macbook:<新令牌>@192.168.255.10:3000/Macbook/question-bank.git
   ```
+- 多 Agent 协作时，每次推送前先 pull，避免冲突
