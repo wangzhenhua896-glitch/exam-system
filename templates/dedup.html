@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命题系统 - 去重处理</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <div class="layout">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-left">
+                    <el-button size="small" @click="go('/management')" :icon="ArrowLeft">返回题库</el-button>
+                    <span class="logo" style="margin-left: 12px;">AI 命题系统</span>
+                    <span class="subtitle">{{ pageTitle }}</span>
+                </div>
+                <div class="header-right">
+                    <div class="status-badge" v-if="currentSubject">
+                        <span style="width:6px;height:6px;border-radius:50%;background:#67c23a;"></span>
+                        {{ getSubjectLabel(currentSubject) }} · 科目老师
+                    </div>
+                    <el-button text type="primary" @click="go('/login')">切换角色</el-button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="page-card">
+                    <!-- 字号控制 -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 12px;">
+                        <el-button size="small" @click="dedupFontSize = Math.max(12, dedupFontSize - 2)">A-</el-button>
+                        <span style="font-size: 12px; color: #909399; min-width: 32px; text-align: center;">{{ dedupFontSize }}px</span>
+                        <el-button size="small" @click="dedupFontSize = Math.min(24, dedupFontSize + 2)">A+</el-button>
+                    </div>
+
+                    <!-- 加载中 -->
+                    <div v-if="scanning" style="text-align: center; padding: 60px; color: #909399;">
+                        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+                        <div style="margin-top: 12px;">正在扫描...</div>
+                    </div>
+
+                    <!-- 完成状态 -->
+                    <div v-else-if="dedupDone" style="text-align: center; padding: 60px; color: #909399;">
+                        <el-icon :size="48" color="#67c23a"><CircleCheck /></el-icon>
+                        <div style="margin-top: 12px; font-size: 16px;">
+                            {{ mergeMode === 'merge' ? '所有同题号题目已处理完毕' : '所有重复题目已处理完毕' }}
+                        </div>
+                        <el-button type="primary" style="margin-top: 20px;" @click="go('/management')">返回题库</el-button>
+                    </div>
+
+                    <!-- 合并同题模式：直接字段合并 -->
+                    <div v-else-if="mergeMode === 'merge' && currentDedupGroup">
+                        <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>
+                                <el-tag type="primary" size="small">题号 {{ currentDedupGroup.question_number }}</el-tag>
+                                &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupSimilarGroups.length }} 组
+                            </span>
+                            <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                        </div>
+                        <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="200">
+                            <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                            <el-table-column label="题号" width="60">
+                                <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                            </el-table-column>
+                            <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                            <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                            <el-table-column label="质量" width="70">
+                                <template #default="scope">
+                                    <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                    <span v-else style="color: #c0c4cc;">-</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="脚本" width="50">
+                                <template #default="scope">
+                                    <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                    <el-tag v-else type="info" size="small">无</el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <!-- 字段合并表 -->
+                        <el-table :data="currentDedupGroup.fieldRows" size="small" style="width: 100%; margin-top: 12px;" max-height="350">
+                            <el-table-column label="字段" width="90" prop="label"></el-table-column>
+                            <el-table-column label="合并值">
+                                <template #default="scope">
+                                    <div style="font-size: 12px; color: #606266; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto;">
+                                        {{ getFieldValue(currentDedupGroup, scope.row) }}
+                                    </div>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="来源" width="130">
+                                <template #default="scope">
+                                    <el-select v-model="scope.row.selectedFromId" size="small" style="width: 100%;">
+                                        <el-option v-for="q in currentDedupGroup.questions" :key="q.id"
+                                            :label="'#' + q.id + (q.question_number ? ' (' + q.question_number + ')' : '')"
+                                            :value="q.id">
+                                        </el-option>
+                                    </el-select>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <el-button @click="skipGroup">跳过</el-button>
+                            <el-button type="primary" @click="confirmMerge">合并</el-button>
+                        </div>
+                    </div>
+
+                    <!-- 去重模式：第一步：处理完全相同的 -->
+                    <div v-else-if="dedupPhase === 'exact' && currentDedupGroup && mergeMode === 'dedup'">
+                        <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>
+                                <el-tag type="danger" size="small">第一步：完全相同</el-tag>
+                                &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupExactGroups.length }} 组
+                            </span>
+                            <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                        </div>
+                        <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">以下题目题干完全相同，请选择保留哪一条，其余将删除：</div>
+                        <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="250">
+                            <el-table-column label="保留" width="50">
+                                <template #default="scope">
+                                    <el-radio :value="scope.row.id" v-model="exactKeepId">&nbsp;</el-radio>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                            <el-table-column label="题号" width="60">
+                                <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                            </el-table-column>
+                            <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                            <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                            <el-table-column label="质量" width="70">
+                                <template #default="scope">
+                                    <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                    <span v-else style="color: #c0c4cc;">-</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="脚本" width="50">
+                                <template #default="scope">
+                                    <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                    <el-tag v-else type="info" size="small">无</el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <el-button @click="skipExactGroup">跳过</el-button>
+                            <el-button type="primary" @click="confirmExactMerge">确认保留并删除其他</el-button>
+                        </div>
+                    </div>
+
+                    <!-- 去重模式：第二步：处理相似的（字段合并） -->
+                    <div v-else-if="dedupPhase === 'similar' && currentDedupGroup">
+                        <div style="margin-bottom: 12px; color: #606266; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>
+                                <el-tag type="warning" size="small">第二步：相似题目</el-tag>
+                                &nbsp;第 <b>{{ dedupCurrentIndex + 1 }}</b> / {{ dedupSimilarGroups.length }} 组
+                            </span>
+                            <el-progress :percentage="dedupProgress" :stroke-width="6" style="width: 200px;"></el-progress>
+                        </div>
+                        <el-table :data="currentDedupGroup.questions" size="small" stripe style="width: 100%;" max-height="200">
+                            <el-table-column label="ID" width="50" prop="id"></el-table-column>
+                            <el-table-column label="题号" width="60">
+                                <template #default="scope">{{ scope.row.question_number || '-' }}</template>
+                            </el-table-column>
+                            <el-table-column label="题干" min-width="150" show-overflow-tooltip prop="content"></el-table-column>
+                            <el-table-column label="分值" width="60" prop="max_score"></el-table-column>
+                            <el-table-column label="质量" width="70">
+                                <template #default="scope">
+                                    <span v-if="scope.row.quality_score !== null">{{ scope.row.quality_score }}分</span>
+                                    <span v-else style="color: #c0c4cc;">-</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="脚本" width="50">
+                                <template #default="scope">
+                                    <el-tag v-if="scope.row.rubric_script" type="success" size="small">有</el-tag>
+                                    <el-tag v-else type="info" size="small">无</el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <!-- 字段合并表 -->
+                        <el-table :data="currentDedupGroup.fieldRows" size="small" style="width: 100%; margin-top: 12px;" max-height="350">
+                            <el-table-column label="字段" width="90" prop="label"></el-table-column>
+                            <el-table-column label="合并值">
+                                <template #default="scope">
+                                    <div style="font-size: 12px; color: #606266; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto;">
+                                        {{ getFieldValue(currentDedupGroup, scope.row) }}
+                                    </div>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="来源" width="130">
+                                <template #default="scope">
+                                    <el-select v-model="scope.row.selectedFromId" size="small" style="width: 100%;">
+                                        <el-option v-for="q in currentDedupGroup.questions" :key="q.id"
+                                            :label="'#' + q.id + (q.question_number ? ' (' + q.question_number + ')' : '')"
+                                            :value="q.id">
+                                        </el-option>
+                                    </el-select>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <el-button @click="skipGroup">跳过</el-button>
+                            <el-button type="primary" @click="confirmMerge">合并</el-button>
+                        </div>
+                    </div>
+
+                    <!-- 空状态 -->
+                    <div v-else style="text-align: center; padding: 60px; color: #909399;">
+                        未发现重复题目
+                        <div style="margin-top: 20px;">
+                            <el-button type="primary" @click="go('/management')">返回题库</el-button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <a href="/grading">单题评分</a> | <a href="/management">题库管理</a> | <a href="/test-cases">测试集管理</a> | <a href="/sensitive-words">敏感词管理</a> | <a href="/user-management">用户管理</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+        const { ArrowLeft, Loading, CircleCheck } = ElementPlusIconsVue;
+        const { handleApiError, getSubjectLabel } = window.SharedApp;
+
+        // 读取 URL 参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const initMode = urlParams.get('mode') || 'dedup'; // 'dedup' | 'merge'
+
+        createApp({
+            setup() {
+                const currentSubject = ref(localStorage.getItem(window.SharedApp.CURRENT_SUBJECT_KEY) || '');
+
+                // 页面标题
+                const pageTitle = computed(() => initMode === 'merge' ? '合并同题' : '去重处理');
+
+                // 状态
+                const scanning = ref(false);
+                const dedupFullscreen = ref(false);
+                const dedupCurrentIndex = ref(0);
+                const dedupDone = ref(false);
+                const dedupFontSize = ref(14);
+                const dedupPhase = ref('exact'); // 'exact' | 'similar'
+                const dedupExactGroups = ref([]);
+                const dedupSimilarGroups = ref([]);
+                const exactKeepId = ref(null);
+                const mergeMode = ref(initMode); // 'dedup' | 'merge'
+
+                // 字段定义
+                const FIELD_DEFS = [
+                    { key: 'question_number', label: '题号' },
+                    { key: 'content', label: '题干' },
+                    { key: 'original_text', label: '原题' },
+                    { key: 'standard_answer', label: '标准答案' },
+                    { key: 'rubric_rules', label: '评分规则' },
+                    { key: 'rubric_points', label: '评分要点' },
+                    { key: 'rubric_script', label: '评分脚本' },
+                    { key: 'max_score', label: '分值' },
+                    { key: 'quality_score', label: '质量评分' },
+                ];
+
+                const buildFieldRows = (group) => {
+                    const s = group.suggestion;
+                    const qMap = {};
+                    for (const q of group.questions) {
+                        qMap[q.id] = q;
+                    }
+                    return FIELD_DEFS.map(fd => {
+                        const sug = s[fd.key];
+                        const fromId = sug ? sug.from_id : s.keep_as_base;
+                        const sugValues = {};
+                        if (sug) sugValues[sug.from_id] = sug.value;
+                        for (const q of group.questions) {
+                            if (!sugValues[q.id] && q[fd.key] != null) {
+                                sugValues[q.id] = q[fd.key];
+                            }
+                        }
+                        return {
+                            key: fd.key,
+                            label: fd.label,
+                            selectedFromId: fromId,
+                            sugValues: sugValues,
+                        };
+                    });
+                };
+
+                const currentDedupGroup = computed(() => {
+                    const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+                    return list[dedupCurrentIndex.value] || null;
+                });
+
+                const dedupProgress = computed(() => {
+                    const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+                    if (list.length === 0) return 100;
+                    return Math.round((dedupCurrentIndex.value / list.length) * 100);
+                });
+
+                const getFieldValue = (group, row) => {
+                    const val = row.sugValues[row.selectedFromId];
+                    if (val == null) return '-';
+                    const str = String(val);
+                    return str.length > 120 ? str.substring(0, 120) + '...' : str;
+                };
+
+                const findDuplicates = async () => {
+                    mergeMode.value = 'dedup';
+                    scanning.value = true;
+                    try {
+                        const res = await axios.post('/api/questions/find-duplicates');
+                        if (!res.data.success) {
+                            ElMessage.error('扫描失败');
+                            return;
+                        }
+                        const groups = res.data.data;
+                        const exactGroups = groups.filter(g => g.exact);
+                        const similarGroups = groups.filter(g => !g.exact);
+                        for (const g of similarGroups) {
+                            g.fieldRows = buildFieldRows(g);
+                        }
+                        dedupExactGroups.value = exactGroups;
+                        dedupSimilarGroups.value = similarGroups;
+                        dedupPhase.value = exactGroups.length > 0 ? 'exact' : 'similar';
+                        dedupCurrentIndex.value = 0;
+                        dedupDone.value = groups.length === 0;
+                        exactKeepId.value = exactGroups.length > 0 ? exactGroups[0].suggestion.keep_as_base : null;
+                        if (groups.length === 0) {
+                            ElMessage.success('未发现重复题目');
+                        } else {
+                            ElMessage.info(`发现 ${exactGroups.length} 组完全相同 + ${similarGroups.length} 组相似，共 ${res.data.total_duplicates} 道题目`);
+                        }
+                    } catch (e) {
+                        handleApiError(e, '扫描失败');
+                    } finally {
+                        scanning.value = false;
+                    }
+                };
+
+                const findSameNumber = async () => {
+                    mergeMode.value = 'merge';
+                    scanning.value = true;
+                    try {
+                        const res = await axios.post('/api/questions/find-same-number');
+                        if (!res.data.success) {
+                            ElMessage.error('扫描失败');
+                            return;
+                        }
+                        const groups = res.data.data;
+                        for (const g of groups) {
+                            g.fieldRows = buildFieldRows(g);
+                        }
+                        dedupExactGroups.value = [];
+                        dedupSimilarGroups.value = groups;
+                        dedupPhase.value = 'similar';
+                        dedupCurrentIndex.value = 0;
+                        dedupDone.value = groups.length === 0;
+                        if (groups.length === 0) {
+                            ElMessage.success('未发现题号相同的重复题目');
+                        } else {
+                            ElMessage.info(`发现 ${groups.length} 组同题号题目待合并`);
+                        }
+                    } catch (e) {
+                        handleApiError(e, '扫描失败');
+                    } finally {
+                        scanning.value = false;
+                    }
+                };
+
+                const confirmMerge = async () => {
+                    const group = currentDedupGroup.value;
+                    if (!group) return;
+                    const updateFields = {};
+                    for (const row of group.fieldRows) {
+                        const val = row.sugValues[row.selectedFromId];
+                        if (val != null) {
+                            updateFields[row.key] = val;
+                        }
+                    }
+                    const keepId = group.suggestion.keep_as_base;
+                    const deleteIds = group.questions.filter(q => q.id !== keepId).map(q => q.id);
+                    if (deleteIds.length === 0) {
+                        ElMessage.warning('没有需要删除的题目');
+                        advanceToNext();
+                        return;
+                    }
+                    for (const delId of deleteIds) {
+                        const q = group.questions.find(q => q.id === delId);
+                        const label = `#${delId}` + (q ? `「${(q.content || '').substring(0, 30)}」` : '');
+                        try {
+                            await ElMessageBox.confirm(
+                                `确认删除题目 ${label}？关联的评分记录和测试用例将迁移到保留题目。此操作不可恢复。`,
+                                '确认删除',
+                                { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+                            );
+                        } catch {
+                            return;
+                        }
+                    }
+                    try {
+                        const res = await axios.post('/api/questions/merge', {
+                            keep_id: keepId,
+                            delete_ids: deleteIds,
+                            update_fields: updateFields,
+                        });
+                        if (res.data.success) {
+                            ElMessage.success(`合并成功，删除了 ${res.data.deleted} 道重复题目`);
+                            advanceToNext();
+                        } else {
+                            ElMessage.error('合并失败: ' + (res.data.error || '未知错误'));
+                        }
+                    } catch (e) {
+                        handleApiError(e, '合并失败');
+                    }
+                };
+
+                const advanceToNext = () => {
+                    const list = dedupPhase.value === 'exact' ? dedupExactGroups.value : dedupSimilarGroups.value;
+                    if (dedupCurrentIndex.value >= list.length - 1) {
+                        if (dedupPhase.value === 'exact' && dedupSimilarGroups.value.length > 0) {
+                            dedupPhase.value = 'similar';
+                            dedupCurrentIndex.value = 0;
+                            ElMessage.info('完全相同题目已处理完毕，进入相似题目合并');
+                        } else {
+                            dedupDone.value = true;
+                        }
+                    } else {
+                        dedupCurrentIndex.value++;
+                        if (dedupPhase.value === 'exact') {
+                            const g = dedupExactGroups.value[dedupCurrentIndex.value];
+                            if (g) exactKeepId.value = g.suggestion.keep_as_base;
+                        }
+                    }
+                };
+
+                const confirmExactMerge = async () => {
+                    const group = currentDedupGroup.value;
+                    if (!group) return;
+                    const keepId = exactKeepId.value;
+                    if (!keepId) {
+                        ElMessage.warning('请先选择要保留的题目');
+                        return;
+                    }
+                    const deleteIds = group.questions.filter(q => q.id !== keepId).map(q => q.id);
+                    if (deleteIds.length === 0) {
+                        advanceToNext();
+                        return;
+                    }
+                    for (const delId of deleteIds) {
+                        const q = group.questions.find(q => q.id === delId);
+                        const label = `#${delId}` + (q ? `「${(q.content || '').substring(0, 30)}」` : '');
+                        try {
+                            await ElMessageBox.confirm(
+                                `确认删除题目 ${label}？此题与 #${keepId} 完全相同。此操作不可恢复。`,
+                                '确认删除',
+                                { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+                            );
+                        } catch {
+                            return;
+                        }
+                    }
+                    try {
+                        const res = await axios.post('/api/questions/merge', {
+                            keep_id: keepId,
+                            delete_ids: deleteIds,
+                            update_fields: {},
+                        });
+                        if (res.data.success) {
+                            ElMessage.success(`已删除 ${res.data.deleted} 道相同题目`);
+                            advanceToNext();
+                        } else {
+                            ElMessage.error('删除失败: ' + (res.data.error || '未知错误'));
+                        }
+                    } catch (e) {
+                        handleApiError(e, '删除失败');
+                    }
+                };
+
+                const skipExactGroup = () => {
+                    advanceToNext();
+                };
+
+                const skipGroup = () => {
+                    advanceToNext();
+                };
+
+                // 根据模式自动触发扫描
+                onMounted(() => {
+                    if (!currentSubject.value) {
+                        window.location.replace('/login?t=' + Date.now());
+                        return;
+                    }
+                    if (initMode === 'merge') {
+                        findSameNumber();
+                    } else {
+                        findDuplicates();
+                    }
+                });
+
+                const go = (url) => { window.location.href = url; };
+
+                return {
+                    pageTitle, currentSubject, getSubjectLabel,
+                    scanning, dedupFullscreen, dedupCurrentIndex, dedupDone,
+                    dedupFontSize, dedupPhase, dedupExactGroups, dedupSimilarGroups, exactKeepId,
+                    mergeMode, currentDedupGroup, dedupProgress,
+                    getFieldValue, findDuplicates, findSameNumber,
+                    confirmMerge, confirmExactMerge, skipExactGroup, skipGroup,
+                    ArrowLeft, Loading, CircleCheck, go,
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

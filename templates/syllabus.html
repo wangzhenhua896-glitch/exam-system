@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命题系统 - 考试资料</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .page-wrap { max-width: 900px; margin: 0 auto; padding: 20px; }
+        .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .page-header .back { color: #409EFF; text-decoration: none; font-size: 14px; }
+        .page-header .back:hover { text-decoration: underline; }
+        .page-header h2 { font-size: 20px; font-weight: 600; }
+        .page-card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="page-wrap">
+        <div class="page-header">
+            <a class="back" href="/management">← 返回题库</a>
+            <h2>考试资料</h2>
+        </div>
+
+        <div class="page-card">
+            <el-tabs v-model="activeTab">
+                <!-- 考试大纲 -->
+                <el-tab-pane label="考试大纲" name="syllabus">
+                    <el-form label-position="top">
+                        <el-row :gutter="16">
+                            <el-col :span="8">
+                                <el-form-item label="选择科目">
+                                    <el-select v-model="syllabusForm.subject" style="width: 100%;" placeholder="选择科目" @change="loadSyllabusContent('syllabus')">
+                                        <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="16">
+                                <el-form-item label="大纲标题">
+                                    <el-input v-model="syllabusForm.title" placeholder="例如：2026年湖南省对口升学考试大纲（思想政治）"></el-input>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-form-item label="大纲内容">
+                            <el-input v-model="syllabusForm.content" type="textarea" :rows="18" placeholder="粘贴或输入考试大纲的完整内容，包括考试范围、知识点要求、考核目标等"></el-input>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" @click="saveSyllabusContent('syllabus')" :loading="syllabusSaving">
+                                <el-icon><Check /></el-icon>保存大纲
+                            </el-button>
+                            <el-button @click="syllabusForm.title = ''; syllabusForm.content = ''">清空</el-button>
+                            <span style="margin-left: 16px; font-size: 12px; color: #909399;" v-if="syllabusForm.updatedAt">
+                                上次保存：{{ syllabusForm.updatedAt }}
+                            </span>
+                        </el-form-item>
+                    </el-form>
+                </el-tab-pane>
+
+                <!-- 教材内容 -->
+                <el-tab-pane label="教材内容" name="textbook">
+                    <el-form label-position="top">
+                        <el-row :gutter="16">
+                            <el-col :span="8">
+                                <el-form-item label="选择科目">
+                                    <el-select v-model="textbookForm.subject" style="width: 100%;" placeholder="选择科目" @change="loadSyllabusContent('textbook')">
+                                        <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="16">
+                                <el-form-item label="教材标题">
+                                    <el-input v-model="textbookForm.title" placeholder="例如：中职思想政治·中国特色社会主义"></el-input>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-form-item label="教材内容">
+                            <el-input v-model="textbookForm.content" type="textarea" :rows="18" placeholder="粘贴或输入教材的核心内容，包括各章节知识点、概念定义、原理说明等"></el-input>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" @click="saveSyllabusContent('textbook')" :loading="textbookSaving">
+                                <el-icon><Check /></el-icon>保存教材
+                            </el-button>
+                            <el-button @click="textbookForm.title = ''; textbookForm.content = ''">清空</el-button>
+                            <span style="margin-left: 16px; font-size: 12px; color: #909399;" v-if="textbookForm.updatedAt">
+                                上次保存：{{ textbookForm.updatedAt }}
+                            </span>
+                        </el-form-item>
+                    </el-form>
+                </el-tab-pane>
+            </el-tabs>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue;
+const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, handleApiError } = window.SharedApp;
+
+const app = createApp({
+    setup() {
+        // 当前科目
+        const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
+        if (!currentSubject.value) {
+            window.location.replace('/login?t=' + Date.now());
+        }
+
+        // 科目列表
+        const subjectList = ref([]);
+        const loadSubjects = () => {
+            try {
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                    if (subjectList.value.length === 0) {
+                        subjectList.value = [...DEFAULT_SUBJECTS];
+                    }
+                } else {
+                    subjectList.value = [...DEFAULT_SUBJECTS];
+                }
+            } catch (e) {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
+        };
+        loadSubjects();
+
+        // 根据 URL 参数决定默认 tab
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTab = ref(urlParams.get('type') === 'textbook' ? 'textbook' : 'syllabus');
+
+        // 考试大纲 / 教材 表单
+        const syllabusForm = reactive({ subject: currentSubject.value, title: '', content: '', updatedAt: '' });
+        const textbookForm = reactive({ subject: currentSubject.value, title: '', content: '', updatedAt: '' });
+        const syllabusSaving = ref(false);
+        const textbookSaving = ref(false);
+
+        // 加载大纲/教材内容
+        const loadSyllabusContent = async (type) => {
+            const form = type === 'syllabus' ? syllabusForm : textbookForm;
+            try {
+                const res = await axios.get(`/api/syllabus/${form.subject}/${type}`);
+                if (res.data.success && res.data.data) {
+                    form.title = res.data.data.title || '';
+                    form.content = res.data.data.content || '';
+                    form.updatedAt = res.data.data.updated_at || '';
+                }
+            } catch (e) {
+                handleApiError(e, '加载内容失败');
+            }
+        };
+
+        // 保存大纲/教材内容
+        const saveSyllabusContent = async (type) => {
+            const form = type === 'syllabus' ? syllabusForm : textbookForm;
+            const saving = type === 'syllabus' ? syllabusSaving : textbookSaving;
+            if (!form.content.trim()) {
+                ElMessage.warning('请输入内容');
+                return;
+            }
+            saving.value = true;
+            try {
+                const res = await axios.post('/api/syllabus', {
+                    subject: form.subject,
+                    content_type: type,
+                    title: form.title,
+                    content: form.content
+                });
+                if (res.data.success) {
+                    ElMessage.success(type === 'syllabus' ? '考试大纲已保存' : '教材内容已保存');
+                    form.updatedAt = new Date().toLocaleString('zh-CN');
+                }
+            } catch (e) {
+                handleApiError(e, '保存失败');
+            } finally {
+                saving.value = false;
+            }
+        };
+
+        // 加载当前 tab 的内容
+        loadSyllabusContent(activeTab.value);
+
+        return {
+            subjectList, currentSubject, activeTab,
+            syllabusForm, textbookForm, syllabusSaving, textbookSaving,
+            loadSyllabusContent, saveSyllabusContent,
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命题系统 - 题目详情</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .page-wrap { max-width: 900px; margin: 0 auto; padding: 20px; }
+        .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .page-header .back { color: #409EFF; text-decoration: none; font-size: 14px; }
+        .page-header .back:hover { text-decoration: underline; }
+        .page-header h2 { font-size: 20px; font-weight: 600; }
+        .page-card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .section-label { font-weight: 600; margin-bottom: 3px; }
+        .section { margin-top: 8px; }
+        .block { padding: 6px 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; line-height: 1.8; }
+        .block-html { padding: 6px 10px; background: #f5f7fa; border-radius: 4px; line-height: 1.8; }
+        .block-scroll { max-height: 300px; overflow-y: auto; }
+        .bg-gray { background: #f5f7fa; }
+        .bg-green { background: #ecfdf5; }
+        .bg-yellow { background: #fefce8; }
+        .bg-blue { background: #f0f9ff; font-family: monospace; font-size: 12px; }
+        .loading-wrap { text-align: center; padding: 60px 0; color: #909399; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="page-wrap">
+        <div class="page-header">
+            <a class="back" href="/management">← 返回题库</a>
+            <h2>题目详情</h2>
+        </div>
+        <div v-loading="loading" class="page-card">
+            <template v-if="data">
+                <el-descriptions :column="3" border size="small">
+                    <el-descriptions-item label="题号">{{ data.question_number || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="学科">{{ getSubjectLabel(data.subject) }}</el-descriptions-item>
+                    <el-descriptions-item label="分值">{{ data.max_score }}分</el-descriptions-item>
+                </el-descriptions>
+                <div class="section">
+                    <div class="section-label">题干</div>
+                    <div v-if="data.content_html" class="block-html" v-html="sanitizeHtml(data.content_html)"></div>
+                    <div v-else class="block bg-gray">{{ data.content }}</div>
+                </div>
+                <div v-if="data.original_text" class="section">
+                    <div class="section-label">原题（原始未处理）</div>
+                    <div v-if="data.original_text.includes('<p') || data.original_text.includes('<span')" class="block-html block-scroll" v-html="sanitizeHtml(data.original_text)"></div>
+                    <div v-else class="block bg-gray block-scroll">{{ data.original_text }}</div>
+                </div>
+                <div v-if="data.standard_answer" class="section">
+                    <div class="section-label">标准答案</div>
+                    <div class="block bg-green">{{ data.standard_answer }}</div>
+                </div>
+                <div v-if="data.rubric_rules" class="section">
+                    <div class="section-label">评分规则</div>
+                    <div class="block bg-yellow">{{ data.rubric_rules }}</div>
+                </div>
+                <div v-if="data.rubric_points" class="section">
+                    <div class="section-label">评分要点</div>
+                    <div class="block bg-yellow">{{ data.rubric_points }}</div>
+                </div>
+                <div v-if="data.rubric_script" class="section">
+                    <div class="section-label">评分脚本</div>
+                    <div class="block bg-blue">{{ data.rubric_script }}</div>
+                </div>
+            </template>
+            <div v-else-if="errorMsg" class="loading-wrap">{{ errorMsg }}</div>
+        </div>
+    </div>
+</div>
+<script>
+const { createApp, ref, onMounted } = Vue;
+const { sanitizeHtml, getSubjectLabel: sharedGetSubjectLabel } = window.SharedApp;
+
+const app = createApp({
+    setup() {
+        const currentSubject = ref(localStorage.getItem(window.SharedApp.CURRENT_SUBJECT_KEY) || '');
+        if (!currentSubject.value) {
+            window.location.replace('/login?t=' + Date.now());
+        }
+
+        const data = ref(null);
+        const loading = ref(true);
+        const errorMsg = ref('');
+
+        const subjectList = ref(JSON.parse(localStorage.getItem(window.SharedApp.SUBJECT_STORAGE_KEY) || '[]'));
+
+        const getSubjectLabel = (value) => sharedGetSubjectLabel(value, subjectList.value);
+
+        const loadQuestion = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            if (!id) {
+                errorMsg.value = '缺少题目 ID 参数';
+                loading.value = false;
+                return;
+            }
+            try {
+                const res = await axios.get('/api/questions/' + id);
+                if (!res.data.success) {
+                    errorMsg.value = '加载题目失败';
+                    loading.value = false;
+                    return;
+                }
+                data.value = res.data.data;
+            } catch (e) {
+                errorMsg.value = '加载题目失败：' + (e.response?.data?.error || e.message);
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        onMounted(loadQuestion);
+
+        return { data, loading, errorMsg, getSubjectLabel, sanitizeHtml };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -58,7 +58,19 @@ ai-grading-system/
 │   └── settings.py            # 模型配置、评分配置、服务配置
 │
 ├── templates/
-│   └── question-bank.html     # Vue 3 题库管理 SPA（~1540 行）
+│   ├── question-bank.html     # 题目列表 + 英语编辑器（~1087 行）
+│   ├── question-edit.html     # 题目编辑（1459 行）
+│   ├── dedup.html             # 去重合并（524 行）
+│   ├── import.html            # 导入题目（392 行）
+│   ├── ai-generate.html       # AI 批量出题（175 行）
+│   ├── syllabus.html          # 考试大纲/教材（204 行）
+│   ├── export-rubrics.html    # 导出评分脚本（~135 行）
+│   ├── consistency-check.html # 一致检查（~158 行）
+│   ├── login.html             # 登录
+│   ├── test-cases.html        # 测试集管理
+│   ├── sensitive-words.html   # 敏感词管理
+│   ├── user-management.html   # 用户管理
+│   └── admin.html             # 管理后台
 │
 ├── dist/
 │   └── index.html             # 暗色主题评分页（~630 行）
@@ -247,32 +259,30 @@ CREATE TABLE syllabus (
 
 ## 6. 前端架构
 
-### 6.1 题库管理（question-bank.html）
+### 6.1 题库管理 — 多页面架构
 
-Vue 3 + Element Plus，单文件 SPA，约 1540 行。
+`question-bank.html` 曾为 3653 行巨型单文件，经 8 轮拆分后降至 **~898 行**，功能分散到 10 个独立页面：
 
-**侧边栏：**
-- 系统管理：科目管理
-- 题库管理：新建题目、题目列表
-- 考试资料：考试大纲、教材内容
-- 评分工具：新窗口评分（跳转 /grading）
+| 页面 | 路由 | 文件 | 行数 | 功能 |
+|------|------|------|------|------|
+| 题库管理 | `/management` | question-bank.html | ~898 | 题目列表 + 英语编辑器 |
+| 题库总览 | `/dashboard` | dashboard.html | ~180 | 统计卡片、覆盖率、质量分布、趋势 |
+| 题目详情 | `/question-view` | question-view.html | ~90 | 查看题目详情 |
+| 题目编辑 | `/question-edit` | question-edit.html | 1459 | 新建/编辑/查看题目 |
+| 去重合并 | `/dedup` | dedup.html | 524 | 去重处理 + 合并同题 |
+| 导入 | `/import` | import.html | 392 | Excel/Word 导入 |
+| AI 批量出题 | `/ai-generate` | ai-generate.html | 175 | AI 自动生成题目 |
+| 考试资料 | `/syllabus` | syllabus.html | 204 | 考试大纲 + 教材内容 |
+| 导出评分脚本 | `/export-rubrics` | export-rubrics.html | ~135 | 批量导出评分脚本 |
+| 一致检查 | `/consistency-check` | consistency-check.html | ~158 | 批量一致检查 |
 
-**核心页面：**
+所有页面均为 Vue 3 + Element Plus 独立应用，通过 `send_file` 返回静态 HTML（避免 Jinja2 与 Vue `{{ }}` 冲突）。
 
-1. **科目管理** — localStorage 存储，默认 9 科（政治、语文、英语、数学、历史、地理、物理、化学、生物）
-2. **新建题目** — 三种模式（create/view/edit），表单包含学科、分值、难度、知识点、考核内容、原题、题干、标准答案、评分规则、分数分布、评分提示词、评分脚本
-   - 快速导入：粘贴原始文本，正则自动拆分题干/答案/评分规则
-   - AI 生成评分脚本
-   - 验证脚本（测试用例对话框）
-   - AI 质量评估
-3. **题目列表** — 科目筛选、关键词搜索、质量筛选、分页（20/页）、查看/编辑/评分/删除
-4. **考试大纲** — 按科目保存大纲内容
-5. **教材内容** — 按科目保存教材内容
+**`/management` 核心功能：**
 
-**测试用例对话框：**
-- 用例表格（描述、类型、期望分、上次验证结果）
-- 添加/编辑表单
-- 验证控制（容差设置、运行验证、进度条、结果汇总）
+1. **题目列表** — 科目筛选、关键词搜索、质量筛选、分页（20/页）、查看/编辑/评分/删除
+2. **题库总览** — 统计卡片、覆盖率、质量分布、最近评分趋势
+3. **英语编辑器** — 5 步工作流（通过 `window.EnglishEditCore` 模块化）
 
 ### 6.2 聚焦评分（dist/index.html）
 

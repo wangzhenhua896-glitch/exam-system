@@ -257,6 +257,13 @@ ssh root@123.56.117.123 'tail -30 /opt/ai-grading/app-5001.log'
 |------|------|
 | `/login` | 登录页 |
 | `/management` | 题库管理（科目、题目、评分脚本、英语专用编辑器） |
+| `/question-edit` | 题目编辑/新建/查看 |
+| `/dedup` | 去重合并 |
+| `/import` | 导入题目 |
+| `/ai-generate` | AI 批量出题 |
+| `/syllabus` | 考试大纲/教材 |
+| `/export-rubrics` | 导出评分脚本 |
+| `/consistency-check` | 一致检查 |
 | `/grading` | 单题评分 |
 | `/test-cases` | 测试集管理 |
 | `/sensitive-words` | 敏感词管理 |

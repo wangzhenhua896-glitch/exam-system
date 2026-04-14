@@ -89,6 +89,34 @@ def register_routes(app: Flask):
         from flask import redirect
         return redirect("/login")
 
+    # 导入题目 - 独立页面
+    @app.route("/import")
+    def import_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'import.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 去重处理 - 独立页面
+    @app.route("/dedup")
+    def dedup_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'dedup.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 题目编辑 - 独立页面
+    @app.route("/question-edit")
+    def question_edit_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-edit.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 评分工作台 - 评分脚本工具独立页
+    @app.route("/rubric-workbench")
+    def rubric_workbench_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'rubric-workbench.html')
+        return send_file(template_path, mimetype='text/html')
+
     # 聚焦单题评分 - 深色主题纯净界面
     @app.route("/grading")
     def grading():
@@ -120,6 +148,48 @@ def register_routes(app: Flask):
     @app.route("/code-viewer")
     def code_viewer():
         return send_from_directory(static_dir, 'code-viewer.html')
+
+    # AI 批量出题 - 独立页面
+    @app.route("/ai-generate")
+    def ai_generate_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'ai-generate.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 考试大纲 / 教材内容 - 独立页面
+    @app.route("/syllabus")
+    def syllabus_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'syllabus.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 导出评分脚本 - 独立页面
+    @app.route("/export-rubrics")
+    def export_rubrics_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'export-rubrics.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 一致检查 - 独立页面
+    @app.route("/consistency-check")
+    def consistency_check_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'consistency-check.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 题目详情 - 独立页面
+    @app.route("/question-view")
+    def question_view_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'question-view.html')
+        return send_file(template_path, mimetype='text/html')
+
+    # 题库总览 - 独立页面
+    @app.route("/dashboard")
+    def dashboard_page():
+        from flask import send_file
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'dashboard.html')
+        return send_file(template_path, mimetype='text/html')
 
     # 注册蓝图
     app.register_blueprint(api_bp, url_prefix="/api")

@@ -1,0 +1,28 @@
+/* question-bank.html 全局样式覆写与布局 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; font-size: 15px; }
+.el-table { font-size: 14px; }
+.el-table th { font-size: 14px; }
+.el-button { font-size: 14px; }
+.el-input { font-size: 14px; }
+.el-select { font-size: 14px; }
+.el-tag { font-size: 13px; }
+.el-menu-item { font-size: 14px; }
+.el-form-item__label { font-size: 14px; }
+.el-dialog__title { font-size: 16px; }
+.main-container { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: 160px; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; transition: width 0.25s ease, opacity 0.25s ease; }
+.sidebar.collapsed { width: 0; overflow: hidden; opacity: 0; }
+.content { flex: 1; padding: 20px; overflow-y: auto; background: #f5f7fa; min-width: 0; }
+.page-card { overflow: hidden; }
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 12px 0 rgba(0,0,0,.05); }
+.stat-value { font-size: 28px; font-weight: bold; color: #409EFF; }
+.stat-label { font-size: 13px; color: #909399; margin-top: 8px; }
+.form-section { margin-bottom: 20px; }
+.section-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; }
+.progress-text { text-align: center; margin-top: 10px; font-size: 14px; color: #606266; }
+.question-table { margin-top: 0; }
+.el-table .cell { white-space: normal; word-break: break-all; }
+.el-textarea__inner { resize: vertical !important; }
+.child-row td { background: #fafafa !important; }

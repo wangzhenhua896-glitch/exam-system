@@ -33,7 +33,7 @@
                         <span style="width:6px;height:6px;border-radius:50%;background:#67c23a;"></span>
                         管理员
                     </div>
-                    <el-button text type="primary" @click="window.location.href='/login'">切换角色</el-button>
+                    <el-button text type="primary" @click="go('/login')">切换角色</el-button>
                 </div>
             </div>
 
@@ -208,11 +208,13 @@
                     loadUsers();
                 });
 
+                const go = (url) => { window.location.href = url; };
+
                 return {
                     users, loading, searchKeyword, dialogVisible, editingId,
                     form, subjectLabels, subjectOptions, filteredUsers,
                     loadUsers, showAddDialog, editUser, onRoleChange,
-                    saveUser, deleteUser, Search,
+                    saveUser, deleteUser, Search, go,
                 };
             }
         }).use(ElementPlus).mount('#app');

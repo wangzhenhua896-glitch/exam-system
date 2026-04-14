@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命题系统 - 导入题目</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .page-wrap { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .page-header .back { color: #409EFF; text-decoration: none; font-size: 14px; }
+        .page-header .back:hover { text-decoration: underline; }
+        .page-header h2 { font-size: 20px; font-weight: 600; }
+        .upload-card { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .upload-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .upload-card .desc { font-size: 13px; color: #909399; margin-bottom: 16px; }
+        .upload-zone { border: 2px dashed #dcdfe6; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+        .upload-zone:hover { border-color: #409EFF; }
+        .upload-zone .icon { font-size: 36px; color: #c0c4cc; margin-bottom: 12px; }
+        .upload-zone .label { font-size: 14px; color: #606266; }
+        .upload-zone .hint { font-size: 12px; color: #c0c4cc; margin-top: 8px; }
+        /* Excel 预览弹窗内的 grid 布局 */
+        .field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .field-item { display: flex; align-items: center; gap: 6px; }
+        .field-item .label { font-size: 12px; color: #909399; width: 70px; text-align: right; }
+        .unmapped-tag { display: flex; align-items: center; gap: 4px; background: #fdf6ec; padding: 4px 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="page-wrap">
+        <div class="page-header">
+            <a class="back" href="/management">← 返回题库</a>
+            <h2>导入题目</h2>
+        </div>
+
+        <!-- Excel / CSV 导入 -->
+        <div class="upload-card">
+            <h3>导入 Excel / CSV</h3>
+            <div class="desc">支持 .xlsx / .xls / .csv 格式，可同时导入多个工作表</div>
+            <el-upload
+                :auto-upload="false"
+                :show-file-list="false"
+                accept=".xlsx,.xls,.csv"
+                :on-change="handleImportFile"
+                drag
+            >
+                <div class="upload-zone" style="border:none; padding:0;">
+                    <div class="icon"><el-icon size="36"><Upload /></el-icon></div>
+                    <div class="label">将文件拖到此处，或<em style="color:#409EFF;">点击上传</em></div>
+                    <div class="hint">支持 .xlsx / .xls / .csv</div>
+                </div>
+            </el-upload>
+            <el-button v-if="importLoading" type="primary" loading style="margin-top: 12px;" disabled>解析中...</el-button>
+        </div>
+
+        <!-- Word 导入 -->
+        <div class="upload-card">
+            <h3>导入 Word (.docx)</h3>
+            <div class="desc">AI 自动解析题目结构，提取题号、标题、内容和评分脚本</div>
+            <el-upload
+                :auto-upload="false"
+                :show-file-list="false"
+                accept=".docx"
+                :on-change="handleWordImportFile"
+                drag
+            >
+                <div class="upload-zone" style="border:none; padding:0;">
+                    <div class="icon"><el-icon size="36"><Document /></el-icon></div>
+                    <div class="label">将文件拖到此处，或<em style="color:#409EFF;">点击上传</em></div>
+                    <div class="hint">支持 .docx</div>
+                </div>
+            </el-upload>
+            <el-button v-if="wordImportLoading" type="primary" loading style="margin-top: 12px;" disabled>解析中...</el-button>
+        </div>
+    </div>
+
+    <!-- Excel 导入预览弹窗 -->
+    <el-dialog v-model="importPreviewVisible" title="导入预览" width="900px" :close-on-click-modal="false">
+        <div style="margin-bottom: 16px; font-size: 14px; color: #606266;">
+            文件「<b>{{ importPreview.filename }}</b>」共 {{ importPreview.sheets.length }} 个工作表，<span style="color: #f56c6c;">请勾选要导入的表，确认字段对应关系</span>：
+        </div>
+        <div v-for="(sheet, idx) in importPreview.sheets" :key="idx" style="margin-bottom: 20px; border: 1px solid #e4e7ed; border-radius: 6px; padding: 16px;" :style="{ opacity: sheet._enabled ? 1 : 0.5 }">
+            <!-- Sheet 头部：勾选 + 名称 + 科目 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <el-checkbox v-model="sheet._enabled" size="large" />
+                    <b style="font-size: 15px;">{{ sheet.name }}</b>
+                    <el-tag size="small">{{ sheet.rows }} 行 · {{ sheet.columns.length }} 列</el-tag>
+                    <el-tag v-if="!sheet._mapping.content" size="small" type="danger">未找到题目列</el-tag>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 13px; color: #909399;">导入科目：</span>
+                    <el-select v-model="sheet._subject" size="small" style="width: 140px;" placeholder="请选择科目">
+                        <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value" />
+                    </el-select>
+                </div>
+            </div>
+
+            <!-- 字段映射表 -->
+            <div v-if="sheet._enabled" style="margin-bottom: 12px; padding: 12px; background: #f8f9fb; border-radius: 4px;">
+                <div style="font-size: 13px; font-weight: 600; color: #606266; margin-bottom: 8px;">字段对应关系：</div>
+                <div class="field-grid">
+                    <div v-for="field in importPreview.db_fields" :key="field.key" class="field-item">
+                        <span class="label">
+                            {{ field.label }}
+                            <span v-if="field.required" style="color: #f56c6c;">*</span>
+                        </span>
+                        <el-select v-model="sheet._mapping[field.key]" size="small" style="flex: 1;" clearable placeholder="不映射">
+                            <el-option v-for="col in sheet.columns" :key="col" :label="col" :value="col" />
+                        </el-select>
+                    </div>
+                </div>
+                <!-- 未识别的列 -->
+                <div v-if="sheet._unmapped && sheet._unmapped.length > 0" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #dcdfe6;">
+                    <div style="font-size: 12px; color: #e6a23c; margin-bottom: 6px;">
+                        以下列未匹配到数据库字段，是否作为附加字段导入？
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <div v-for="col in sheet._unmapped" :key="col" class="unmapped-tag">
+                            <el-checkbox v-model="sheet._extraFieldsEnabled[col]" size="small" />
+                            <span style="font-size: 12px; color: #b37c00;">{{ col }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据预览 -->
+            <el-table v-if="sheet._enabled" :data="sheet.preview" stripe size="small" style="width: 100%;" max-height="180">
+                <el-table-column v-for="col in sheet.columns" :key="col" :prop="col" :label="col" :min-width="120" show-overflow-tooltip>
+                    <template #header="{ column }">
+                        <span>{{ column.label }}</span>
+                        <el-tag v-if="isColumnMapped(sheet, col)" size="small" type="success" style="margin-left: 4px; font-size: 10px;">
+                            {{ getMappedFieldLabel(col) }}
+                        </el-tag>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <div v-if="sheet._enabled && sheet.rows > 5" style="font-size: 12px; color: #909399; margin-top: 8px;">
+                仅展示前 5 行，共 {{ sheet.rows }} 行数据
+            </div>
+        </div>
+        <template #footer>
+            <el-button @click="importPreviewVisible = false">取消</el-button>
+            <el-button type="primary" @click="confirmImport" :loading="importLoading" :disabled="!hasEnabledSheet">
+                确认导入 ({{ enabledSheetCount }} 个工作表)
+            </el-button>
+        </template>
+    </el-dialog>
+
+    <!-- Word 导入预览弹窗 -->
+    <el-dialog v-model="wordImportPreviewVisible" title="Word 导入预览" width="900px" :close-on-click-modal="false">
+        <div style="margin-bottom: 16px; font-size: 14px; color: #606266;">
+            文件「<b>{{ wordImportPreview.filename }}</b>」共解析出 <span style="color: #409EFF; font-weight: bold;">{{ wordImportPreview.total }}</span> 道题目：
+        </div>
+        <el-table :data="wordImportPreview.questions" stripe size="small" style="width: 100%;" max-height="400">
+            <el-table-column label="题号" width="80" prop="question_number" />
+            <el-table-column label="标题" min-width="140" prop="title" show-overflow-tooltip />
+            <el-table-column label="科目" width="80">
+                <template #default="{ row }">
+                    <el-tag size="small" type="success" v-if="row.subject === 'english'">英语</el-tag>
+                    <el-tag size="small" v-else>{{ row.subject }}</el-tag>
+                </template>
+            </el-table-column>
+            <el-table-column label="考试" min-width="160" prop="exam_name" show-overflow-tooltip />
+            <el-table-column label="满分" width="60" prop="max_score" align="center" />
+            <el-table-column label="内容预览" min-width="250">
+                <template #default="{ row }">
+                    <div style="font-size: 12px; color: #606266; max-height: 40px; overflow: hidden; text-overflow: ellipsis;">{{ row.content_preview }}</div>
+                </template>
+            </el-table-column>
+            <el-table-column label="评分脚本" width="90" align="center">
+                <template #default="{ row }">
+                    <el-tag size="small" :type="row.rubric_length > 0 ? 'success' : 'info'">
+                        {{ row.rubric_length > 0 ? row.rubric_length + '字' : '无' }}
+                    </el-tag>
+                </template>
+            </el-table-column>
+        </el-table>
+        <template #footer>
+            <el-button @click="wordImportPreviewVisible = false">取消</el-button>
+            <el-button type="primary" @click="confirmWordImport" :loading="wordImportLoading">
+                确认导入 ({{ wordImportPreview.total }} 题)
+            </el-button>
+        </template>
+    </el-dialog>
+</div>
+
+<script>
+const { createApp, ref, computed } = Vue;
+const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, getSubjectLabel, handleApiError } = window.SharedApp;
+
+const app = createApp({
+    setup() {
+        // 科目列表
+        const subjectList = ref([]);
+        const loadSubjects = () => {
+            try {
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                    if (subjectList.value.length === 0) {
+                        subjectList.value = [...DEFAULT_SUBJECTS];
+                    }
+                } else {
+                    subjectList.value = [...DEFAULT_SUBJECTS];
+                }
+            } catch (e) {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
+        };
+        loadSubjects();
+
+        // 当前科目（作为导入默认值）
+        const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
+
+        // 导入 Excel
+        const importLoading = ref(false);
+        const importPreviewVisible = ref(false);
+        const importPreview = ref({ filename: '', sheets: [], db_fields: [] });
+        let importFileRaw = null;
+
+        // 导入 Word
+        const wordImportLoading = ref(false);
+        const wordImportPreviewVisible = ref(false);
+        const wordImportPreview = ref({ token: '', filename: '', total: 0, questions: [] });
+
+        const enabledSheetCount = computed(() => importPreview.value.sheets.filter(s => s._enabled).length);
+        const hasEnabledSheet = computed(() => enabledSheetCount.value > 0);
+
+        function isColumnMapped(sheet, col) {
+            return Object.values(sheet._mapping || {}).includes(col);
+        }
+        function getMappedFieldLabel(col) {
+            const fields = importPreview.value.db_fields || [];
+            for (const f of fields) {
+                const sheets = importPreview.value.sheets || [];
+                for (const s of sheets) {
+                    if (s._mapping && s._mapping[f.key] === col) return f.label;
+                }
+            }
+            return '';
+        }
+
+        async function handleImportFile(file) {
+            importFileRaw = file.raw;
+            const formData = new FormData();
+            formData.append('file', file.raw);
+
+            importLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-questions/preview', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (data.success) {
+                    const defaultSubject = currentSubject.value || '';
+                    data.data.sheets.forEach(s => {
+                        s._subject = defaultSubject;
+                        s._enabled = true;
+                        s._mapping = { ...s.mapping };
+                        s._unmapped = s.unmapped_columns || [];
+                        s._extraFieldsEnabled = {};
+                        (s._unmapped || []).forEach(c => { s._extraFieldsEnabled[c] = false; });
+                    });
+                    importPreview.value = data.data;
+                    importPreviewVisible.value = true;
+                } else {
+                    ElMessage.error('预览失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                handleApiError(e, '预览失败');
+            }
+            importLoading.value = false;
+        }
+
+        async function confirmImport() {
+            if (!importFileRaw) return;
+            const enabledSheets = importPreview.value.sheets.filter(s => s._enabled);
+            if (enabledSheets.length === 0) {
+                ElMessage.warning('请至少勾选一个工作表');
+                return;
+            }
+            for (const s of enabledSheets) {
+                if (!s._subject) {
+                    ElMessage.warning(`工作表「${s.name}」请选择导入科目`);
+                    return;
+                }
+                if (!s._mapping.content) {
+                    ElMessage.warning(`工作表「${s.name}」请映射「题目内容」字段`);
+                    return;
+                }
+            }
+            const formData = new FormData();
+            formData.append('file', importFileRaw);
+            formData.append('sheet_configs', JSON.stringify(
+                enabledSheets.map(s => {
+                    const extra_fields = {};
+                    Object.entries(s._extraFieldsEnabled || {}).forEach(([col, enabled]) => {
+                        if (enabled) extra_fields[col] = col;
+                    });
+                    return { sheet: s.name, subject: s._subject, col_map: s._mapping, extra_fields };
+                })
+            ));
+
+            importLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-questions', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (data.success) {
+                    const detail = data.data.sheets
+                        .map(s => `${s.sheet}: ${s.imported}题`)
+                        .join('，');
+                    ElMessage.success(`导入完成，共 ${data.data.imported} 题（${detail}）`);
+                    importPreviewVisible.value = false;
+                } else {
+                    ElMessage.error('导入失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                handleApiError(e, '导入失败');
+            }
+            importLoading.value = false;
+        }
+
+        // 导入 Word
+        async function handleWordImportFile(file) {
+            const formData = new FormData();
+            formData.append('file', file.raw);
+            wordImportLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-word', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (data.success) {
+                    wordImportPreview.value = data.data;
+                    wordImportPreviewVisible.value = true;
+                } else {
+                    ElMessage.error('解析失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                handleApiError(e, '解析失败');
+            }
+            wordImportLoading.value = false;
+        }
+
+        async function confirmWordImport() {
+            const token = wordImportPreview.value.token;
+            if (!token) return;
+            wordImportLoading.value = true;
+            try {
+                const { data } = await axios.post('/api/import-word/confirm', { token });
+                if (data.success) {
+                    let msg = `导入完成，共 ${data.data.imported} 题`;
+                    if (data.data.errors && data.data.errors.length > 0) {
+                        msg += `，${data.data.errors.length} 题失败`;
+                    }
+                    ElMessage.success(msg);
+                    wordImportPreviewVisible.value = false;
+                } else {
+                    ElMessage.error('导入失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                handleApiError(e, '导入失败');
+            }
+            wordImportLoading.value = false;
+        }
+
+        return {
+            subjectList, currentSubject,
+            importLoading, handleImportFile, importPreviewVisible, importPreview, confirmImport,
+            enabledSheetCount, hasEnabledSheet, isColumnMapped, getMappedFieldLabel,
+            wordImportLoading, handleWordImportFile, wordImportPreviewVisible, wordImportPreview, confirmWordImport,
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>

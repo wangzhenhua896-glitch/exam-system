@@ -33,7 +33,7 @@
                         <span style="width:6px;height:6px;border-radius:50%;background:#67c23a;"></span>
                         {{ subjectLabels[currentSubject] || currentSubject }} · 科目老师
                     </div>
-                    <el-button text type="primary" @click="window.location.href='/login'">切换角色</el-button>
+                    <el-button text type="primary" @click="go('/login')">切换角色</el-button>
                 </div>
             </div>
 
@@ -285,6 +285,8 @@
                     loadWords();
                 });
 
+                const go = (url) => { window.location.href = url; };
+
                 return {
                     words, loading, searchKeyword, filterSeverity,
                     dialogVisible, batchDialogVisible, editingId,
@@ -294,7 +296,7 @@
                     highCount, mediumCount, lowCount,
                     loadWords, showAddDialog, editWord, saveWord,
                     deleteWord, showBatchDialog, batchImport,
-                    Search,
+                    Search, go,
                 };
             }
         }).use(ElementPlus).mount('#app');

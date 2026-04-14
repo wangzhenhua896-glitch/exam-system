@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 命题系统 - 一致检查</title>
+    <link rel="stylesheet" href="/static/vendor/element-plus.css">
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <script src="/static/vendor/vue.global.prod.js"></script>
+    <script src="/static/vendor/element-plus.js"></script>
+    <script src="/static/vendor/element-plus-icons.js"></script>
+    <script src="/static/vendor/axios.min.js"></script>
+    <script src="/static/js/shared.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .page-wrap { max-width: 900px; margin: 0 auto; padding: 20px; }
+        .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .page-header .back { color: #409EFF; text-decoration: none; font-size: 14px; }
+        .page-header .back:hover { text-decoration: underline; }
+        .page-header h2 { font-size: 20px; font-weight: 600; }
+        .page-card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .page-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+        .page-desc { font-size: 13px; color: #909399; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="page-wrap">
+        <div class="page-header">
+            <a class="back" href="/management">← 返回题库</a>
+            <h2>一致检查</h2>
+        </div>
+
+        <div class="page-card">
+            <div class="page-title">批量一致检查</div>
+            <div class="page-desc">检查指定科目下所有题目的评分脚本一致性，包括满分对齐、标准答案匹配、评分脚本格式等</div>
+
+            <el-form label-position="top">
+                <el-row :gutter="16">
+                    <el-col :span="12">
+                        <el-form-item label="选择科目">
+                            <el-select v-model="selectedSubject" style="width: 100%;" placeholder="请选择科目">
+                                <el-option v-for="sub in subjectList" :key="sub.value" :label="sub.label" :value="sub.value"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12" style="display: flex; align-items: flex-end;">
+                        <el-form-item>
+                            <el-button type="warning" size="large" @click="runCheck" :loading="checkLoading" :disabled="!selectedSubject">
+                                <el-icon><CircleCheck /></el-icon> 开始检查
+                            </el-button>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+            </el-form>
+        </div>
+
+        <!-- 检查结果 -->
+        <div v-if="checkResult" class="page-card">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <el-tag v-if="checkResult.pass" type="success" size="large">全部通过</el-tag>
+                <el-tag v-else type="danger" size="large">{{ checkResult.problem_count }} 题有问题</el-tag>
+                <span style="color: #909399; font-size: 13px;">共 {{ checkResult.total }} 题</span>
+            </div>
+
+            <div v-if="!checkResult.pass">
+                <div v-for="p in checkResult.problems" :key="p.id" style="margin-bottom: 16px; padding: 12px; background: #fef0f0; border-radius: 6px; border: 1px solid #fbc4c4;">
+                    <div style="font-weight: 600; margin-bottom: 6px;">
+                        <el-tag size="small" type="danger">#{{ p.question_number || p.id }}</el-tag>
+                        {{ p.title }}
+                    </div>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #606266; line-height: 1.8;">
+                        <li v-for="(issue, idx) in p.issues" :key="idx">{{ issue }}</li>
+                    </ul>
+                    <div style="margin-top: 8px;">
+                        <el-button size="small" type="primary" plain @click="go('/question-edit?id=' + p.id)">去修复</el-button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref } = Vue;
+const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, handleApiError } = window.SharedApp;
+
+const app = createApp({
+    setup() {
+        const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
+        if (!currentSubject.value) {
+            window.location.replace('/login?t=' + Date.now());
+        }
+
+        // 科目列表
+        const subjectList = ref([]);
+        const loadSubjects = () => {
+            try {
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
+                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
+                    if (subjectList.value.length === 0) subjectList.value = [...DEFAULT_SUBJECTS];
+                } else {
+                    subjectList.value = [...DEFAULT_SUBJECTS];
+                }
+            } catch (e) {
+                subjectList.value = [...DEFAULT_SUBJECTS];
+            }
+        };
+        loadSubjects();
+
+        const selectedSubject = ref(currentSubject.value);
+        const checkLoading = ref(false);
+        const checkResult = ref(null);
+
+        async function runCheck() {
+            if (!selectedSubject.value) {
+                ElMessage.warning('请先选择一个科目');
+                return;
+            }
+            checkLoading.value = true;
+            checkResult.value = null;
+            try {
+                const { data } = await axios.post('/api/batch-check-consistency', { subject: selectedSubject.value });
+                if (data.success) {
+                    checkResult.value = data.data;
+                    if (data.data.pass) {
+                        const label = window.SharedApp.getSubjectLabel(selectedSubject.value, subjectList.value);
+                        ElMessage.success(`「${label}」共 ${data.data.total} 题，全部通过一致检查`);
+                    }
+                } else {
+                    ElMessage.error('检查失败：' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                handleApiError(e, '检查失败');
+            } finally {
+                checkLoading.value = false;
+            }
+        }
+
+        const go = (url) => { window.location.href = url; };
+
+        return {
+            subjectList, currentSubject,
+            selectedSubject, checkLoading, checkResult,
+            runCheck, go,
+        };
+    }
+});
+
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+app.use(ElementPlus);
+app.mount('#app');
+</script>
+</body>
+</html>
