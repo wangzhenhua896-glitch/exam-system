@@ -844,6 +844,8 @@
               max_score: sq.maxScore,
               scoring_strategy: 'max',
               rubric: { type: 'essay', scoring_strategy: sq.scoreFormulaType },
+              rubric_script: generatedScript.value || rubricScript.value,
+              parent_id: currentParentId.value,
             });
             // 更新采分点答案
             if (sq.answerId) {
@@ -871,6 +873,7 @@
               scoring_strategy: 'max',
               parent_id: currentParentId.value,
               question_type: 'essay',
+              rubric_script: generatedScript.value || rubricScript.value,
             });
             sq.questionId = childRes.data.data.id;
             await axios.post(API_BASE + '/api/questions/' + sq.questionId + '/answers', {
