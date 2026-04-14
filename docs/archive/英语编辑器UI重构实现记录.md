@@ -234,17 +234,17 @@ const englishEdit = Vue.reactive(window.EnglishEditCore.useEnglishEdit());
 1. ~~**运行后端测试**~~ — ✅ 已完成，33/33 全部通过
 2. ~~**提交 3 个未跟踪文件**~~ — ✅ 已在 a067a34 中提交
 3. ~~**同义词/排除词自动填入**~~ — ✅ 已实现为点击添加模式（el-popover 逐个/批量添加，已有词灰显去重）
-4. **端到端测试** — 完整走通 Step 1 → Step 5 的工作流
+4. ~~**端到端测试**~~ — ✅ 已完成，66/66 全通过（Q166 回归 18 + State B 13 + 保存逻辑 35）
 
 ### 中优先级
 
-5. **采分点提取专用端点** — 当前 `extractScoringPoints()` 复用 `/api/english/extract`，效果可能不够精准
-6. **质量评估集成** — `QUALITY_EVALUATION_SYSTEM_PROMPT_EN` 已存在但未接入工作流
-7. **自查步骤集成** — `SELF_CHECK_RUBRIC_SYSTEM_PROMPT_EN` 已存在但未接入
+5. ~~**采分点提取专用端点**~~ — ✅ 已完成，新增 `POST /api/english/extract-scoring-points`，专用 Prompt + flat JSON 响应
+6. ~~**质量评估集成**~~ — ✅ 已完成，Step 3 增加"质量评估"按钮，调用 `/api/evaluate-question`（subject=english）
+7. ~~**自查步骤集成**~~ — ✅ 已完成，Step 3 增加"自查脚本"按钮，调用 `/api/self-check-rubric`（subject=english），黄色卡片展示 issues + improved_script
 
 ### 低优先级
 
-8. **State B 加载验证** — 仅有 rubric_script 无子题数据的旧题目加载逻辑
+8. ~~**State B 加载验证**~~ — ✅ 已完成，Q172 测试通过（13/13）
 9. **题型编辑器扩展** — EDITOR_REGISTRY 已就位，ChoiceEditor / FillBlankEditor / TrueFalseEditor 待实现
 10. **测试依赖清理** — `test_workflow_status_requires_body` 依赖题目 ID=1 存在，应改为 fixture
 
@@ -261,4 +261,6 @@ const englishEdit = Vue.reactive(window.EnglishEditCore.useEnglishEdit());
 | 题型抽象层 EDITOR_REGISTRY | ✅ 注册表已就位，仅 essay 实现 |
 | workflow_status 独立列存储 | ✅ 已实现 |
 | State A / State B 双轨加载 | ✅ 已实现 |
-| 质量评估 + 自查步骤 | ❌ 未接入 |
+| 质量评估 + 自查步骤 | ✅ 已接入 Step 3，质量评估 + 自查脚本 + 应用完善版本 |
+| 采分点提取专用端点 | ✅ 已实现 `/api/english/extract-scoring-points`，专用 Prompt + flat JSON |
+| 端到端测试 66/66 | ✅ 回归验证 + State B + 保存逻辑全通过 |
