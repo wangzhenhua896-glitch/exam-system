@@ -413,6 +413,30 @@ def english_extract():
     return jsonify({'success': True, 'data': result})
 
 
+@api_bp.route('/english/extract-scoring-points', methods=['POST'])
+def english_extract_scoring_points():
+    """从已知子题中提取采分点（不含子题拆分）"""
+    data = request.json or {}
+    question_text = data.get('question_text', '')
+    standard_answer = data.get('standard_answer', '')
+    if not question_text.strip() or not standard_answer.strip():
+        return jsonify({'success': False, 'error': 'question_text 和 standard_answer 不能为空'}), 400
+
+    max_score = data.get('max_score', 0)
+
+    from app.english_prompts import EXTRACT_SCORING_POINTS_SYSTEM, make_extract_scoring_points_prompt
+    user_prompt = make_extract_scoring_points_prompt(question_text, standard_answer, max_score)
+    raw = _call_llm_sync(EXTRACT_SCORING_POINTS_SYSTEM, user_prompt)
+    if not raw:
+        return jsonify({'success': False, 'error': 'AI 调用失败'}), 500
+
+    result = _parse_json_from_llm(raw)
+    if not result or not result.get('scoring_points'):
+        return jsonify({'success': False, 'error': 'AI 返回结果无效', 'raw': raw[:500]}), 500
+
+    return jsonify({'success': True, 'data': result})
+
+
 @api_bp.route('/english/suggest-synonyms', methods=['POST'])
 def english_suggest_synonyms():
     """AI 同义词补全"""

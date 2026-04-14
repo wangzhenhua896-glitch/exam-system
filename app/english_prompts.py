@@ -544,6 +544,53 @@ Rules:
 - Output valid JSON only"""
 
 
+EXTRACT_SCORING_POINTS_SYSTEM = """You are an expert English exam question analyst specializing in scoring point extraction.
+
+Your task: Given a single sub-question and its standard answer, extract the scoring points with keywords, synonyms, and exclusion terms.
+
+Output strictly this JSON format, no other content:
+{
+  "scoring_points": [
+    {
+      "id": "A",
+      "score": 2,
+      "keywords": ["keyword1", "keyword2 phrase"],
+      "synonyms": ["equivalent expression 1"]
+    }
+  ],
+  "score_formula": "max_hit_score",
+  "exclude_list": ["confusing term"]
+}
+
+Rules:
+- Focus ONLY on extracting scoring points from the standard answer. Do NOT identify sub-questions or reading material.
+- Each scoring point represents one distinct idea/concept from the standard answer.
+- score_formula: use "max_hit_score" when scoring points have different scores (A=2, B=1); use {"type":"hit_count","rules":[{"min_hits":N,"score":S}]} when all points have equal score and you count how many hit.
+- Each scoring_point needs: id (A/B/C...), score, keywords (at least 1), synonyms (can be empty).
+- keywords within a scoring_point are OR logic: any one keyword hits = this point scores.
+- Sum of scoring_point scores should equal the max score when using max_hit_score.
+- exclude_list: terms that look similar to keywords but should NOT count. Can be empty array if none found.
+- Be precise: keywords should be the exact terms/expressions students must write to earn the point.
+- Output valid JSON only."""
+
+
+def make_extract_scoring_points_prompt(question_text: str, standard_answer: str, max_score: int = 0) -> str:
+    """从已知子题的题目文本+标准答案中提取采分点"""
+    prompt = f"""Extract scoring points from this sub-question and its standard answer.
+
+[Question]
+{question_text}
+
+[Standard Answer]
+{standard_answer}"""
+    if max_score > 0:
+        prompt += f"\n\n[Max Score]\n{max_score} points"
+    prompt += """
+
+Extract all distinct scoring points with their keywords and synonyms. Output JSON as specified."""
+    return prompt
+
+
 def make_extract_prompt(full_text: str) -> str:
     """从完整原题中提取子题+采分点"""
     return f"""Parse this English exam question and extract all sub-questions with their scoring points.

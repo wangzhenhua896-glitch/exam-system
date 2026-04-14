@@ -687,13 +687,15 @@
       if (!sq.text || !sq.standardAnswer) return;
       extractingLoading.value = true;
       try {
-        var res = await axios.post(API_BASE + '/api/english/extract', {
-          full_text: sq.text + '\n' + sq.standardAnswer,
+        var res = await axios.post(API_BASE + '/api/english/extract-scoring-points', {
+          question_text: sq.text,
+          standard_answer: sq.standardAnswer,
+          max_score: sq.maxScore,
         });
-        if (res.data.success && res.data.data && res.data.data.sub_questions) {
-          var extracted = res.data.data.sub_questions[0];
-          if (extracted && extracted.scoring_points) {
-            sq.scoringPoints = extracted.scoring_points.map(function (sp) {
+        if (res.data.success && res.data.data) {
+          var data = res.data.data;
+          if (data.scoring_points) {
+            sq.scoringPoints = data.scoring_points.map(function (sp) {
               return {
                 id: sp.id || 'A',
                 score: sp.score || 1,
@@ -701,9 +703,9 @@
                 synonyms: (sp.synonyms || []).slice(),
               };
             });
-            sq.scoreFormulaType = (typeof extracted.score_formula === 'string' && extracted.score_formula === 'max_hit_score')
+            sq.scoreFormulaType = (typeof data.score_formula === 'string' && data.score_formula === 'max_hit_score')
               ? 'max_hit_score' : 'hit_count';
-            if (extracted.exclude_list) sq.excludeList = extracted.exclude_list.slice();
+            if (data.exclude_list) sq.excludeList = data.exclude_list.slice();
           }
         }
       } catch (e) {
