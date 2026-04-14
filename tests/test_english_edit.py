@@ -139,6 +139,19 @@ class TestApiValidation:
         with app.test_client() as c:
             yield c
 
+    @pytest.fixture
+    def test_question_id(self):
+        """创建测试题目，测试后清理"""
+        from app.models.db_models import add_question, delete_question
+        qid = add_question(
+            subject='english', title='Fixture Test', content='Test content',
+            original_text=None, standard_answer='Test answer',
+            rubric_rules=None, rubric_points=None, rubric_script=None,
+            rubric='{}', max_score=2.0,
+        )
+        yield qid
+        delete_question(qid)
+
     def test_extract_requires_full_text(self, client):
         resp = client.post('/api/english/extract',
                            data=json.dumps({}),
@@ -167,15 +180,14 @@ class TestApiValidation:
                            content_type='application/json')
         assert resp.status_code == 400
 
-    def test_workflow_status_requires_body(self, client):
-        # 需要一个存在的题目 — 用固定 ID 的老题
-        resp = client.put('/api/questions/1/workflow-status',
+    def test_workflow_status_requires_body(self, client, test_question_id):
+        resp = client.put(f'/api/questions/{test_question_id}/workflow-status',
                           data=json.dumps({}),
                           content_type='application/json')
         assert resp.status_code == 400
 
-    def test_workflow_status_wrong_method(self, client):
-        resp = client.get('/api/questions/1/workflow-status')
+    def test_workflow_status_wrong_method(self, client, test_question_id):
+        resp = client.get(f'/api/questions/{test_question_id}/workflow-status')
         assert resp.status_code == 405
 
 
