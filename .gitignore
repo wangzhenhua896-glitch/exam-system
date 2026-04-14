@@ -32,9 +32,13 @@ _tmp_*
 
 # Node (if any)
 node_modules/
+eslint.config.mjs
+package.json
+package-lock.json
 
 # Database
 data/*.db
+data/*.db.*
 
 # Exports & results
 exports/

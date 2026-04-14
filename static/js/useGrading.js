@@ -1,4 +1,5 @@
 import { API_BASE } from './api.js';
+const { handleApiError } = window.SharedApp;
 // 评分核心模块
 export function useGrading({ selectedQuestion, selectedQuestionId, studentAnswer, manualQuestion, manualRubric, manualMaxScore, manualSubject, manualRubricPoints, currentMaxScore, providers, currentModelId, splitModelId }) {
     const { ref, computed } = Vue;

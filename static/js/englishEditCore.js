@@ -8,6 +8,7 @@
   'use strict';
 
   var API_BASE = '';
+  var handleApiError = window.SharedApp.handleApiError;
   var ElMessage = ElementPlus.ElMessage;
 
   // ============================================================
@@ -305,8 +306,7 @@
           }
         }
       } catch (e) {
-        console.error('加载题目失败', e);
-        ElMessage.error('加载题目失败：' + (e.message || '网络异常'));
+        handleApiError(e, '加载题目失败');
       }
       pageLoading.value = false;
     }
@@ -520,8 +520,7 @@
           ElMessage.error('AI 提取失败：' + (res.data.error || '返回数据异常'));
         }
       } catch (e) {
-        console.error('AI 提取异常', e);
-        ElMessage.error('AI 提取异常：' + (e.message || '网络错误'));
+        handleApiError(e, 'AI 提取异常');
       }
       extractingLoading.value = false;
     }
@@ -597,8 +596,7 @@
           });
         }
       } catch (e) {
-        console.error('同义词补全失败', e);
-        ElMessage.error('同义词补全失败：' + (e.message || '网络错误'));
+        handleApiError(e, '同义词补全失败');
       } finally {
         synonymLoadingMap.value[spKey] = false;
       }
@@ -656,8 +654,7 @@
           });
         }
       } catch (e) {
-        console.error('排除词建议失败', e);
-        ElMessage.error('排除词建议失败：' + (e.message || '网络错误'));
+        handleApiError(e, '排除词建议失败');
       } finally {
         excludeLoading.value = false;
       }
@@ -710,8 +707,7 @@
           }
         }
       } catch (e) {
-        console.error('采分点提取失败', e);
-        ElMessage.error('采分点提取失败：' + (e.message || '网络错误'));
+        handleApiError(e, '采分点提取失败');
       }
       extractingLoading.value = false;
     }
@@ -743,8 +739,7 @@
           markStepCompleted('script');
         }
       } catch (e) {
-        console.error('脚本生成失败', e);
-        ElMessage.error('脚本生成失败：' + (e.message || '网络错误'));
+        handleApiError(e, '脚本生成失败');
       }
       scriptGenerating.value = false;
     }
@@ -888,8 +883,7 @@
         // 保存 workflow_status
         await saveWorkflowStatus();
       } catch (e) {
-        console.error('保存失败', e);
-        ElMessage.error('保存失败：' + (e.message || '网络错误'));
+        handleApiError(e, '保存失败');
       }
       pageLoading.value = false;
     }
