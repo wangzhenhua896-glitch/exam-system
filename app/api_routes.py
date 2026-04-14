@@ -2533,12 +2533,8 @@ def self_check_rubric():
 @api_bp.route('/bugs', methods=['GET'])
 def get_bugs():
     """获取 bug 日志列表"""
-    import sqlite3
-    import os as _os
-    from config.settings import GRADING_CONFIG
-    db_path = GRADING_CONFIG.get('db_path') or _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), 'data', 'exam_system.db')
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    from app.models.db_models import get_db_connection
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     bug_type = request.args.get('bug_type', '')
