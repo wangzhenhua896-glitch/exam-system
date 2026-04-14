@@ -113,6 +113,10 @@
 
     // ---- 评分脚本（step3） ----
     var generatedScript = ref('');
+    var selfCheckLoading = ref(false);
+    var selfCheckResult = ref(null);
+    var qualityLoading = ref(false);
+    var qualityResult = ref(null);
 
     // ---- 验证结果（step4） ----
     var validationResults = ref([]);
@@ -746,6 +750,70 @@
       scriptGenerating.value = false;
     }
 
+    async function selfCheckScript() {
+      if (!generatedScript.value) return;
+      selfCheckLoading.value = true;
+      selfCheckResult.value = null;
+      try {
+        var allContent = subQuestions.value.map(function (sq) { return sq.text; }).join('\n');
+        var allAnswer = subQuestions.value.map(function (sq) { return sq.standardAnswer; }).join('\n');
+        var res = await axios.post(API_BASE + '/api/self-check-rubric', {
+          content: allContent,
+          score: parentMaxScore.value,
+          standardAnswer: allAnswer,
+          rubricScript: generatedScript.value,
+          subject: 'english',
+        });
+        if (res.data.success) {
+          selfCheckResult.value = res.data.data;
+          if (res.data.data.issue_count === 0) {
+            ElMessage.success('自查通过，未发现问题');
+          }
+        } else {
+          ElMessage.error('自查失败：' + (res.data.error || '未知错误'));
+        }
+      } catch (e) {
+        handleApiError(e, '自查失败');
+      } finally {
+        selfCheckLoading.value = false;
+      }
+    }
+
+    function applyImprovedScript() {
+      if (selfCheckResult.value && selfCheckResult.value.improved_script) {
+        generatedScript.value = selfCheckResult.value.improved_script;
+        selfCheckResult.value = null;
+        ElMessage.success('已应用完善后的评分脚本');
+      }
+    }
+
+    async function evaluateQuality() {
+      var sqs = subQuestions.value;
+      if (!sqs.length || !sqs[0].standardAnswer) {
+        ElMessage.warning('请先完成子题配置');
+        return;
+      }
+      qualityLoading.value = true;
+      qualityResult.value = null;
+      try {
+        var res = await axios.post(API_BASE + '/api/evaluate-question', {
+          content: sqs.map(function (sq) { return sq.text; }).join('\n'),
+          standardAnswer: sqs.map(function (sq) { return sq.standardAnswer; }).join('\n'),
+          maxScore: parentMaxScore.value,
+          subject: 'english',
+        });
+        if (res.data.success) {
+          qualityResult.value = res.data.data;
+        } else {
+          ElMessage.error('质量评估失败：' + (res.data.error || '未知错误'));
+        }
+      } catch (e) {
+        handleApiError(e, '质量评估失败');
+      } finally {
+        qualityLoading.value = false;
+      }
+    }
+
     // ============================================================
     // Step4: 一致性验证
     // ============================================================
@@ -1026,6 +1094,13 @@
       clearExcludeSuggestions: clearExcludeSuggestions,
       extractScoringPoints: extractScoringPoints,
       generateScript: generateScript,
+      selfCheckScript: selfCheckScript,
+      applyImprovedScript: applyImprovedScript,
+      evaluateQuality: evaluateQuality,
+      selfCheckLoading: selfCheckLoading,
+      selfCheckResult: selfCheckResult,
+      qualityLoading: qualityLoading,
+      qualityResult: qualityResult,
       validateAll: validateAll,
       saveAll: saveAll,
       isQuestionComplete: isQuestionComplete,

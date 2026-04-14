@@ -907,10 +907,57 @@
                                 <template #header>
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <span style="font-weight: 600;">评分脚本</span>
-                                        <el-button type="primary" plain :loading="englishEdit.scriptGenerating" @click="englishEdit.generateScript()">生成评分脚本</el-button>
+                                        <div style="display: flex; gap: 8px;">
+                                            <el-button type="primary" plain :loading="englishEdit.scriptGenerating" @click="englishEdit.generateScript()">生成评分脚本</el-button>
+                                            <el-button type="warning" plain :loading="englishEdit.selfCheckLoading" :disabled="!englishEdit.generatedScript" @click="englishEdit.selfCheckScript()">自查脚本</el-button>
+                                            <el-button type="info" plain :loading="englishEdit.qualityLoading" @click="englishEdit.evaluateQuality()">质量评估</el-button>
+                                        </div>
                                     </div>
                                 </template>
                                 <el-input v-model="englishEdit.generatedScript" type="textarea" :rows="16" placeholder='点击"生成评分脚本"按钮，AI 将根据采分点配置自动生成…' />
+                                <!-- 自查结果 -->
+                                <div v-if="englishEdit.selfCheckResult" style="margin-top: 12px; padding: 12px; background: #fdf6ec; border: 1px solid #e6a23c; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-weight: 600; color: #e6a23c;">自查结果：发现 {{ englishEdit.selfCheckResult.issue_count }} 个问题</span>
+                                        <div style="display: flex; gap: 8px;">
+                                            <el-button size="small" type="primary" plain @click="englishEdit.applyImprovedScript()">应用完善版本</el-button>
+                                            <el-button size="small" @click="englishEdit.selfCheckResult = null">关闭</el-button>
+                                        </div>
+                                    </div>
+                                    <div v-if="englishEdit.selfCheckResult.issues && englishEdit.selfCheckResult.issues.length > 0" style="margin-bottom: 8px;">
+                                        <div v-for="(issue, idx) in englishEdit.selfCheckResult.issues" :key="idx" style="padding: 6px 0; border-bottom: 1px solid #faecd8; font-size: 13px; line-height: 1.6;">
+                                            <span style="color: #e6a23c; font-weight: 600;">[{{ issue.category }}]</span>
+                                            {{ issue.description }}
+                                            <span v-if="issue.location" style="color: #909399;">（{{ issue.location }}）</span>
+                                        </div>
+                                    </div>
+                                    <el-collapse v-if="englishEdit.selfCheckResult.improved_script">
+                                        <el-collapse-item title="查看完善后的脚本">
+                                            <div style="padding: 8px; background: #fff; border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;">{{ englishEdit.selfCheckResult.improved_script }}</div>
+                                        </el-collapse-item>
+                                    </el-collapse>
+                                </div>
+                                <!-- 质量评估结果 -->
+                                <div v-if="englishEdit.qualityResult" style="margin-top: 12px; padding: 12px; background: #f4f4f5; border: 1px solid #dcdfe6; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <span style="font-size: 28px; font-weight: 700;" :style="{ color: englishEdit.qualityResult.overall_score >= 80 ? '#67c23a' : englishEdit.qualityResult.overall_score >= 60 ? '#e6a23c' : '#f56c6c' }">{{ englishEdit.qualityResult.overall_score }}</span>
+                                            <el-tag :type="englishEdit.qualityResult.verdict === 'pass' ? 'success' : englishEdit.qualityResult.verdict === 'warning' ? 'warning' : 'danger'" size="small">{{ englishEdit.qualityResult.verdict }}</el-tag>
+                                        </div>
+                                        <el-button size="small" @click="englishEdit.qualityResult = null">关闭</el-button>
+                                    </div>
+                                    <div v-if="englishEdit.qualityResult.issues && englishEdit.qualityResult.issues.length > 0" style="margin-bottom: 8px;">
+                                        <div v-for="(issue, idx) in englishEdit.qualityResult.issues" :key="idx" style="padding: 6px 0; border-bottom: 1px solid #ebeef5; font-size: 13px; line-height: 1.6;">
+                                            <el-tag size="small" :type="issue.severity === 'error' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'info'" style="margin-right: 4px;">{{ issue.severity }}</el-tag>
+                                            <span style="font-weight: 600; color: #606266;">[{{ issue.category }}]</span>
+                                            {{ issue.description }}
+                                        </div>
+                                    </div>
+                                    <div v-if="englishEdit.qualityResult.suggestions && englishEdit.qualityResult.suggestions.length > 0">
+                                        <div style="font-weight: 600; color: #409eff; margin-bottom: 4px; font-size: 13px;">改进建议：</div>
+                                        <div v-for="(s, idx) in englishEdit.qualityResult.suggestions" :key="'s'+idx" style="padding: 4px 0; font-size: 13px; color: #606266;">• {{ s }}</div>
+                                    </div>
+                                </div>
                                 <div style="margin-top: 12px; text-align: right;">
                                     <el-button @click="englishEdit.currentStep = 'per_question'">← 返回修改采分点</el-button>
                                     <el-button type="primary" :disabled="!englishEdit.generatedScript" @click="englishEdit.validateAll(); englishEdit.currentStep = 'validate';">
