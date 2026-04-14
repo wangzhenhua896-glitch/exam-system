@@ -1,0 +1,82 @@
+#!/bin/bash
+# pre-commit hook — AI 智能评分系统
+#
+# 检查内容：
+# 1. JS 文件语法检查（node -c）
+# 2. ESLint 检查（catch 块规范 + 基础错误）
+# 3. HTML 文件中的内联 JS 语法检查
+
+set -e
+
+echo "🔍 Pre-commit 检查..."
+
+# 获取本次提交中改动的 JS 文件
+JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$' || true)
+HTML_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.html$' || true)
+
+if [ -z "$JS_FILES" ] && [ -z "$HTML_FILES" ]; then
+  echo "  没有 JS/HTML 文件改动，跳过检查"
+  exit 0
+fi
+
+# 1. JS 文件语法检查
+if [ -n "$JS_FILES" ]; then
+  echo "  📄 语法检查 JS 文件..."
+  for f in $JS_FILES; do
+    if [ -f "$f" ]; then
+      # 跳过 api.js（纯 export/import，node -c 需要 --input-type=module）
+      if echo "$f" | grep -q 'api\.js$\|use.*\.js$'; then
+        node --input-type=module -e "$(cat "$f")" 2>/dev/null || {
+          # module 语法检查失败，尝试普通检查
+          node -c "$f" 2>/dev/null || {
+            echo "  ❌ 语法错误: $f"
+            exit 1
+          }
+        }
+      else
+        node -c "$f" 2>/dev/null || {
+          echo "  ❌ 语法错误: $f"
+          exit 1
+        }
+      fi
+    fi
+  done
+  echo "  ✅ 语法检查通过"
+
+  # 2. ESLint 检查（只检查 error，warning 不阻塞）
+  echo "  📐 ESLint 检查..."
+  npx eslint --no-warn-ignored $JS_FILES 2>&1 || {
+    echo ""
+    echo "  ❌ ESLint 检查失败，请修复上述 error 后重新提交"
+    echo "  💡 运行 'npx eslint static/js/' 查看详情"
+    exit 1
+  }
+  echo "  ✅ ESLint 检查通过"
+fi
+
+# 3. HTML 内联 JS 语法检查
+if [ -n "$HTML_FILES" ]; then
+  echo "  📄 语法检查 HTML 内联 JS..."
+  for f in $HTML_FILES; do
+    if [ -f "$f" ]; then
+      # 提取 <script> 中 createApp 部分做语法检查
+      node -e "
+        const fs = require('fs');
+        const html = fs.readFileSync('$f', 'utf-8');
+        const match = html.match(/<script>[\s\S]*?createApp\([\s\S]*?<\/script>/);
+        if (!match) process.exit(0);
+        const js = match[0].replace(/<\/?script>/g, '');
+        const tmp = require('os').tmpdir() + '/pre_commit_check.js';
+        fs.writeFileSync(tmp, js);
+        require('child_process').execSync('node -c ' + tmp, { stdio: 'inherit' });
+      " 2>/dev/null || {
+        echo "  ❌ HTML 内联 JS 语法错误: $f"
+        exit 1
+      }
+    fi
+  done
+  echo "  ✅ HTML 内联 JS 语法检查通过"
+fi
+
+echo "✅ Pre-commit 检查全部通过"
+exit 0
