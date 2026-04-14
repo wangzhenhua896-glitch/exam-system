@@ -17,7 +17,7 @@ REMOTE_USER="root"
 REMOTE_PASS="Wzh13901143779!"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 解析参数：第一个非选项参数作为主机，其余为选项
+# 解析参数
 REMOTE_HOST="${DEFAULT_HOST}"
 REMOTE_PORT="${DEFAULT_PORT}"
 REMOTE_DIR="${DEFAULT_DIR}"
@@ -51,7 +51,6 @@ while [ $idx -lt ${#args[@]} ]; do
             exit 0
             ;;
         *)
-            # 第一个非选项参数作为主机
             if [ "$REMOTE_HOST" = "$DEFAULT_HOST" ]; then
                 REMOTE_HOST="${args[$idx]}"
             fi
@@ -60,21 +59,10 @@ while [ $idx -lt ${#args[@]} ]; do
     idx=$((idx+1))
 done
 
-# sshpass 封装
-SSH_CMD="sshpass -p '${REMOTE_PASS}' ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST}"
-
-# 需要同步的文件和目录
-SYNC_ITEMS=(
-    "app/"
-    "config/"
-    "dist/"
-    "templates/"
-    "static/"
-    "main.py"
-    "requirements.txt"
-    "start.sh"
-    ".env.example"
-)
+# sshpass 封装函数
+remote() {
+    sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" "$@"
+}
 
 echo "========================================="
 echo " AI 智能评分系统 - 部署"
@@ -86,9 +74,10 @@ echo ""
 
 # 1. 同步文件
 echo "[1/4] 同步文件..."
-eval "${SSH_CMD}" "mkdir -p ${REMOTE_DIR}"
+remote "mkdir -p ${REMOTE_DIR}"
 
-eval "cd '${LOCAL_DIR}' && sshpass -p '${REMOTE_PASS}' tar czf - \
+cd "$LOCAL_DIR"
+tar czf - \
     --exclude='*.pyc' \
     --exclude='__pycache__' \
     --exclude='*.log' \
@@ -105,19 +94,20 @@ eval "cd '${LOCAL_DIR}' && sshpass -p '${REMOTE_PASS}' tar czf - \
     --exclude='node_modules' \
     --exclude='*.db' \
     app/ config/ dist/ templates/ static/ main.py requirements.txt start.sh .env.example \
-    | ${SSH_CMD} 'cd ${REMOTE_DIR} && tar xzf -'"
+    | sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" \
+        "cd ${REMOTE_DIR} && tar xzf -"
 
 echo ""
 
 # 2. 远程安装依赖
 echo "[2/4] 安装依赖..."
-eval "${SSH_CMD}" "cd ${REMOTE_DIR} && pip install -q -r requirements.txt 2>&1 | tail -3"
+remote "cd ${REMOTE_DIR} && /usr/bin/python3.11 -m pip install -q -r requirements.txt 2>&1 | tail -3"
 
 echo ""
 
 # 3. 停止旧进程（按目录+端口定位，不误杀其他实例）
 echo "[3/4] 停止旧进程..."
-eval "${SSH_CMD}" "cd ${REMOTE_DIR} && \
+remote "cd ${REMOTE_DIR} && \
     PID_FILE='app-${REMOTE_PORT}.pid' && \
     if [ -f \"\$PID_FILE\" ]; then \
         OLD_PID=\$(cat \"\$PID_FILE\"); \
@@ -133,9 +123,9 @@ echo ""
 
 # 4. 启动服务
 echo "[4/4] 启动服务..."
-eval "${SSH_CMD}" "cd ${REMOTE_DIR} && \
+remote "cd ${REMOTE_DIR} && \
     mkdir -p logs && \
-    PORT=${REMOTE_PORT} FLASK_DEBUG=false nohup python main.py --port ${REMOTE_PORT} --no-debug \
+    PORT=${REMOTE_PORT} FLASK_DEBUG=false nohup /usr/bin/python3.11 main.py --port ${REMOTE_PORT} --no-debug \
     > app-${REMOTE_PORT}.log 2>&1 & \
     echo \$! > app-${REMOTE_PORT}.pid"
 
@@ -145,7 +135,7 @@ sleep 3
 # 健康检查
 echo ""
 echo "健康检查..."
-if eval "${SSH_CMD}" "curl -sf http://localhost:${REMOTE_PORT}/ > /dev/null 2>&1"; then
+if remote "curl -sf http://localhost:${REMOTE_PORT}/ > /dev/null 2>&1"; then
     echo ""
     echo "========================================="
     echo " 部署成功!"
