@@ -1482,7 +1482,7 @@ def import_word_confirm():
 import asyncio
 
 @api_bp.route('/grade', methods=['POST'])
-async def grade_answer():
+def grade_answer():
     """
     单题智能评分
     ---
@@ -1781,7 +1781,7 @@ async def grade_answer():
     # 三层并行评分
     from app.three_layer_grader import three_layer_grade
     from app.qwen_engine import QwenGradingResult
-    grade_result = await three_layer_grade(
+    grade_result = three_layer_grade(
         grading_engine=grading_engine,
         question=question_text,
         answer=student_answer,
@@ -1988,7 +1988,7 @@ def list_history():
 
 
 @api_bp.route('/batch', methods=['POST'])
-async def create_batch():
+def create_batch():
     """创建批量评分任务 - 使用 Qwen-Agent GradingAgent"""
     data = request.json
     task_name = data.get('task_name', '批量评分')
@@ -2006,7 +2006,7 @@ async def create_batch():
             q = get_question(int(qid))
             if q and q.get('subject'):
                 subj = q['subject']
-        result = await grading_engine.grade(
+        result = grading_engine.grade(
             question=item.get('question', ''),
             answer=item.get('answer', ''),
             rubric=item.get('rubric', {}),
@@ -3148,7 +3148,7 @@ def delete_test_case_detail(question_id, test_case_id):
 
 
 @api_bp.route('/questions/<int:question_id>/generate-test-cases', methods=['POST'])
-async def generate_test_cases_for_question(question_id):
+def generate_test_cases_for_question(question_id):
     """为已有题目自动生成测试用例（支持参数化配置）"""
     q = get_question(question_id)
     if not q:
@@ -3494,7 +3494,7 @@ def rollback_script(question_id):
 # =============================================================================
 
 @api_bp.route('/verify-rubric', methods=['POST'])
-async def verify_rubric():
+def verify_rubric():
     """验证评分脚本：对所有测试用例运行评分，对比实际分与期望分"""
     data = request.json
     question_id = data.get('question_id')
@@ -3545,7 +3545,7 @@ async def verify_rubric():
     results = []
     for tc in cases:
         try:
-            result = await grading_engine.grade(
+            result = grading_engine.grade(
                 question=question_text,
                 answer=tc['answer_text'],
                 rubric=rubric,

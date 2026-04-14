@@ -53,10 +53,6 @@ def create_app() -> Flask:
 
 def register_routes(app: Flask):
     """注册路由"""
-    from .routes import grading_bp
-    from .batch_routes import batch_bp
-    from .validation_routes import validation_bp
-    from .tuning_routes import tuning_bp
     from .api_routes import api_bp
     from .config_routes import config_bp
     from flask import send_from_directory, render_template
@@ -126,10 +122,6 @@ def register_routes(app: Flask):
         return send_from_directory(static_dir, 'code-viewer.html')
 
     # 注册蓝图
-    app.register_blueprint(grading_bp, url_prefix="/api/grading")
-    app.register_blueprint(batch_bp, url_prefix="/api/batch")
-    app.register_blueprint(validation_bp, url_prefix="/api/validation")
-    app.register_blueprint(tuning_bp, url_prefix="/api/tuning")
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(config_bp, url_prefix="/api/config")
 

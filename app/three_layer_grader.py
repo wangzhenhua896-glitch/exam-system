@@ -10,9 +10,9 @@
 英语科目：通过 app.english_grader.grade_english() 独立评分
 """
 
-import asyncio
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Tuple
 
 from loguru import logger
@@ -121,7 +121,7 @@ def vector_match_score(answer: str, question_answers: List[Dict], max_score: flo
     return score, {'similarity': best_similarity, 'matched_label': best_label, 'method': 'vector'}
 
 
-async def three_layer_grade(
+def three_layer_grade(
     grading_engine,
     question: str,
     answer: str,
@@ -171,7 +171,7 @@ async def three_layer_grade(
     # ===== 英语科目：交给独立模块 =====
     if subject == 'english':
         from app.english_grader import grade_english
-        return await grade_english(
+        return grade_english(
             answer=answer,
             question_answers=question_answers,
             max_score=max_score,
@@ -195,28 +195,19 @@ async def three_layer_grade(
         logger.warning(f"关键词匹配异常: {e}")
         layer_details['keyword'] = {'error': str(e)}
 
-    def run_vector():
-        return vector_match_score(answer, question_answers, max_score)
+    # 第2层 + 第3层：用线程池并行执行
+    if _debug:
+        logger.debug(f"[三层评分] 开始线程池并行执行第2层(向量) + 第3层(LLM)")
 
-    # 第3层：LLM 评分（异步）
-    async def run_llm():
-        return await grading_engine.grade(
-            question=question,
-            answer=answer,
-            rubric=rubric,
-            max_score=max_score,
-            subject=subject,
-            provider=provider,
-            model=model,
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        vector_future = executor.submit(vector_match_score, answer, question_answers, max_score)
+        llm_future = executor.submit(
+            grading_engine.grade, question, answer, rubric, max_score, subject, provider, model
         )
 
-    # 并行执行第2层和第3层
-    if _debug:
-        logger.debug(f"[三层评分] 开始并行执行第2层(向量) + 第3层(LLM)")
-    loop = asyncio.get_event_loop()
-    vector_task = loop.run_in_executor(None, run_vector)
-    llm_task = run_llm()
-    (vec_score, vec_detail), llm_result = await asyncio.gather(vector_task, llm_task)
+        vec_score, vec_detail = vector_future.result()
+        llm_result = llm_future.result()
+
     layer_scores['vector'] = vec_score
     layer_details['vector'] = vec_detail
     layer_scores['llm'] = llm_result.final_score if llm_result else None

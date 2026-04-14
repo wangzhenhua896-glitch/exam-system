@@ -392,7 +392,7 @@ comment 应用中文写评语，不要用英文。
 - 只输出JSON，不要其他内容。"""
 
 
-async def grade_english_fallback(
+def grade_english_fallback(
     client,
     model: str,
     question: str,
@@ -588,7 +588,7 @@ def _calculate_confidence(score: float, max_score: float, content: str) -> float
 # 英语评分主流程
 # ============================================================
 
-async def grade_english(
+def grade_english(
     answer: str,
     question_answers: List[Dict],
     max_score: float,
@@ -632,7 +632,7 @@ async def grade_english(
         layer_details['keyword'] = {'reason': '无采分点数据'}
         logger.info("英语评分: 无采分点数据，回退通用评分")
         try:
-            llm_result = await grading_engine.grade(
+            llm_result = grading_engine.grade(
                 question=question,
                 answer=answer,
                 rubric=rubric or {},
@@ -702,7 +702,7 @@ async def grade_english(
             llm_sub_result = None
             try:
                 if hasattr(grading_engine, 'client') and sp_json.get('scoring_points'):
-                    llm_sub_result = await grade_english_fallback(
+                    llm_sub_result = grade_english_fallback(
                         client=grading_engine.client,
                         model=grading_engine.model,
                         question=question,

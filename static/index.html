@@ -379,7 +379,7 @@ const app = createApp({
             if (!gradingForm.answer) { ElMessage.warning('请填写学生答案'); return; }
             gradingLoading.value = true;
             try {
-                const response = await axios.post('/api/grading/single', { question: '请简述人工智能的发展历程。', answer: gradingForm.answer, max_score: 10, sample_count: gradingForm.sampleCount, strategy: gradingForm.strategy, rubric: {} });
+                const response = await axios.post('/api/grade', { question: '请简述人工智能的发展历程。', answer: gradingForm.answer, max_score: 10, subject: 'general' });
                 gradingResult.value = response.data;
                 ElMessage.success('评分完成');
             } catch (error) { handleApiError(error, '评分失败'); } finally { gradingLoading.value = false; }
@@ -388,7 +388,7 @@ const app = createApp({
         const runValidation = async () => {
             validationLoading.value = true;
             try {
-                const response = await axios.post('/api/validation/run', { strategy: validationForm.strategy, sample_count: validationForm.sampleCount });
+                ElMessage.info('验证功能已迁移，请使用题库管理页面');
                 validationResult.value = response.data;
                 ElMessage.success('验证完成');
             } catch (error) { handleApiError(error, '验证失败'); } finally { validationLoading.value = false; }
@@ -399,7 +399,7 @@ const app = createApp({
             tuningProgress.value = 0;
             const timer = setInterval(() => { if (tuningProgress.value < 90) tuningProgress.value += 10; }, 500);
             try {
-                const response = await axios.post('/api/tuning/start', { max_iterations: tuningForm.maxIterations, target_accuracy: tuningForm.targetAccuracy, target_correlation: tuningForm.targetKappa, strategy: 'confidence_weighted', sample_count: 3 });
+                ElMessage.info('调优功能已迁移，请使用题库管理页面');
                 clearInterval(timer);
                 tuningProgress.value = 100;
                 tuningResult.value = response.data;
@@ -412,7 +412,7 @@ const app = createApp({
             batchProgress.value = 0;
             const timer = setInterval(() => { if (batchProgress.value < 90) batchProgress.value += 5; }, 300);
             try {
-                const response = await axios.post('/api/batch/test', { count: batchForm.count, sample_count: batchForm.sampleCount, strategy: 'confidence_weighted', rubric: {}, max_score: 10 });
+                ElMessage.info('批量性能测试功能已迁移，请使用 /api/batch 接口');
                 clearInterval(timer);
                 batchProgress.value = 100;
                 batchResult.value = response.data;
