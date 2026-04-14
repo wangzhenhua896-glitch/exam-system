@@ -82,6 +82,35 @@ def init_database():
         cursor.execute('ALTER TABLE questions ADD COLUMN exam_name TEXT DEFAULT NULL')
     except Exception:
         pass
+    # 多满分答案：parent_id 支持父子题
+    try:
+        cursor.execute('ALTER TABLE questions ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES questions(id)')
+    except Exception:
+        pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_questions_parent ON questions(parent_id)')
+    except Exception:
+        pass
+    # 单题评分策略覆盖（NULL 使用全局默认）
+    try:
+        cursor.execute("ALTER TABLE questions ADD COLUMN scoring_strategy TEXT DEFAULT NULL")
+    except Exception:
+        pass
+    # 富文本 HTML 内容（前端展示用，评分引擎继续读 content 纯文本）
+    try:
+        cursor.execute("ALTER TABLE questions ADD COLUMN content_html TEXT DEFAULT NULL")
+    except Exception:
+        pass
+    # 题型标识（essay/single_choice/multi_choice/fill_blank/true_false/translation）
+    try:
+        cursor.execute("ALTER TABLE questions ADD COLUMN question_type TEXT DEFAULT 'essay'")
+    except Exception:
+        pass
+    # 工作流状态（独立列，不存 rubric JSON 中，避免保存时被覆盖）
+    try:
+        cursor.execute("ALTER TABLE questions ADD COLUMN workflow_status TEXT DEFAULT NULL")
+    except Exception:
+        pass
 
     # grading_records 新字段
     try:
@@ -284,6 +313,62 @@ def init_database():
             )
         except Exception:
             pass
+
+    # 满分答案表（多满分答案支持）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS question_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+            scope_type TEXT NOT NULL DEFAULT 'question',
+            scope_id TEXT DEFAULT '',
+            score_ratio REAL DEFAULT 1.0,
+            answer_text TEXT NOT NULL,
+            label TEXT DEFAULT '',
+            source TEXT DEFAULT 'manual',
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_qa_question ON question_answers(question_id, scope_type)
+    ''')
+
+    # 评分参数配置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS grading_params (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # 初始化默认阈值（幂等）
+    default_params = [
+        ('match_pass_threshold', '0.80', '学生答案与满分答案的匹配度高于此值，直接判定得分，不再调用AI'),
+        ('match_review_threshold', '0.65', '匹配度在此区间，交给AI复核后给分'),
+        ('full_check_threshold', '0.72', '整题评分后的校验阈值，偏离此值触发复查'),
+        ('scoring_strategy', 'avg', '全局评分策略：max / min / avg / median'),
+    ]
+    for p in default_params:
+        try:
+            cursor.execute(
+                'INSERT OR IGNORE INTO grading_params (key, value, description) VALUES (?, ?, ?)',
+                p
+            )
+        except Exception:
+            pass
+
+    # 迁移已有 standard_answer 到 question_answers（幂等）
+    try:
+        cursor.execute('''
+            INSERT INTO question_answers (question_id, scope_type, scope_id, score_ratio, answer_text, label, source)
+            SELECT id, 'question', '', 1.0, standard_answer, '标准答案', 'migrated'
+            FROM questions
+            WHERE standard_answer IS NOT NULL AND standard_answer != ''
+            AND id NOT IN (SELECT question_id FROM question_answers WHERE scope_type = 'question' AND label = '标准答案')
+        ''')
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
@@ -567,13 +652,13 @@ def update_script_version_result(question_id: int, version: int,
 
 
 # 题目操作
-def add_question(subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float = 10.0, quality_score: Optional[float] = None, question_number: Optional[str] = None, difficulty: Optional[str] = None, exam_name: Optional[str] = None) -> int:
+def add_question(subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float = 10.0, quality_score: Optional[float] = None, question_number: Optional[str] = None, difficulty: Optional[str] = None, exam_name: Optional[str] = None, parent_id: Optional[int] = None, scoring_strategy: Optional[str] = None, content_html: Optional[str] = None, question_type: str = 'essay', workflow_status: Optional[str] = None) -> int:
     """添加题目"""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO questions (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name)
+        'INSERT INTO questions (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name, parent_id, scoring_strategy, content_html, question_type, workflow_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_number, difficulty, exam_name, parent_id, scoring_strategy, content_html, question_type, workflow_status)
     )
     conn.commit()
     question_id = cursor.lastrowid
@@ -604,7 +689,7 @@ def get_question(question_id: int) -> Optional[Dict]:
     return dict(row) if row else None
 
 
-def update_question(question_id: int, subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float, quality_score: Optional[float] = None) -> bool:
+def update_question(question_id: int, subject: str, title: str, content: str, original_text: Optional[str], standard_answer: Optional[str], rubric_rules: Optional[str], rubric_points: Optional[str], rubric_script: Optional[str], rubric: str, max_score: float, quality_score: Optional[float] = None, parent_id: Optional[int] = None, scoring_strategy: Optional[str] = None, content_html: Optional[str] = None, question_type: Optional[str] = None, workflow_status: Optional[str] = None) -> bool:
     """更新题目，自动快照评分脚本版本"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -632,8 +717,8 @@ def update_question(question_id: int, subject: str, title: str, content: str, or
             is_first_script = True
 
     cursor.execute(
-        'UPDATE questions SET subject = ?, title = ?, content = ?, original_text = ?, standard_answer = ?, rubric_rules = ?, rubric_points = ?, rubric_script = ?, rubric = ?, max_score = ?, quality_score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, question_id)
+        'UPDATE questions SET subject = ?, title = ?, content = ?, original_text = ?, standard_answer = ?, rubric_rules = ?, rubric_points = ?, rubric_script = ?, rubric = ?, max_score = ?, quality_score = ?, parent_id = ?, scoring_strategy = ?, content_html = ?, question_type = ?, workflow_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (subject, title, content, original_text, standard_answer, rubric_rules, rubric_points, rubric_script, rubric, max_score, quality_score, parent_id, scoring_strategy, content_html, question_type or 'essay', workflow_status, question_id)
     )
 
     # 首次设置脚本 → 记录为版本 1
@@ -649,6 +734,20 @@ def update_question(question_id: int, subject: str, title: str, content: str, or
             (question_id, next_ver, rubric_script, '初始版本')
         )
 
+    conn.commit()
+    changes = cursor.rowcount
+    conn.close()
+    return changes > 0
+
+
+def update_workflow_status(question_id: int, workflow_status: str) -> bool:
+    """轻量更新 workflow_status，不触发脚本快照"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE questions SET workflow_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (workflow_status, question_id)
+    )
     conn.commit()
     changes = cursor.rowcount
     conn.close()
@@ -1075,6 +1174,129 @@ def delete_user(user_id: int) -> bool:
     affected = cursor.rowcount
     conn.close()
     return affected > 0
+
+
+# ==================== 满分答案管理 ====================
+
+def get_question_answers(question_id: int, scope_type: Optional[str] = None) -> List[Dict]:
+    """获取某题的满分答案列表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if scope_type:
+        cursor.execute(
+            'SELECT * FROM question_answers WHERE question_id = ? AND scope_type = ? ORDER BY scope_id, sort_order, id',
+            (question_id, scope_type)
+        )
+    else:
+        cursor.execute(
+            'SELECT * FROM question_answers WHERE question_id = ? ORDER BY scope_type, scope_id, sort_order, id',
+            (question_id,)
+        )
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def add_question_answer(question_id: int, scope_type: str = 'question', scope_id: str = '',
+                        score_ratio: float = 1.0, answer_text: str = '', label: str = '',
+                        source: str = 'manual', sort_order: int = 0) -> int:
+    """添加一个满分答案，返回新 ID"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        '''INSERT INTO question_answers
+           (question_id, scope_type, scope_id, score_ratio, answer_text, label, source, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+        (question_id, scope_type, scope_id, score_ratio, answer_text, label, source, sort_order)
+    )
+    answer_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return answer_id
+
+
+def update_question_answer(answer_id: int, **kwargs) -> bool:
+    """更新满分答案"""
+    allowed = {'scope_type', 'scope_id', 'score_ratio', 'answer_text', 'label', 'source', 'sort_order'}
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if not fields:
+        return False
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    values = list(fields.values()) + [answer_id]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'UPDATE question_answers SET {set_clause} WHERE id = ?', values)
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def delete_question_answer(answer_id: int) -> bool:
+    """删除一个满分答案"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM question_answers WHERE id = ?', (answer_id,))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+# ==================== 评分参数配置 ====================
+
+def get_grading_param(key: str, default: Optional[str] = None) -> Optional[str]:
+    """获取单个评分参数"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM grading_params WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else default
+
+
+def get_all_grading_params() -> Dict[str, str]:
+    """获取所有评分参数"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT key, value, description FROM grading_params ORDER BY key')
+    params = {row['key']: {'value': row['value'], 'description': row['description']} for row in cursor.fetchall()}
+    conn.close()
+    return params
+
+
+def set_grading_param(key: str, value: str, description: str = '') -> None:
+    """设置评分参数（有则更新，无则插入）"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO grading_params (key, value, description) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, description = ?, updated_at = CURRENT_TIMESTAMP',
+        (key, value, description, value, description)
+    )
+    conn.commit()
+    conn.close()
+
+
+# ==================== 父子题查询 ====================
+
+def get_child_questions(parent_id: int) -> List[Dict]:
+    """获取某父题的所有子题"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM questions WHERE parent_id = ? ORDER BY question_number, id', (parent_id,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_question_with_children(question_id: int) -> Optional[Dict]:
+    """获取题目及其子题列表"""
+    question = get_question(question_id)
+    if not question:
+        return None
+    children = get_child_questions(question_id)
+    question['children'] = children
+    return question
 
 
 # 初始化数据库

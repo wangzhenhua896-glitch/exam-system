@@ -15,10 +15,13 @@
 ```
 app/
 ├── app.py              # Flask 工厂 + 路由注册
-├── api_routes.py       # ★ 主 API（评分/题目/历史/批量/脚本生成/敏感词/用户）
+├── api_routes.py       # ★ 主 API（评分/题目/历史/批量/脚本生成/敏感词/用户/英语编辑器AI接口）
 ├── routes.py           # 聚合评分引擎路由（历史遗留，新入口走 api_routes）
 ├── config_routes.py    # 模型配置管理 API
 ├── qwen_engine.py      # ★ 核心评分引擎 QwenGradingEngine
+├── english_grader.py   # ★ 英语采分点精确匹配引擎（812行）
+├── english_prompts.py  # 英语科目 Prompt（含编辑器 AI 接口提示词）
+├── three_layer_grader.py # 三层并行评分调度
 ├── semantic_checker.py # 语义校验（text2vec 向量相似度纠偏）
 ├── validation.py       # 验证引擎
 ├── engine.py           # 多模型聚合引擎（历史遗留）
@@ -29,7 +32,7 @@ config/
 ├── settings.py         # 默认配置 + .env 加载
 templates/              # Jinja2 页面（login/question-bank/test-cases/sensitive-words/user-management）
 dist/index.html         # 单题评分页（Vue 3 SPA）
-static/js/              # 前端模块：api.js + useXxx.js（组合式）
+static/js/              # 前端模块：api.js + useXxx.js（组合式）+ englishEditCore.js
 data/exam_system.db     # SQLite 数据库
 docs/                   # 设计文档
 exports/                # 评分脚本导出示例
@@ -71,48 +74,81 @@ POST /api/grade
 
 ### 批量评分
 ```
-POST /api/batch  →  { "task_name": "...", "answers": [{"question":"..","answer":"..","max_score":8},...] }
+POST /api/batch  →  { "task_name": "...", "answers": [{"question_id": 5, "answer":"..", "max_score":8},...] }
 GET  /api/batch/{task_id}  →  查询进度和结果
 ```
+注意：批量评分通过 question_id 从 DB 自动获取 subject，也可在 item 中直接传 subject。
 
 ### 其他关键 API
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/generate-rubric-script` | AI 生成评分脚本 |
-| POST | `/api/verify-rubric` | 用测试用例验证评分脚本准确性 |
-| POST | `/api/evaluate-question` | AI 命题质量评估 |
-| POST | `/api/auto-generate` | AI 自动出题+脚本+测试用例 |
-| POST | `/api/questions/{id}/generate-test-cases` | 为已有题目生成测试用例 |
+| POST | `/api/generate-rubric-script` | AI 生成评分脚本（传 subject 切换中/英文提示词） |
+| POST | `/api/verify-rubric` | 用测试用例验证评分脚本准确性（自动获取 subject） |
+| POST | `/api/evaluate-question` | AI 命题质量评估（传 subject 切换中/英文标准） |
+| POST | `/api/auto-generate` | AI 自动出题+脚本+测试用例（传 subject 切换语言） |
+| POST | `/api/questions/{id}/generate-test-cases` | 为已有题目生成测试用例（自动获取 subject，风格选项随科目动态） |
 | GET  | `/api/providers` | 列出可用模型及子模型 |
 | GET  | `/api/stats` | 统计信息 |
 | GET  | `/api/dashboard` | 题库总览仪表盘 |
+| GET  | `/api/questions/{id}/answers` | 获取满分答案列表 |
+| POST | `/api/questions/{id}/answers` | 添加满分答案 |
+| PUT  | `/api/questions/{id}/answers/{aid}` | 修改满分答案 |
+| DELETE | `/api/questions/{id}/answers/{aid}` | 删除满分答案 |
+| GET  | `/api/grading-params` | 获取评分参数配置 |
+| PUT  | `/api/grading-params/{key}` | 修改评分参数 |
+| GET  | `/api/questions/{id}/children` | 获取子题列表 |
+| GET  | `/api/questions/{id}/with-children` | 获取题目含子题 |
+| PUT  | `/api/questions/{id}/workflow-status` | 轻量更新工作流状态（不触发脚本快照） |
+| POST | `/api/english/extract` | AI 提取子题+采分点（英语编辑器用） |
+| POST | `/api/english/suggest-synonyms` | AI 同义词补全 |
+| POST | `/api/english/suggest-exclude` | AI 排除词建议 |
+| POST | `/api/english/generate-rubric` | AI 生成评分脚本（编辑器用） |
 
-## 评分流程（v2.1.0 10步流水线）
-1. 空答案预检（正则去标点后 <2字 → 直接0分）
+## 评分流程（v3.0.0 三层并行 + 策略取分）
+1. 空答案预检（正则去标点后 <2字 → 直接0分；英语按词数 <2词判断）
 2. 敏感词扫描（high 级别 → 直接0分）
-3. 反作弊检测（复制题干/空白/答非所问 → 0分）
-4. 构造 scoring_items
-5. LLM 评分（按科目走不同提示词）
-6. 结果解析（JSON 提取 + 正则兜底 + 3次重试）
-7. 语义校验（text2vec 向量相似度 ≥0.72 → 自动纠偏，英语跳过）
-8. 证据验证（quoted_text 是否真实存在于答案中）
-9. 判别 Agent（短答案高分检测 / 全满分检测）
-10. 边界检查 + 一致性检查（同学生同题差异 >20% → 标记）
+3. **三层并行执行**：
+   - 第1层：关键词匹配（英语采分点逐个检查）→ 得分_A
+   - 第2层：向量匹配度（text2vec 相似度 × 满分）→ 得分_B（**英语跳过**：中文 text2vec 对英文不可靠）
+   - 第3层：LLM 评分（按科目走不同提示词）→ 得分_C
+4. 按策略取最终得分（max / min / avg / median）
+5. 证据验证（quoted_text 是否真实存在于答案中）
+6. 判别 Agent（短答案高分检测：中文按字数<10，英语按词数<5 / 全满分检测）
+7. 边界检查 + 一致性检查（同学生同题差异 >20% → 标记）
+
+**策略配置**：全局默认存在 grading_params 表，单题可在 questions.scoring_strategy 覆盖
 
 ## 关键设计原则
 - **一致性 P0**: 同一答案多次评分必须同分
-- **科目分支**: 思政/语文/英语各有独立提示词和输出解析格式
+- **科目分支**: 思政/语文/英语各有独立提示词和输出解析格式，所有涉及评分/生成的 API 均需传 subject
+- **英语跳过向量层**: 中文 text2vec 对英文不可靠，英语科目不执行向量匹配
 - **总分由系统累加**: 不信任模型给出的总分，从 scoring_items 逐项累加
 - **不静默返回0分**: API/解析失败必重试3次，耗尽返回 score=null
 - **配置分层**: .env → Python 默认 → 数据库覆盖（DB 优先）
-- **前端非构建**: Vue 3 CDN 引入，原生 JS 组合式 API（useXxx.js）
+- **前端非构建**: Vue 3 CDN 引入，原生 JS 组合式 API（useXxx.js）；题型编辑器用全局变量暴露（englishEditCore.js → window.EnglishEditCore）
 - **数据库无 ORM**: 直接 sqlite3 操作，ALTER TABLE 兼容旧库
+- **题型抽象**: 前端 EDITOR_REGISTRY 按 question_type 路由编辑器；后端按 rubric.type 分流评分函数；DB 通过 question_type + scope_type + answer_text 格式适配，不新建表
+- **编辑器产出 = 引擎输入**: buildApiPayload() 输出的 JSON 就是 english_scoring_point_match() 直接消费的格式，中间不做转换
 
-## 数据库（9 张表）
+## 数据库（12 张表）
 questions / grading_records / test_cases / model_configs /
-rubric_script_history / syllabus / batch_tasks / users / sensitive_words
+rubric_script_history / syllabus / batch_tasks / users / sensitive_words /
+question_answers / grading_params / rubrics / bug_log
 
 直接 sqlite3 操作。DB 路径: `data/exam_system.db`
+
+### questions 表关键列
+- `question_type` — 题型标识（essay/single_choice/multi_choice/fill_blank/true_false/translation），默认 essay
+- `workflow_status` — 工作流状态 JSON（独立列，不存 rubric 中避免覆盖）
+- `parent_id` — 父题关系，NULL 为父题，非 NULL 为子题
+- `scoring_strategy` — 单题评分策略覆盖（max/min/avg/median），NULL 使用全局默认
+- `rubric` — JSON 格式，新格式含 `type` + `version` 字段
+
+### 英语编辑器前端模块
+- `static/js/englishEditCore.js` — 5 步工作流状态机，通过 `window.EnglishEditCore` 全局暴露
+- 非 ES Module 模式（question-bank.html 用 `<script>` 引入）
+- 核心函数：`useEnglishEdit()` 返回响应式状态和方法集合
+- `buildApiPayload()` 生成的 JSON 必须与评分引擎 `english_scoring_point_match()` 消费格式完全一致
 
 ## 评分脚本编写规范
 
@@ -173,12 +209,28 @@ python main.py                 # → http://localhost:5001
 ./start.sh status              # 查看状态
 ```
 
+### 阿里云服务器
+
+- **IP**: 123.56.117.123
+- **用户**: root
+- **远程目录**: `/opt/ai-grading`
+- **默认端口**: 5001
+- **Python**: `/usr/bin/python3.11`
+- **数据库**: 服务器上独立维护，不会被本地覆盖（deploy.sh 排除了 `data/`）
+
 ### 远程部署
 ```bash
-./deploy.sh                    # 部署到默认服务器 (123.56.117.123)
-./deploy.sh 192.168.1.100      # 部署到指定服务器
+./deploy.sh                          # 部署到默认服务器 5001 端口
+./deploy.sh 123.56.117.123 -p 5002   # 指定端口（多版本并行）
+./deploy.sh 123.56.117.123 -d /opt/ai-grading-v2  # 指定目录
+./deploy.sh 123.56.117.123 -p 5002 -d /opt/ai-grading-v2  # 全指定
 ```
-部署流程：tar 打包传输 → pip 安装依赖 → 停止旧进程 → nohup 启动 → 健康检查
+部署流程：tar 打包传输（排除 data/exports/logs/.env）→ pip 安装依赖 → 停止旧进程（按端口定位）→ nohup 启动 → 健康检查
+
+远程日志查看：
+```bash
+ssh root@123.56.117.123 'tail -30 /opt/ai-grading/app-5001.log'
+```
 
 ### 日志
 - 应用日志: `app.log`（nohup 输出）
@@ -188,7 +240,7 @@ python main.py                 # → http://localhost:5001
 | 路径 | 功能 |
 |------|------|
 | `/login` | 登录页 |
-| `/management` | 题库管理（科目、题目、评分脚本） |
+| `/management` | 题库管理（科目、题目、评分脚本、英语专用编辑器） |
 | `/grading` | 单题评分 |
 | `/test-cases` | 测试集管理 |
 | `/sensitive-words` | 敏感词管理 |
@@ -197,6 +249,7 @@ python main.py                 # → http://localhost:5001
 ## 文档索引
 | 文档 | 说明 |
 |------|------|
+| docs/数据字典.md | ★ 数据库 12 张表的字段/类型/约束/关系 |
 | docs/AI智能评分系统设计文档-v2.0.0.md | ★ 最权威参考（1327行） |
 | docs/PROJECT_SUMMARY.md | 架构/目录/数据库/API 总览 |
 | docs/双Agent评分系统重构方案-v1.0.0.md | 双 Agent 流水线方案 |
@@ -205,3 +258,8 @@ python main.py                 # → http://localhost:5001
 | docs/多模型配置系统设计.md | Provider→Model→Instance 三层管理 |
 | docs/评分脚本版本管理.md | 自动归档/独立版本/回滚 |
 | docs/TEST_CASES_MODULE.md | 测试集管理模块 |
+| docs/思政测试用例集.md | 12 题 × 126 用例的完整测试集 |
+| docs/思政评分验证测试报告.md | 评分验证框架及结果报告 |
+| docs/评分脚本自查自纠方案.md | 四层检查体系（结构/对齐/验证/一致性） |
+| docs/多满分答案设计方案.md | ★ 多满分答案+父子题+三层并行评分方案 |
+| docs/英语编辑器设计方案.md | ★ 英语题目编辑器 UI 重构方案（5步工作流+题型抽象层+buildApiPayload格式约束） |
