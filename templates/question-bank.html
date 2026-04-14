@@ -629,7 +629,7 @@
                                 <template #header>
                                     <span style="font-weight: 600;">粘贴原题（含题目+标准答案）</span>
                                 </template>
-                                <el-input v-model="englishEdit.pasteText" type="textarea" :rows="10" placeholder="粘贴完整的英语原题，包含阅读材料、题目和标准答案..." />
+                                <textarea v-model="englishEdit.pasteText" rows="10" style="width:100%;padding:8px;border:1px solid #dcdfe6;border-radius:4px;font-family:inherit;" placeholder="粘贴完整的英语原题，包含阅读材料、题目和标准答案..."></textarea>
                                 <div style="margin-top: 12px; display: flex; gap: 12px;">
                                     <el-button type="primary" :loading="englishEdit.extractingLoading" @click="englishEdit.extractFromPaste()" :disabled="!englishEdit.pasteText.trim()">
                                         智能解析
@@ -1685,7 +1685,7 @@
 const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
 const { ElMessage, ElMessageBox } = ElementPlus;
 
-const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, SUBJECT_LABELS, getSubjectLabel, sanitizeHtml } = window.SharedApp;
+const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, SUBJECT_LABELS, getSubjectLabel, sanitizeHtml, handleApiError } = window.SharedApp;
 
 const app = createApp({
     setup() {
@@ -1817,7 +1817,7 @@ const app = createApp({
                     form.updatedAt = res.data.data.updated_at || '';
                 }
             } catch (e) {
-                console.error('加载内容失败', e);
+                handleApiError(e, '加载内容失败');
             }
         };
 
@@ -1842,7 +1842,7 @@ const app = createApp({
                     form.updatedAt = new Date().toLocaleString('zh-CN');
                 }
             } catch (e) {
-                ElMessage.error('保存失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '保存失败');
             } finally {
                 saving.value = false;
             }
@@ -1893,8 +1893,7 @@ const app = createApp({
                     stats.value = res.data.data;
                 }
             } catch (e) {
-                console.error('加载统计失败', e);
-                ElMessage.error('加载统计失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '加载统计失败');
             }
         };
 
@@ -1909,8 +1908,7 @@ const app = createApp({
                     dashboard.value = res.data.data;
                 }
             } catch (e) {
-                console.error('加载题库总览失败', e);
-                ElMessage.error('加载题库总览失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '加载题库总览失败');
             }
         };
 
@@ -1949,8 +1947,7 @@ const app = createApp({
                     questions.value = all;
                 }
             } catch (e) {
-                console.error('加载题目列表失败', e);
-                ElMessage.error('加载题目列表失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '加载题目列表失败');
             }
         };
 
@@ -2016,8 +2013,8 @@ const app = createApp({
                     autoGenStatus.value = '生成失败';
                 }
             } catch (e) {
-                ElMessage.error('生成失败：' + (e.response?.data?.error || e.message));
-                autoGenStatus.value = '生成失败：' + e.message;
+                handleApiError(e, '生成失败');
+                autoGenStatus.value = '生成失败';
             } finally {
                 autoGenRunning.value = false;
             }
@@ -2122,7 +2119,7 @@ const app = createApp({
                     ElMessage.error('检查失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('检查失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '检查失败');
             } finally {
                 batchCheckLoading.value = false;
             }
@@ -2182,7 +2179,7 @@ const app = createApp({
                     ElMessage.error('预览失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('预览失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '预览失败');
             }
             importLoading.value = false;
         }
@@ -2235,7 +2232,7 @@ const app = createApp({
                     ElMessage.error('导入失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('导入失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '导入失败');
             }
             importLoading.value = false;
         }
@@ -2256,7 +2253,7 @@ const app = createApp({
                     ElMessage.error('解析失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('解析失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '解析失败');
             }
             wordImportLoading.value = false;
         }
@@ -2281,7 +2278,7 @@ const app = createApp({
                     ElMessage.error('导入失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('导入失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '导入失败');
             }
             wordImportLoading.value = false;
         }
@@ -2316,8 +2313,7 @@ const app = createApp({
                     testCaseCount.value = res.data.data.length;
                 }
             } catch (e) {
-                console.error('加载测试用例失败', e);
-                ElMessage.error('加载测试用例失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '加载测试用例失败');
             } finally {
                 testCaseLoading.value = false;
             }
@@ -2356,7 +2352,7 @@ const app = createApp({
                 resetTestCaseForm();
                 await loadTestCases();
             } catch (e) {
-                ElMessage.error('保存失败: ' + (e.response?.data?.error || e.message));
+                handleApiError(e, '保存失败');
             }
         };
 
@@ -2376,7 +2372,7 @@ const app = createApp({
                 ElMessage.success('已删除');
                 await loadTestCases();
             } catch (e) {
-                if (e instanceof Error) { ElMessage.error('删除失败：' + (e.response?.data?.error || e.message)); }
+                handleApiError(e, '删除失败');
             }
         };
 
@@ -2416,7 +2412,7 @@ const app = createApp({
                     ElMessage.success(`验证完成: ${d.passed_cases}/${d.total_cases} 通过, 准确率 ${d.accuracy}%`);
                 }
             } catch (e) {
-                ElMessage.error('验证失败: ' + (e.response?.data?.error || e.message));
+                handleApiError(e, '验证失败');
             } finally {
                 verifyRunning.value = false;
             }
@@ -2447,7 +2443,7 @@ const app = createApp({
                     ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('生成失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '生成失败');
             } finally {
                 generatingPoints.value = false;
             }
@@ -2476,7 +2472,7 @@ const app = createApp({
                     ElMessage.error('检查失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('检查失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '检查失败');
             } finally {
                 consistencyLoading.value = false;
             }
@@ -2549,7 +2545,7 @@ const app = createApp({
                     ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('生成评分脚本失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '生成评分脚本失败');
             } finally {
                 generatingScript.value = false;
             }
@@ -2587,7 +2583,7 @@ const app = createApp({
                     ElMessage.error('自查失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('自查失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '自查失败');
             } finally {
                 selfChecking.value = false;
             }
@@ -2683,7 +2679,7 @@ const app = createApp({
                     ElMessage.error('评估失败：' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('命题质量评估失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '命题质量评估失败');
             } finally {
                 evaluatingQuality.value = false;
             }
@@ -2696,8 +2692,7 @@ const app = createApp({
                 const res = await axios.get(`/api/questions/${questionId}/answers`);
                 if (res.data.success) questionAnswers.value = res.data.data;
             } catch (e) {
-                console.error('加载满分答案失败', e);
-                ElMessage.error('加载满分答案失败：' + (e.response?.data?.error || e.message));
+                handleApiError(e, '加载满分答案失败');
             }
         };
         const addAnswer = async () => {
@@ -2718,7 +2713,7 @@ const app = createApp({
                     await loadAnswers(editingQuestionId.value);
                     ElMessage.success('已添加');
                 }
-            } catch (e) { ElMessage.error('添加失败: ' + e.message); }
+            } catch (e) { handleApiError(e, '添加失败'); }
         };
         const removeAnswer = async (answerId) => {
             if (!editingQuestionId.value) return;
@@ -2728,7 +2723,7 @@ const app = createApp({
                     await loadAnswers(editingQuestionId.value);
                     ElMessage.success('已删除');
                 }
-            } catch (e) { ElMessage.error('删除失败: ' + e.message); }
+            } catch (e) { handleApiError(e, '删除失败'); }
         };
         const parseScoringPointJson = (text) => {
             if (!text) return null;
@@ -2746,7 +2741,7 @@ const app = createApp({
                     label: answer.label,
                 });
                 ElMessage.success('已更新');
-            } catch (e) { ElMessage.error('更新失败: ' + e.message); }
+            } catch (e) { handleApiError(e, '更新失败'); }
         };
         const editAnswerScoreRatio = async (answer) => {
             if (!editingQuestionId.value) return;
@@ -2754,7 +2749,7 @@ const app = createApp({
                 await axios.put(`/api/questions/${editingQuestionId.value}/answers/${answer.id}`, {
                     score_ratio: answer.score_ratio,
                 });
-            } catch (e) { ElMessage.error('更新占比失败'); }
+            } catch (e) { handleApiError(e, '更新占比失败'); }
         };
 
         const saveQuestion = async () => {
@@ -2812,7 +2807,7 @@ const app = createApp({
                     ElMessage.error('保存失败: ' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('保存失败: ' + e.message);
+                handleApiError(e, '保存失败');
             }
         };
 
@@ -2853,7 +2848,7 @@ const app = createApp({
                     scriptHistory.value = res.data.data;
                 }
             } catch (e) {
-                ElMessage.error('加载版本历史失败');
+                handleApiError(e, '加载版本历史失败');
             }
             scriptHistoryLoading.value = false;
         };
@@ -2885,9 +2880,7 @@ const app = createApp({
                     openScriptHistory();
                 }
             } catch (e) {
-                if (e !== 'cancel') {
-                    ElMessage.error('回退失败');
-                }
+                handleApiError(e, '回退失败');
             }
         };
 
@@ -2907,7 +2900,7 @@ const app = createApp({
                     ElMessage.error('删除失败: ' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                if (e instanceof Error) { ElMessage.error('删除失败：' + (e.response?.data?.error || e.message)); }
+                handleApiError(e, '删除失败');
             }
         };
 
@@ -2959,8 +2952,7 @@ const app = createApp({
                 setContentEditorContent(questionForm.contentHtml);
                 return q;
             } catch (e) {
-                console.error('加载题目失败', e);
-                ElMessage.error('加载题目失败: ' + e.message);
+                handleApiError(e, '加载题目失败');
                 return null;
             }
         };
@@ -3062,7 +3054,7 @@ const app = createApp({
                     ElMessage.info(`发现 ${exactGroups.length} 组完全相同 + ${similarGroups.length} 组相似，共 ${res.data.total_duplicates} 道题目`);
                 }
             } catch (e) {
-                ElMessage.error('扫描失败: ' + e.message);
+                handleApiError(e, '扫描失败');
             } finally {
                 dedupLoading.value = false;
             }
@@ -3093,7 +3085,7 @@ const app = createApp({
                     ElMessage.info(`发现 ${groups.length} 组同题号题目待合并`);
                 }
             } catch (e) {
-                ElMessage.error('扫描失败: ' + e.message);
+                handleApiError(e, '扫描失败');
             } finally {
                 mergeLoading.value = false;
             }
@@ -3153,7 +3145,7 @@ const app = createApp({
                     ElMessage.error('合并失败: ' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('合并失败: ' + e.message);
+                handleApiError(e, '合并失败');
             }
         };
 
@@ -3220,7 +3212,7 @@ const app = createApp({
                     ElMessage.error('删除失败: ' + (res.data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('删除失败: ' + e.message);
+                handleApiError(e, '删除失败');
             }
         };
 
@@ -3306,7 +3298,7 @@ const app = createApp({
                     ElMessage.error('修正失败：' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                ElMessage.error('修正失败：' + e.message);
+                handleApiError(e, '修正失败');
             }
         };
 
@@ -3326,7 +3318,7 @@ const app = createApp({
                 viewDialogData.value = res.data.data;
                 viewDialogVisible.value = true;
             } catch (e) {
-                ElMessage.error('加载题目失败: ' + e.message);
+                handleApiError(e, '加载题目失败');
             }
         };
 
