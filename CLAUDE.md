@@ -268,14 +268,20 @@ ssh root@123.56.117.123 'tail -30 /opt/ai-grading/app-5001.log'
 | docs/数据字典.md | ★ 数据库 12 张表的字段/类型/约束/关系 |
 | docs/AI智能评分系统设计文档-v2.0.0.md | ★ 最权威参考（1327行） |
 | docs/PROJECT_SUMMARY.md | 架构/目录/数据库/API 总览 |
+| docs/多满分答案设计方案.md | ★ 多满分答案+父子题+三层并行评分方案 |
+| docs/英语采分点评分方案.md | ★ 英语采分点精确匹配+LLM 兜底方案 |
+| docs/英语评分模块独立设计.md | 英语评分模块架构设计 |
+| docs/英语简答题文档拆分方案.md | 英语题目 Word 文档解析拆分 |
+| docs/英语LLM兜底方案设计.md | 英语 LLM 评分兜底策略 |
 | docs/双Agent评分系统重构方案-v1.0.0.md | 双 Agent 流水线方案 |
-| docs/语义校验测试用例说明.md | text2vec 语义校验模块 |
-| docs/评分一致性测试报告-20260410.md | 8模型×8版本一致性测试 |
 | docs/多模型配置系统设计.md | Provider→Model→Instance 三层管理 |
 | docs/评分脚本版本管理.md | 自动归档/独立版本/回滚 |
-| docs/TEST_CASES_MODULE.md | 测试集管理模块 |
-| docs/思政测试用例集.md | 12 题 × 126 用例的完整测试集 |
-| docs/思政评分验证测试报告.md | 评分验证框架及结果报告 |
 | docs/评分脚本自查自纠方案.md | 四层检查体系（结构/对齐/验证/一致性） |
-| docs/多满分答案设计方案.md | ★ 多满分答案+父子题+三层并行评分方案 |
-| docs/英语编辑器设计方案.md | ★ 英语题目编辑器 UI 重构方案（5步工作流+题型抽象层+buildApiPayload格式约束） |
+| docs/语义校验测试用例说明.md | text2vec 语义校验模块 |
+| docs/TEST_CASES_MODULE.md | 测试集管理模块 |
+| docs/前端代码审查与改进清单.md | ★ 前端代码审查（P0×5/P1×13/P2×10 + 架构问题） |
+| docs/页面设计规范.md | 前端页面设计规范与交互约定 |
+| docs/待办工作清单.md | 待办事项跟踪 |
+| docs/Gitea本地备份配置.md | Gitea 本地 Git 备份配置 |
+| docs/MODEL_CONFIG.md | 模型配置管理说明 |
+| docs/archive/ | 已归档的过程记录（Bug修复/优化/测试报告等） |
