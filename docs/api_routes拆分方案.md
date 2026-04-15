@@ -486,3 +486,7 @@ npx playwright test
 4. **循环导入检查**：所有新文件只从 `api_shared.py` import，`api_shared.py` 不 import 任何 `routes_xxx.py`，没有循环依赖。
 
 5. **`_build_merge_suggestion()`**：这是 `routes_dedup.py` 的内部辅助函数，不需要对外暴露，直接放在该文件里即可。
+
+6. **`routes_import.py` 的 db import 需自行补全**：文档中只列出了常用的4个 db 函数作为示例，实际上导出评分脚本、导入Word等功能还用到更多函数。执行 Agent 应在搬代码时，检查每个函数用到了哪些 db 操作，逐一补进 import，不能只照搬文档示例。
+
+7. **import 漏写的表现**：如果某个新文件漏写了某个 import，`python main.py` 启动时会立刻抛出 `ImportError` 或 `NameError`，不会悄悄运行出错。报错信息会直接显示缺少哪个名称，按提示补上即可。**不存在"运行正常但功能出错"的情况**，排查非常容易。
