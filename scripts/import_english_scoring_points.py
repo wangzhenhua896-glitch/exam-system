@@ -496,6 +496,549 @@ QUESTIONS_DATA = [
                 ]
             }
         ]
+    },
+    # ── 0007-0012：高教版 M1 U6 第二批（四大发明 ~ 北斗）──────────────
+    {
+        "question_number": "0007",
+        "parent_id": 172,
+        "title_prefix": "The Four Great Inventions of Ancient China",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # 四个发明名称，写全四个得2分；写1-3个得1分
+                "sub_id": "Q1",
+                "text": "What are the Four Great Inventions of Ancient China?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 4, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["papermaking"],
+                        "synonyms": ["paper-making", "paper making"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["printing"],
+                        "synonyms": ["movable type printing"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["gunpowder"],
+                        "synonyms": ["gun powder"]
+                    },
+                    {
+                        "id": "D", "score": 1,
+                        "keywords": ["compass"],
+                        "synonyms": ["the compass"]
+                    }
+                ]
+            },
+            {
+                # 人名 Cai Lun，全名2分；只写 Cai 或 Lun 得1分
+                "sub_id": "Q2",
+                "text": "Who improved papermaking in the Eastern Han Dynasty?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "max_hit_score",
+                "exclude_list": [],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 2,
+                        "keywords": ["cai lun"],
+                        "synonyms": ["Cai Lun", "cai lvn"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["cai", "lun"],
+                        "synonyms": []
+                    }
+                ]
+            },
+            {
+                # 两个采分点：navigate + long-distance travel
+                "sub_id": "Q3",
+                "text": "How did the compass help people?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["navigate the seas"],
+                        "synonyms": ["sail on the sea", "find their way on the ocean",
+                                     "guide ships", "sail the seas", "find direction at sea"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["long-distance travel"],
+                        "synonyms": ["travel long distances", "long journeys",
+                                     "faraway travel", "travel far", "long trips"]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "question_number": "0008",
+        "parent_id": 173,
+        "title_prefix": "Chinese Calligraphy",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # 四件工具，写全四个得2分；写1-3个得1分
+                "sub_id": "Q1",
+                "text": "What are the four treasures of calligraphy?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 4, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["brush"],
+                        "synonyms": ["writing brush", "calligraphy brush"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["ink"],
+                        "synonyms": ["ink stick"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["paper"],
+                        "synonyms": ["rice paper"]
+                    },
+                    {
+                        "id": "D", "score": 1,
+                        "keywords": ["inkstone"],
+                        "synonyms": ["ink slab", "ink stone"]
+                    }
+                ]
+            },
+            {
+                # 人名 Wang Xizhi，全名2分；只写 Wang 或 Xizhi 得1分
+                "sub_id": "Q2",
+                "text": "Who is one of the most famous calligraphers in Chinese history?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "max_hit_score",
+                "exclude_list": [],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 2,
+                        "keywords": ["wang xizhi"],
+                        "synonyms": ["Wang Xizhi", "wang xi zhi"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["wang", "xizhi"],
+                        "synonyms": []
+                    }
+                ]
+            },
+            {
+                # 三个采分点，写出至少两个得2分；写一个得1分
+                "sub_id": "Q3",
+                "text": "How does practicing calligraphy help people?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["calm the mind"],
+                        "synonyms": ["calms the mind", "relax the mind",
+                                     "make the mind peaceful", "makes you calm"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["patience"],
+                        "synonyms": ["being patient"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["focus"],
+                        "synonyms": ["concentration", "being focused", "improves focus"]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "question_number": "0009",
+        "parent_id": 174,
+        "title_prefix": "Mobile Payment in China",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # 两个 app 名称，必须都写出才得2分；只写一个得1分
+                "sub_id": "Q1",
+                "text": "What are the most popular mobile payment apps in China?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["alipay"],
+                        "synonyms": ["AliPay", "Alipay"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["wechat pay"],
+                        "synonyms": ["WeChat Pay", "Wechat Pay", "WeChat", "Weixin Pay"]
+                    }
+                ]
+            },
+            {
+                # 核心原因：到处可用；2分=accepted almost everywhere；1分=只说方便/快
+                "sub_id": "Q2",
+                "text": "Why do many people stop carrying cash in China?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "max_hit_score",
+                "exclude_list": [],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 2,
+                        "keywords": ["accepted almost everywhere"],
+                        "synonyms": ["used everywhere", "widely accepted",
+                                     "accepted everywhere", "accepted in most places",
+                                     "almost everywhere you go", "used almost everywhere"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["convenient", "fast", "easy"],
+                        "synonyms": []
+                    }
+                ]
+            },
+            {
+                # 两个好处：saves time + makes payments safer
+                "sub_id": "Q3",
+                "text": "What are the two benefits of mobile payment mentioned in this passage?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["saves time"],
+                        "synonyms": ["save time", "time-saving", "time-efficient"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["makes payments safer"],
+                        "synonyms": ["safer payments", "more secure", "increases safety",
+                                     "safer transactions", "more secure payment"]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "question_number": "0010",
+        "parent_id": 175,
+        "title_prefix": "The Silk Road",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # silk + trade 缺一得1分；组合得2分
+                "sub_id": "Q1",
+                "text": "What was the Silk Road named after?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "max_hit_score",
+                "exclude_list": [],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 2,
+                        "keywords": ["silk trade"],
+                        "synonyms": ["the silk trade", "silk trading", "trade in silk",
+                                     "the trade of silk", "trading silk"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["silk", "trade"],
+                        "synonyms": []
+                    }
+                ]
+            },
+            {
+                # 三个商品，写出至少两个得2分；写一个得1分
+                "sub_id": "Q2",
+                "text": "What goods did China send to the West?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["silk"],
+                        "synonyms": ["silk fabric", "silk cloth"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["tea"],
+                        "synonyms": ["tea leaves"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["porcelain"],
+                        "synonyms": ["china", "ceramics"]
+                    }
+                ]
+            },
+            {
+                # 两个采分点：connected civilizations + promoted understanding
+                "sub_id": "Q3",
+                "text": "Why was the Silk Road important?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["connected different civilizations"],
+                        "synonyms": ["connected civilizations", "linked different cultures",
+                                     "linked East and West", "brought different cultures together"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["promoted understanding between east and west"],
+                        "synonyms": ["promoted understanding", "helped east and west understand each other",
+                                     "improved mutual understanding", "increased mutual understanding",
+                                     "helped people know each other"]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "question_number": "0011",
+        "parent_id": 176,
+        "title_prefix": "Chinese Paper Cutting",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # festivals + special occasions 两个各1分
+                "sub_id": "Q1",
+                "text": "When do people use paper cuttings?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["festivals"],
+                        "synonyms": ["festival", "the spring festival", "holidays"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["special occasions"],
+                        "synonyms": ["special events", "important days", "special days"]
+                    }
+                ]
+            },
+            {
+                # 三个图案类别，写出至少两个得2分；写一个得1分
+                "sub_id": "Q2",
+                "text": "What are popular patterns about paper cuttings?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["flowers"],
+                        "synonyms": ["flower patterns"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["animals"],
+                        "synonyms": ["animal designs", "butterfly", "fish"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["chinese characters"],
+                        "synonyms": ["characters like fu and xi", "the character fu",
+                                     "fu", "xi", "characters"]
+                    }
+                ]
+            },
+            {
+                # 核心：wish others good fortune；简略也可
+                "sub_id": "Q3",
+                "text": "Why are paper cuttings given as gifts?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "max_hit_score",
+                "exclude_list": [],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 2,
+                        "keywords": ["wish others good fortune"],
+                        "synonyms": ["bring good luck to others", "give good wishes",
+                                     "to bless others", "for good fortune",
+                                     "bring good luck", "for good luck"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["good luck", "good wishes", "good fortune"],
+                        "synonyms": []
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "question_number": "0012",
+        "parent_id": 177,
+        "title_prefix": "BeiDou Navigation System",
+        "pinyin_whitelist": [],
+        "sub_questions": [
+            {
+                # self-developed + global navigation satellite system 各1分
+                "sub_id": "Q1",
+                "text": "What is BeiDou?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["self-developed"],
+                        "synonyms": ["china-made", "independently developed by china",
+                                     "homegrown", "self-developed by china", "china's own"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["global navigation satellite system"],
+                        "synonyms": ["navigation satellite system", "gnss",
+                                     "satellite navigation system", "positioning system"]
+                    }
+                ]
+            },
+            {
+                # 四个应用领域，写出至少两个得2分；写一个得1分
+                "sub_id": "Q2",
+                "text": "Where is BeiDou used in our daily life?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["transportation"],
+                        "synonyms": ["transport", "traffic"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["farming"],
+                        "synonyms": ["agriculture"]
+                    },
+                    {
+                        "id": "C", "score": 1,
+                        "keywords": ["disaster relief"],
+                        "synonyms": ["disaster rescue", "emergency response"]
+                    },
+                    {
+                        "id": "D", "score": 1,
+                        "keywords": ["everyday life"],
+                        "synonyms": ["daily life", "ordinary life"]
+                    }
+                ]
+            },
+            {
+                # growing strength + space technology/innovation 各1分
+                "sub_id": "Q3",
+                "text": "What does BeiDou show about China?",
+                "max_score": 2,
+                "scoring_strategy": "max",
+                "score_formula": "hit_count",
+                "exclude_list": [],
+                "scoring_rules": [
+                    {"min_hits": 2, "score": 2},
+                    {"min_hits": 1, "score": 1}
+                ],
+                "scoring_points": [
+                    {
+                        "id": "A", "score": 1,
+                        "keywords": ["growing strength"],
+                        "synonyms": ["rising power", "increasing ability",
+                                     "strong capability", "increasing power", "progress",
+                                     "china is strong"]
+                    },
+                    {
+                        "id": "B", "score": 1,
+                        "keywords": ["space technology and innovation"],
+                        "synonyms": ["space technology", "innovation",
+                                     "space tech", "technological innovation in space",
+                                     "space exploration"]
+                    }
+                ]
+            }
+        ]
     }
 ]
 
