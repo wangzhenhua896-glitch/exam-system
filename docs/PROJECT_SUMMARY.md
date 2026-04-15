@@ -360,7 +360,7 @@ tar xzf ai-grading-system-backup-YYYYMMDD_HHMMSS.tar.gz
 ### 功能缺口
 
 1. **批量评分/规则验证/自动调优** — 前端标记为"暂未开放"，后端路由存在但依赖遗留的多模型引擎
-2. **无权限控制** — 所有 API 暴露，无认证
+2. **~~无权限控制~~** — 已实现 Flask session + 科目访问控制（`before_request` 统一校验，非 admin 只能操作本科目数据）
 3. **无输入验证** — API 层缺少参数校验和类型检查
 4. **无单元测试** — tests/ 目录为空
 
