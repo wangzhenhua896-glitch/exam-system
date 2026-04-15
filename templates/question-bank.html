@@ -187,7 +187,7 @@
                                 <span style="font-size: 18px; font-weight: 600;">英语题目编辑器</span>
                                 <el-tag type="info" style="margin-left: 12px;">{{ englishEdit.parentTitle }}</el-tag>
                             </div>
-                            <el-button type="danger" plain size="small" @click="confirm('重新提取将清空当前所有采分点和评分脚本配置，确定？') && englishEdit.resetAll()">
+                            <el-button type="danger" plain size="small" @click="englishEdit.confirmResetAll()">
                                 重新提取
                             </el-button>
                         </div>
@@ -195,7 +195,7 @@
                         <!-- 步骤指示器 -->
                         <div style="display: flex; align-items: center; margin-bottom: 24px; gap: 0;">
                             <template v-for="(step, si) in englishEdit.WORKFLOW_STEPS" :key="step.id">
-                                <div style="display: flex; align-items: center; cursor: pointer;" @click="englishEdit.goToStep(step.id)">
+                                <div :style="{ display: 'flex', alignItems: 'center', cursor: englishEdit.canEnterStep && englishEdit.canEnterStep[step.id] ? 'pointer' : 'not-allowed', opacity: englishEdit.canEnterStep && englishEdit.canEnterStep[step.id] ? 1 : 0.5 }" @click="englishEdit.canEnterStep && englishEdit.canEnterStep[step.id] ? englishEdit.goToStep(step.id) : ElementPlus.ElMessage.info('请先完成前面的步骤')">
                                     <div :style="{
                                         width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontSize: '14px', fontWeight: '600', color: '#fff',
@@ -334,9 +334,9 @@
                                         <!-- 采分点列表 -->
                                         <div style="margin-bottom: 16px;">
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                                <label style="font-size: 13px; color: #606266;">采分点</label>
+                                                <label style="font-size: 13px; color: #606266;">采分点 <span :style="{ color: sq.scoringPoints.reduce(function(sum, sp) { return sum + (sp.score || 0); }, 0) === sq.maxScore ? '#67c23a' : '#f56c6c' }">分值合计: {{ sq.scoringPoints.reduce(function(sum, sp) { return sum + (sp.score || 0); }, 0) }} / {{ sq.maxScore }} {{ sq.scoringPoints.reduce(function(sum, sp) { return sum + (sp.score || 0); }, 0) === sq.maxScore ? '✓' : '✗' }}</span></label>
                                                 <div>
-                                                    <el-button size="small" plain @click="englishEdit.extractScoringPoints(sq)" :loading="englishEdit.extractingLoading">智能提取采分点</el-button>
+                                                    <el-button size="small" plain @click="englishEdit.extractScoringPoints(sq)" :loading="englishEdit.scoringPointExtractingMap[sq.tempId]">智能提取采分点</el-button>
                                                     <el-button size="small" type="primary" plain @click="englishEdit.addScoringPoint(sq)">+ 添加采分点</el-button>
                                                 </div>
                                             </div>
@@ -530,7 +530,11 @@
                                         </div>
                                     </div>
                                 </template>
-                                <el-input v-model="englishEdit.generatedScript" type="textarea" :rows="16" placeholder='点击"生成评分脚本"按钮，AI 将根据采分点配置自动生成…' />
+                                <el-collapse v-model="englishEdit.scriptCollapseActive">
+                                    <el-collapse-item title="评分脚本内容" name="script">
+                                        <el-input v-model="englishEdit.generatedScript" type="textarea" :rows="16" placeholder='点击"生成评分脚本"按钮，AI 将根据采分点配置自动生成…' />
+                                    </el-collapse-item>
+                                </el-collapse>
                                 <!-- 自查结果 -->
                                 <div v-if="englishEdit.selfCheckResult" style="margin-top: 12px; padding: 12px; background: #fdf6ec; border: 1px solid #e6a23c; border-radius: 4px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -599,7 +603,8 @@
                                     <el-tag :type="vr.level === 'ok' ? 'success' : (vr.level === 'warning' ? 'warning' : 'danger')" size="small">
                                         {{ vr.rule }}
                                     </el-tag>
-                                    <span :style="{ color: vr.level === 'ok' ? '#67c23a' : (vr.level === 'warning' ? '#e6a23c' : '#f56c6c') }">{{ vr.message }}</span>
+                                    <span v-if="vr.level !== 'ok' && vr.qi !== undefined" style="color: #409eff; cursor: pointer; text-decoration: underline;" @click="englishEdit.goToStep('per_question'); englishEdit.goToQuestion(vr.qi)">{{ vr.message }}</span>
+                                    <span v-else :style="{ color: vr.level === 'ok' ? '#67c23a' : (vr.level === 'warning' ? '#e6a23c' : '#f56c6c') }">{{ vr.message }}</span>
                                 </div>
                                 <div style="margin-top: 16px; text-align: right;">
                                     <el-button @click="englishEdit.currentStep = 'script'">← 返回修改脚本</el-button>
@@ -627,6 +632,7 @@
                                 <div style="text-align: right;">
                                     <el-button @click="englishEdit.currentStep = 'validate'">← 返回修改</el-button>
                                     <el-button type="primary" :loading="englishEdit.pageLoading" @click="englishEdit.saveAll()">保存</el-button>
+                                    <el-button @click="currentPage = 'question-list'">返回题库</el-button>
                                 </div>
                             </el-card>
                         </div>

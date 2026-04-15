@@ -54,6 +54,7 @@
 
     // ---- 评分脚本 ----
     var generatedScript = ref('');
+    var scriptCollapseActive = ref(['script']);
     var selfCheckLoading = ref(false);
     var selfCheckResult = ref(null);
     var qualityLoading = ref(false);
@@ -559,6 +560,7 @@
       try {
         var script = await AI.generateScript(subQuestions.value, parentMaxScore.value);
         generatedScript.value = script;
+        scriptCollapseActive.value = ['script'];
         markStepCompleted('script');
       } catch (e) {
         handleApiError(e, '脚本生成失败');
@@ -685,6 +687,7 @@
       completedSteps: completedSteps,
       subQuestions: subQuestions,
       generatedScript: generatedScript,
+      scriptCollapseActive: scriptCollapseActive,
       validationResults: validationResults,
       validationPassed: validationPassed,
       extractingLoading: extractingLoading,

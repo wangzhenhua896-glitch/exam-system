@@ -31,11 +31,11 @@
     // V2 & V3
     state.subQuestions.forEach(function (sq, qi) {
       if (sq.scoringPoints.length === 0) {
-        results.push({ rule: 'V2', level: 'error', message: 'Q' + (qi + 1) + ' 没有采分点' });
+        results.push({ rule: 'V2', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' 没有采分点' });
       }
       sq.scoringPoints.forEach(function (sp) {
         if (sp.keywords.length === 0) {
-          results.push({ rule: 'V3', level: 'error', message: 'Q' + (qi + 1) + ' 采分点 ' + sp.id + ' 没有关键词' });
+          results.push({ rule: 'V3', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' 采分点 ' + sp.id + ' 没有关键词' });
         }
       });
     });
@@ -44,16 +44,16 @@
     state.subQuestions.forEach(function (sq, qi) {
       if (sq.scoreFormulaType === 'hit_count') {
         if (sq.scoringRules.length === 0) {
-          results.push({ rule: 'V4', level: 'error', message: 'Q' + (qi + 1) + ' hit_count 无计分规则' });
+          results.push({ rule: 'V4', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' hit_count 无计分规则' });
         }
         var hits = sq.scoringRules.map(function (r) { return r.minHits; });
         var uniqueHits = hits.filter(function (v, i) { return hits.indexOf(v) === i; });
         if (hits.length !== uniqueHits.length) {
-          results.push({ rule: 'V5', level: 'error', message: 'Q' + (qi + 1) + ' hit_count 有重复命中数' });
+          results.push({ rule: 'V5', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' hit_count 有重复命中数' });
         }
         sq.scoringRules.forEach(function (r) {
           if (r.score > sq.maxScore) {
-            results.push({ rule: 'V9', level: 'error', message: 'Q' + (qi + 1) + ' 规则得分 ' + r.score + ' 超过满分 ' + sq.maxScore });
+            results.push({ rule: 'V9', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' 规则得分 ' + r.score + ' 超过满分 ' + sq.maxScore });
           }
         });
       }
@@ -64,7 +64,7 @@
       var ids = sq.scoringPoints.map(function (sp) { return sp.id; });
       var uniqueIds = ids.filter(function (v, i) { return ids.indexOf(v) === i; });
       if (ids.length !== uniqueIds.length) {
-        results.push({ rule: 'V6', level: 'error', message: 'Q' + (qi + 1) + ' 采分点编号不唯一' });
+        results.push({ rule: 'V6', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' 采分点编号不唯一' });
       }
     });
 
@@ -76,9 +76,17 @@
       });
       sq.excludeList.forEach(function (ex) {
         if (allKw.indexOf(ex.toLowerCase()) >= 0) {
-          results.push({ rule: 'V7', level: 'warning', message: 'Q' + (qi + 1) + ' 排除词 "' + ex + '" 与关键词重叠' });
+          results.push({ rule: 'V7', level: 'warning', qi: qi, message: 'Q' + (qi + 1) + ' 排除词 "' + ex + '" 与关键词重叠' });
         }
       });
+    });
+
+    // V8: 每个子题的采分点分值之和必须等于子题满分
+    state.subQuestions.forEach(function (sq, qi) {
+      var spSum = sq.scoringPoints.reduce(function (sum, sp) { return sum + (sp.score || 0); }, 0);
+      if (spSum !== sq.maxScore) {
+        results.push({ rule: 'V8', level: 'error', qi: qi, message: 'Q' + (qi + 1) + ' 采分点分值之和 (' + spSum + ') 不等于满分 (' + sq.maxScore + ')' });
+      }
     });
 
     var hasError = results.some(function (r) { return r.level === 'error'; });
