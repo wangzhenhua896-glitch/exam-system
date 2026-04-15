@@ -2,7 +2,7 @@
 数据库API路由 - 连接前端和数据库
 """
 import json
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from loguru import logger
 from app.models.db_models import (
     add_question, get_questions, get_question,
@@ -32,6 +32,52 @@ from config.settings import GRADING_CONFIG
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 grading_engine = QwenGradingEngine(GRADING_CONFIG)
+
+
+# ─── 登录/登出 + 科目访问控制 ───────────────────────────────────
+
+@api_bp.route('/login', methods=['POST'])
+def login():
+    """建立 session，验证用户存在于 users 表"""
+    data = request.get_json(force=True)
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify(success=False, error='用户名不能为空'), 400
+    user = get_user(username)
+    if not user:
+        return jsonify(success=False, error='用户不存在'), 404
+    if not user.get('is_active', 1):
+        return jsonify(success=False, error='用户已禁用'), 403
+    session['username'] = user['username']
+    session['subject'] = user.get('subject')
+    session['role'] = user.get('role', 'teacher')
+    return jsonify(success=True, data={
+        'username': user['username'],
+        'subject': user.get('subject'),
+        'role': user.get('role', 'teacher'),
+        'display_name': user.get('display_name', ''),
+    })
+
+
+@api_bp.route('/logout', methods=['POST'])
+def logout():
+    """清除 session"""
+    session.clear()
+    return jsonify(success=True)
+
+
+def _check_subject_access(target_subject):
+    """检查当前 session 用户是否有权访问目标科目。admin 不受限。"""
+    if session.get('role') == 'admin':
+        return True
+    return session.get('subject') == target_subject
+
+
+def _session_subject():
+    """返回当前 session 的科目，admin 返回 None（表示全部）"""
+    if session.get('role') == 'admin':
+        return None
+    return session.get('subject')
 
 
 PROVIDER_NAMES = {
@@ -239,8 +285,10 @@ QUALITY_EVALUATION_SYSTEM_PROMPT = """你是一位资深职业教育命题质量
 
 @api_bp.route('/questions', methods=['GET'])
 def list_questions():
-    """获取题目列表"""
-    subject = request.args.get('subject')
+    """获取题目列表 — 非 admin 强制用 session.subject 过滤"""
+    subject = _session_subject()  # admin 返回 None → 全部；teacher 返回本科目
+    if subject is None:
+        subject = request.args.get('subject')  # admin 可选过滤
     questions = get_questions(subject)
     # 转换rubric字符串为对象
     for q in questions:
@@ -258,6 +306,8 @@ def get_question_detail(question_id):
     question = get_question(question_id)
     if not question:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(question.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权访问其他科目的题目'}), 403
     if isinstance(question.get('rubric'), str):
         try:
             question['rubric'] = json.loads(question['rubric'])
@@ -278,14 +328,18 @@ def get_question_detail(question_id):
 
 @api_bp.route('/questions', methods=['POST'])
 def create_question():
-    """创建新题目"""
+    """创建新题目 — 非 admin 强制 subject = session.subject"""
     data = request.json
     rubric = data.get('rubric')
     if isinstance(rubric, dict):
         rubric = json.dumps(rubric, ensure_ascii=False)
 
+    subject = data.get('subject', 'general')
+    if not _check_subject_access(subject):
+        return jsonify({'success': False, 'error': '无权为其他科目创建题目'}), 403
+
     question_id = add_question(
-        subject=data.get('subject', 'general'),
+        subject=subject,
         title=data.get('title', ''),
         content=data.get('content', ''),
         original_text=data.get('original_text'),
@@ -310,19 +364,23 @@ def create_question():
 
 @api_bp.route('/questions/<int:question_id>', methods=['PUT'])
 def update_question_detail(question_id):
-    """更新题目"""
+    """更新题目 — 非 admin 不能改其他科目题目"""
+    existing = get_question(question_id)
+    if not existing:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(existing.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的题目'}), 403
+
     data = request.json
     rubric = data.get('rubric')
     if isinstance(rubric, dict):
         rubric = json.dumps(rubric, ensure_ascii=False)
     if not rubric:
-        # rubric 列 NOT NULL，缺失时保留原值
-        existing = get_question(question_id)
-        rubric = existing.get('rubric', '{}') if existing else '{}'
+        rubric = existing.get('rubric', '{}')
 
     success = update_question(
         question_id,
-        subject=data.get('subject', 'general'),
+        subject=data.get('subject', existing.get('subject', 'general')),
         title=data.get('title', ''),
         content=data.get('content', ''),
         original_text=data.get('original_text'),
@@ -525,10 +583,15 @@ def english_generate_rubric():
 
 @api_bp.route('/questions/<int:question_id>', methods=['DELETE'])
 def delete_question_detail(question_id):
-    """删除题目"""
+    """删除题目 — 非 admin 不能删其他科目题目"""
+    question = get_question(question_id)
+    if not question:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(question.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权删除其他科目的题目'}), 403
     success = delete_question(question_id)
     if not success:
-        return jsonify({'success': False, 'error': '题目不存在'}), 404
+        return jsonify({'success': False, 'error': '删除失败'}), 500
     return jsonify({'success': True, 'data': {'id': question_id}})
 
 
@@ -1626,6 +1689,9 @@ def grade_answer():
     if question_id:
         q = get_question(int(question_id))
         if q:
+            # 科目访问控制
+            if not _check_subject_access(q.get('subject', '')):
+                return jsonify({'success': False, 'error': '无权评分其他科目的题目'}), 403
             question_text = q.get('content') or question_text
             max_score = q.get('max_score') or max_score
             if q.get('subject'):
@@ -2014,6 +2080,10 @@ def create_batch():
         if qid:
             q = get_question(int(qid))
             if q:
+                # 科目访问控制
+                if not _check_subject_access(q.get('subject', '')):
+                    results.append({'question_id': qid, 'error': '无权评分其他科目的题目', 'score': None})
+                    continue
                 if q.get('subject'):
                     subj = q['subject']
                 question_text = q.get('content') or question_text

@@ -39,10 +39,26 @@ def create_app() -> Flask:
     
     # 扩展
     CORS(app)
-    
+
+    # Session 校验：所有 /api/* 必须携带有效 session（白名单除外）
+    @app.before_request
+    def check_session():
+        from flask import request, session, jsonify
+        path = request.path
+        # 放行：页面路由、静态资源、登录接口
+        if path in ('/login', '/admin', '/') or path.startswith('/static'):
+            return None
+        if path == '/api/login':
+            return None
+        # API 路由必须有 session
+        if path.startswith('/api/'):
+            if 'username' not in session:
+                return jsonify(success=False, error='未登录，请先登录'), 401
+        return None
+
     # 路由
     register_routes(app)
-    
+
     # 错误处理
     register_error_handlers(app)
     
