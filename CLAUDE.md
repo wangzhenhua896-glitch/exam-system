@@ -291,4 +291,7 @@ ssh root@123.56.117.123 'tail -30 /opt/ai-grading/app-5001.log'
 | docs/待办工作清单.md | 待办事项跟踪 |
 | docs/Gitea本地备份配置.md | Gitea 本地 Git 备份配置 |
 | docs/MODEL_CONFIG.md | 模型配置管理说明 |
+| docs/测试技巧与自动化指南.md | Playwright + API 测试方法手册、常见坑 |
+| docs/英语采分点评分验证报告-20260415.md | ★ 0007-0012 采分点评分验证（34用例，含1个Bug记录） |
+| docs/api_routes拆分方案.md | ★ api_routes.py 拆分为11个文件的详细方案（后端Agent执行用） |
 | docs/archive/ | 已归档的过程记录（Bug修复/优化/测试报告等） |
