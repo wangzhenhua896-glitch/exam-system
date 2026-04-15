@@ -41,8 +41,6 @@ data/*.db.*
 exports/
 results/
 
-# Vendor
-static/vendor/
 
 # Backup / temp files
 *.bak
