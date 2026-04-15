@@ -17,7 +17,9 @@ from app import routes_questions  # noqa: F401, E402
 from app import routes_english  # noqa: F401, E402
 from app import routes_import  # noqa: F401, E402
 from app import routes_dedup  # noqa: F401, E402
-from app import routes_grading  # noqa: F401, E402
+from app import routes_grade  # noqa: F401, E402
+from app import routes_batch  # noqa: F401, E402
+from app import routes_stats  # noqa: F401, E402
 from app import routes_rubric  # noqa: F401, E402
 from app import routes_ai  # noqa: F401, E402
 from app import routes_testcases  # noqa: F401, E402

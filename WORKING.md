@@ -43,3 +43,7 @@
 | `app/api_routes.py` 其余部分 | 后端 Agent |
 | `app/models/db_models.py` | 后端 Agent |
 | `templates/question-bank.html` | **当前 Agent 正在改第3步区域（520行起）** |
+| `app/models/_*.py` | db_models.py 拆分子模块（已完成） |
+| `app/routes_grade.py` | routes_grading.py 拆分 — 单题评分（已完成） |
+| `app/routes_batch.py` | routes_grading.py 拆分 — 批量评分（已完成） |
+| `app/routes_stats.py` | routes_grading.py 拆分 — 统计报表（已完成） |
