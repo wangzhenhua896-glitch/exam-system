@@ -48,7 +48,7 @@ def create_app() -> Flask:
         # 放行：页面路由、静态资源、登录接口
         if path in ('/login', '/admin', '/') or path.startswith('/static'):
             return None
-        if path == '/api/login':
+        if path in ('/api/login', '/api/users'):
             return None
         # API 路由必须有 session
         if path.startswith('/api/'):

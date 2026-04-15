@@ -1,8 +1,8 @@
 # WIP: 后端科目校验 — 交接文档
 
 > 创建时间：2026-04-15
-> 状态：进行中，需在新对话中继续
-> 分支：master（已提交 commit 364e303）
+> 状态：已完成
+> 分支：master（已提交 commit 364e303 + 本次完成）
 
 ## 目标
 
@@ -14,21 +14,21 @@
 
 核心思路：Flask session（基于 SECRET_KEY 签名 cookie）+ `before_request` 统一校验 + 各端点科目访问控制。
 
-## 已完成
+## 已完成（全部）
 
-### 1. `app/api_routes.py` — 登录/登出 + 辅助函数（新增 ~50 行）
+### 1. `app/api_routes.py` — 登录/登出 + 辅助函数
 
 - `POST /api/login` — 验证用户存在于 `users` 表，建立 session（username/subject/role）
 - `POST /api/logout` — 清除 session
 - `_check_subject_access(target_subject)` — admin 返回 True，teacher 检查 subject 是否匹配
 - `_session_subject()` — admin 返回 None（全部），teacher 返回本科目
 
-### 2. `app/app.py` — before_request 钩子（新增 ~16 行）
+### 2. `app/app.py` — before_request 钩子
 
-- 白名单放行：`/login`、`/admin`、`/`、`/static/*`、`/api/login`
+- 白名单放行：`/login`、`/admin`、`/`、`/static/*`、`/api/login`、`/api/users`
 - 其他 `/api/*` 路由：session 中无 username → 返回 401
 
-### 3. `api_routes.py` — 已加科目校验的端点
+### 3. 已加科目校验的端点（全部完成）
 
 | 端点 | 校验方式 | 行为 |
 |------|---------|------|
@@ -37,87 +37,77 @@
 | `POST /api/questions` | `_check_subject_access` | 非 admin 不能为其他科目创建题目（403） |
 | `PUT /api/questions/<id>` | `_check_subject_access` | 非 admin 不能修改其他科目题目（403） |
 | `DELETE /api/questions/<id>` | `_check_subject_access` | 非 admin 不能删除其他科目题目（403） |
-| `POST /api/grade` | `_check_subject_access` | 传 question_id 时校验题目所属科目（403） |
+| `PUT /api/questions/<id>/workflow-status` | `_check_subject_access` | 非 admin 不能修改其他科目题目状态（403） |
+| `GET /api/questions/<id>/children` | `_check_subject_access` | 非 admin 不能查看其他科目的子题（403） |
+| `GET /api/questions/<id>/with-children` | `_check_subject_access` | 非 admin 不能查看其他科目题目（403） |
+| `POST /api/grade` | `_check_subject_access` | 传 question_id 时校验题目所属科目（403）；无 question_id 时校验直接传的 subject（403） |
 | `POST /api/batch` | `_check_subject_access` | 逐 item 校验，不匹配则跳过并记录错误 |
+| `GET /api/stats` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `GET /api/dashboard` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `GET /api/export-rubric-scripts` | `_session_subject()` | 非 admin 强制用 session.subject |
+| `GET /api/test-cases/overview` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `GET /api/test-cases/all` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `POST /api/questions/<id>/test-cases` | `_check_subject_access` | 非 admin 不能为其他科目题目添加测试用例（403） |
+| `PUT /api/questions/<id>/test-cases/<tid>` | `_check_subject_access` | 非 admin 不能修改其他科目的测试用例（403） |
+| `DELETE /api/questions/<id>/test-cases/<tid>` | `_check_subject_access` | 非 admin 不能删除其他科目的测试用例（403） |
+| `POST /api/questions/<id>/generate-test-cases` | `_check_subject_access` | 非 admin 不能为其他科目题目生成测试用例（403） |
+| `GET /api/syllabus` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `GET /api/syllabus/<subject>/<type>` | `_check_subject_access` | 非 admin 不能查看其他科目大纲（403） |
+| `POST /api/syllabus` | `_check_subject_access` | 非 admin 强制 subject = session.subject（403） |
+| `DELETE /api/syllabus/<subject>/<type>` | `_check_subject_access` | 非 admin 不能删除其他科目大纲（403） |
+| `GET /api/sensitive-words` | `_session_subject()` | 非 admin 强制用 session.subject 过滤 |
+| `POST /api/sensitive-words` | `session.subject` | 非 admin 强制 subject = session.subject |
+| `POST /api/sensitive-words/batch` | `session.subject` | 非 admin 强制覆盖 subject |
+| `GET /api/history` | `_session_subject()` | 非 admin 只看本科目评分记录 |
+| `POST /api/generate-rubric-points` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/generate-rubric-script` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/self-check-rubric` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/evaluate-question` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/auto-generate` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/batch-check-consistency` | `session.subject` | 非 admin 强制用 session.subject |
+| `POST /api/verify-rubric` | `_check_subject_access` | 非 admin 不能验证其他科目题目（403） |
+| `POST /api/generate-answer` | `_check_subject_access` | 非 admin 不能为其他科目题目生成答案（403） |
+| `GET /api/questions/<id>/answers` | `_check_subject_access` | 非 admin 不能查看其他科目答案（403） |
+| `POST /api/questions/<id>/answers` | `_check_subject_access` | 非 admin 不能为其他科目添加答案（403） |
+| `PUT /api/questions/<id>/answers/<aid>` | `_check_subject_access` | 非 admin 不能修改其他科目答案（403） |
+| `DELETE /api/questions/<id>/answers/<aid>` | `_check_subject_access` | 非 admin 不能删除其他科目答案（403） |
+| `GET /api/questions/<id>/script-history` | `_check_subject_access` | 非 admin 不能查看其他科目版本历史（403） |
+| `POST /api/questions/<id>/script-rollback` | `_check_subject_access` | 非 admin 不能回退其他科目脚本（403） |
+| `POST /api/questions/find-duplicates` | `_session_subject()` | 非 admin 只扫本科目 |
+| `POST /api/questions/find-same-number` | `_session_subject()` | 非 admin 只扫本科目 |
+| `POST /api/import-questions` | `_session_subject()` | 非 admin 导入的题目强制用 session.subject |
+| `POST /api/import-word/confirm` | `_session_subject()` | 非 admin 导入的题目强制用 session.subject |
 
-## 未完成
+不做科目校验的端点（影响小或无科目概念）：
+- `/api/providers` — 模型列表，无科目概念
+- `/api/users` — 用户管理，白名单放行（登录页需要）
+- `/api/grading-params` — 全局参数配置
+- `/api/bugs` — 系统 bug 日志，诊断用
+- `/api/check-consistency` — 单题一致性检查，基于请求体数据
 
-### 4. 其他端点科目校验
+### 4. `templates/login.html` — 前端改造
 
-以下端点尚未加校验，需要在新对话中处理：
+- `enterSystem()` 改为先调 `POST /api/login` 建立 session，再写 localStorage
+- `goAdmin()` 改为调 `POST /api/login { username: 'admin' }` 建立 session
 
-- `GET /api/stats` — 非 admin 应强制用 session.subject 过滤
-- `GET /api/dashboard` 或 `GET /api/dashboard/overview` — 同上
-- `GET /api/export-rubric-scripts` — 同上
-- `GET /api/test-cases/overview` — 同上
-- `GET /api/syllabus` — 同上
-- `POST /api/syllabus` — 非 admin 强制 subject = session.subject
-- `POST /api/ai-generate` — 非 admin 强制 subject = session.subject
-- `GET/POST /api/sensitive-words` — 同上
+### 5. `static/js/shared.js` — 401 跳转
 
-**方法：** 找到每个端点中读取 subject 参数的位置，加 `_session_subject()` / `_check_subject_access()` 校验。
+- `handleApiError` 中加 401 检测，自动跳转 `/login`
 
-### 5. `templates/login.html` — 前端改造
+### 6. 验证测试（全部通过）
 
-当前 `enterSystem()` 只写 localStorage，不调后端。需要改为：
-
-```js
-const enterSystem = async () => {
-    // ... 验证逻辑不变 ...
-    const { data } = await axios.post('/api/login', { username: selectedSubject.value });
-    if (data.success) {
-        localStorage.setItem(ROLE_KEY, data.data.role);
-        localStorage.setItem(CURRENT_SUBJECT_KEY, data.data.subject);
-        localStorage.setItem(TEACHER_NAME_KEY, name);
-        window.location.href = '/management?t=' + Date.now();
-    }
-};
 ```
-
-`goAdmin()` 同理：
-
-```js
-const goAdmin = async () => {
-    const { data } = await axios.post('/api/login', { username: 'admin' });
-    if (data.success) {
-        localStorage.setItem(ROLE_KEY, 'admin');
-        localStorage.removeItem(CURRENT_SUBJECT_KEY);
-        localStorage.removeItem(TEACHER_NAME_KEY);
-        window.location.href = '/admin';
-    }
-};
+Test 1: No session → GET /api/questions → 401 ✓
+Test 2: POST /api/login { username: 'english' } → success ✓
+Test 3: GET /api/questions with session → 只返回英语题目(28题) ✓
+Test 4: GET /api/questions?subject=politics → 仍只返回英语 ✓
+Test 5: GET /api/stats → 只显示英语统计 ✓
+Test 6: GET /api/dashboard → subject=english ✓
+Test 7: GET /api/questions/<政治题ID> → 403 ✓
+Test 8: POST /api/logout → success ✓
+Test 9: After logout, GET /api/questions → 401 ✓
+Test 10: GET /api/users without auth → success (白名单) ✓
+Test 11: Admin login → 全科访问(62题/4科) ✓
+Test 12: POST /api/syllabus with politics subject as english → 403 ✓
+Test 13: POST /api/syllabus with english subject as english → success ✓
 ```
-
-### 6. `static/js/shared.js` — 401 跳转
-
-在 `handleApiError` 函数中加 401 处理：
-
-```js
-if (error.response && error.response.status === 401) {
-    window.location.href = '/login?t=' + Date.now();
-    return;
-}
-```
-
-### 7. 验证测试
-
-用 curl 或 Playwright 验证：
-1. 不带 session 访问 `GET /api/questions` → 401
-2. `POST /api/login { username: 'english' }` → success + cookie
-3. 带 cookie `GET /api/questions` → 只返回英语题目
-4. 带 cookie `GET /api/questions?subject=politics` → 仍只返回英语
-5. 带 cookie `DELETE /api/questions/<政治题ID>` → 403
-6. `POST /api/logout` → 清除 session
-
-### 8. 文档更新
-
-- CLAUDE.md：补充 session 认证机制说明
-- PROJECT_SUMMARY.md：安全架构更新
-
-## 注意事项
-
-- `get_user(username)` 已存在于 `db_models.py`（line 1127），直接用
-- `users` 表预置用户：admin/politics/chinese/english/math/history/geography/physics/chemistry/biology
-- admin 的 subject 为 NULL，`_session_subject()` 返回 None 表示全库访问
-- Flask session 默认 cookie 名 `session`，SameSite=Lax，前端 axios 默认带 cookie
-- `config_routes.py` 也有 `/api/config/*` 路由，before_request 已覆盖，如需要也可加科目校验

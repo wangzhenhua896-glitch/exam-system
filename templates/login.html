@@ -160,6 +160,18 @@ createApp({
             const name = teacherName.value.trim();
             const user = userMap.value[selectedSubject.value];
 
+            // 先调后端建立 session
+            try {
+                const { data } = await axios.post('/api/login', { username: selectedSubject.value });
+                if (!data.success) {
+                    ElMessage.error(data.error || '登录失败');
+                    return;
+                }
+            } catch (e) {
+                ElMessage.error('登录失败，请检查网络连接');
+                return;
+            }
+
             // 保存姓名到数据库
             if (user && name !== (user.teacher_name || '')) {
                 try {
@@ -177,7 +189,17 @@ createApp({
             window.location.href = '/management?t=' + Date.now();
         };
 
-        const goAdmin = () => {
+        const goAdmin = async () => {
+            try {
+                const { data } = await axios.post('/api/login', { username: 'admin' });
+                if (!data.success) {
+                    ElMessage.error(data.error || '登录失败');
+                    return;
+                }
+            } catch (e) {
+                ElMessage.error('登录失败，请检查网络连接');
+                return;
+            }
             localStorage.setItem(ROLE_KEY, 'admin');
             localStorage.removeItem(CURRENT_SUBJECT_KEY);
             localStorage.removeItem(TEACHER_NAME_KEY);

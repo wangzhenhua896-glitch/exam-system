@@ -60,6 +60,11 @@
     var showMsg = opts.showElMessage !== false;
     // ElMessageBox.confirm 取消时抛出 'cancel'，不提示
     if (e === 'cancel' || e?.message === 'cancel') return '';
+    // 401 未登录 → 跳转登录页
+    if (e.response && e.response.status === 401) {
+      window.location.href = '/login?t=' + Date.now();
+      return '未登录';
+    }
     var msg = prefix + '：' + (e.response?.data?.error || e.response?.data?.message || e.message || '未知错误');
     if (showMsg && typeof ElMessage !== 'undefined') {
       ElMessage.error(msg);

@@ -406,6 +406,12 @@ def update_question_detail(question_id):
 def update_question_workflow_status(question_id):
     """轻量更新 workflow_status（不触发脚本快照）"""
     from app.models.db_models import update_workflow_status
+    # 科目访问控制
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的题目'}), 403
     data = request.json or {}
     ws = data.get('workflow_status')
     if ws is None:
@@ -600,6 +606,10 @@ def delete_question_detail(question_id):
 @api_bp.route('/questions/<int:question_id>/answers', methods=['GET'])
 def list_question_answers(question_id):
     """获取某题的满分答案列表"""
+    # 科目访问控制
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权访问其他科目的答案'}), 403
     scope_type = request.args.get('scope_type')
     answers = get_question_answers(question_id, scope_type)
     return jsonify({'success': True, 'data': answers})
@@ -608,6 +618,10 @@ def list_question_answers(question_id):
 @api_bp.route('/questions/<int:question_id>/answers', methods=['POST'])
 def create_question_answer(question_id):
     """为某题添加一个满分答案"""
+    # 科目访问控制
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的答案'}), 403
     data = request.json or {}
     answer_id = add_question_answer(
         question_id=question_id,
@@ -625,6 +639,9 @@ def create_question_answer(question_id):
 @api_bp.route('/questions/<int:question_id>/answers/<int:answer_id>', methods=['PUT'])
 def edit_question_answer(question_id, answer_id):
     """修改某个满分答案"""
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的答案'}), 403
     data = request.json or {}
     success = update_question_answer(answer_id, **data)
     if not success:
@@ -635,6 +652,9 @@ def edit_question_answer(question_id, answer_id):
 @api_bp.route('/questions/<int:question_id>/answers/<int:answer_id>', methods=['DELETE'])
 def remove_question_answer(question_id, answer_id):
     """删除某个满分答案"""
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权删除其他科目的答案'}), 403
     success = delete_question_answer(answer_id)
     if not success:
         return jsonify({'success': False, 'error': '答案不存在'}), 404
@@ -666,6 +686,11 @@ def edit_grading_param(key):
 @api_bp.route('/questions/<int:question_id>/children', methods=['GET'])
 def list_child_questions(question_id):
     """获取某题的子题列表"""
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权访问其他科目的题目'}), 403
     children = get_child_questions(question_id)
     return jsonify({'success': True, 'data': children})
 
@@ -676,16 +701,19 @@ def get_question_detail_with_children(question_id):
     q = get_question_with_children(question_id)
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权访问其他科目的题目'}), 403
     return jsonify({'success': True, 'data': q})
 
 
 @api_bp.route('/questions/find-duplicates', methods=['POST'])
 def find_duplicates():
-    """扫描重复题目，返回分组及最优字段组合建议"""
+    """扫描重复题目 — 非 admin 只扫本科目"""
     import re
     from difflib import SequenceMatcher
 
-    questions = get_questions()
+    subject = _session_subject()  # admin 返回 None → 全部
+    questions = get_questions(subject)
     if len(questions) < 2:
         return jsonify({'success': True, 'data': [], 'total_groups': 0, 'total_duplicates': 0})
 
@@ -939,8 +967,9 @@ def merge_questions():
 
 @api_bp.route('/questions/find-same-number', methods=['POST'])
 def find_same_number():
-    """按题号分组，找出题号相同但可能是不同版本的题目，返回合并建议"""
-    questions = get_questions()
+    """按题号分组 — 非 admin 只扫本科目"""
+    subject = _session_subject()  # admin 返回 None → 全部
+    questions = get_questions(subject)
     if len(questions) < 2:
         return jsonify({'success': True, 'data': [], 'total_groups': 0})
 
@@ -1001,10 +1030,10 @@ def find_same_number():
 
 @api_bp.route('/export-rubric-scripts', methods=['GET'])
 def export_rubric_scripts():
-    """按科目导出评分脚本，支持 Markdown 和 Word 格式"""
+    """按科目导出评分脚本 — 非 admin 强制用 session.subject"""
     from flask import Response
     import io
-    subject = request.args.get('subject', '').strip()
+    subject = _session_subject() or request.args.get('subject', '').strip()
     fmt = request.args.get('format', 'md').strip().lower()
     if not subject:
         return jsonify({'success': False, 'error': '请指定科目参数'}), 400
@@ -1381,6 +1410,10 @@ def import_questions():
             row_subject = str(row.get(col_map.get('subject', ''), sheet_subject)).strip()
             if row_subject == 'nan' or not row_subject:
                 row_subject = sheet_subject
+            # 非 admin 强制用 session.subject
+            session_subj = _session_subject()
+            if session_subj:
+                row_subject = session_subj
 
             rubric_points = str(row.get(col_map.get('rubric_points', ''), '')).strip()
             if rubric_points == 'nan':
@@ -1503,6 +1536,8 @@ def import_word_confirm():
 
     imported = 0
     errors = []
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
     for q in questions:
         try:
             # 构造 rubric JSON
@@ -1513,7 +1548,7 @@ def import_word_confirm():
             }, ensure_ascii=False)
 
             add_question(
-                subject=q.get('subject', 'english'),
+                subject=session_subj or q.get('subject', 'english'),
                 title=q.get('title', '') or q.get('content', '')[:30],
                 content=q.get('content', ''),
                 original_text=q.get('original_text', q.get('content', '')),
@@ -1685,6 +1720,10 @@ def grade_answer():
     max_score = data.get('max_score', 10.0)
     subject = data.get('subject', 'general')
     question_answers_list = []
+
+    # 非 question_id 模式：校验直接传的 subject
+    if not question_id and not _check_subject_access(subject):
+        return jsonify({'success': False, 'error': '无权评分其他科目的题目'}), 403
 
     if question_id:
         q = get_question(int(question_id))
@@ -2039,10 +2078,44 @@ def grade_answer():
 
 @api_bp.route('/history', methods=['GET'])
 def list_history():
-    """获取评分历史"""
+    """获取评分历史 — 非 admin 只看本科目记录"""
+    from app.models.db_models import get_db_connection
+
     question_id = request.args.get('question_id', type=int)
     limit = request.args.get('limit', 50, type=int)
-    history = get_grading_history(question_id, limit)
+    subject = _session_subject()  # admin 返回 None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if question_id:
+        if subject:
+            cursor.execute(
+                '''SELECT gr.* FROM grading_records gr
+                   JOIN questions q ON gr.question_id = q.id
+                   WHERE gr.question_id = ? AND q.subject = ?
+                   ORDER BY gr.graded_at DESC LIMIT ?''',
+                (question_id, subject, limit)
+            )
+        else:
+            cursor.execute(
+                'SELECT * FROM grading_records WHERE question_id = ? ORDER BY graded_at DESC LIMIT ?',
+                (question_id, limit)
+            )
+    else:
+        if subject:
+            cursor.execute(
+                '''SELECT gr.* FROM grading_records gr
+                   JOIN questions q ON gr.question_id = q.id
+                   WHERE q.subject = ?
+                   ORDER BY gr.graded_at DESC LIMIT ?''',
+                (subject, limit)
+            )
+        else:
+            cursor.execute('SELECT * FROM grading_records ORDER BY graded_at DESC LIMIT ?', (limit,))
+    columns = [desc[0] for desc in cursor.description]
+    history = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+
     # 转换details字符串为对象
     for h in history:
         if isinstance(h.get('details'), str):
@@ -2214,27 +2287,45 @@ def get_batch_status(task_id):
 
 @api_bp.route('/stats', methods=['GET'])
 def get_stats():
-    """获取统计信息"""
+    """获取统计信息 — 非 admin 强制用 session.subject 过滤"""
     from app.models.db_models import get_db_connection
 
+    subject = _session_subject()  # admin 返回 None → 全部；teacher 返回本科目
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 总题目数
-    cursor.execute('SELECT COUNT(*) FROM questions')
-    total_questions = cursor.fetchone()[0]
+    if subject:
+        # 科目老师只看本科目
+        cursor.execute('SELECT COUNT(*) FROM questions WHERE subject = ?', [subject])
+        total_questions = cursor.fetchone()[0]
 
-    # 总评分次数
-    cursor.execute('SELECT COUNT(*) FROM grading_records')
-    total_gradings = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ?
+        """, [subject])
+        total_gradings = cursor.fetchone()[0]
 
-    # 平均分
-    cursor.execute('SELECT AVG(score) FROM grading_records WHERE score IS NOT NULL')
-    avg_score = cursor.fetchone()[0] or 0
+        cursor.execute("""
+            SELECT AVG(gr.score) FROM grading_records gr
+            JOIN questions q ON gr.question_id = q.id
+            WHERE q.subject = ? AND gr.score IS NOT NULL
+        """, [subject])
+        avg_score = cursor.fetchone()[0] or 0
 
-    # 各科目题目数
-    cursor.execute('SELECT subject, COUNT(*) FROM questions GROUP BY subject')
-    subjects = dict(cursor.fetchall())
+        subjects = {subject: total_questions}
+    else:
+        cursor.execute('SELECT COUNT(*) FROM questions')
+        total_questions = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM grading_records')
+        total_gradings = cursor.fetchone()[0]
+
+        cursor.execute('SELECT AVG(score) FROM grading_records WHERE score IS NOT NULL')
+        avg_score = cursor.fetchone()[0] or 0
+
+        cursor.execute('SELECT subject, COUNT(*) FROM questions GROUP BY subject')
+        subjects = dict(cursor.fetchall())
 
     conn.close()
 
@@ -2251,14 +2342,12 @@ def get_stats():
 
 @api_bp.route('/dashboard', methods=['GET'])
 def get_dashboard():
-    """题库总览 — 全面统计数据
-
-    支持 ?subject=xxx 按科目过滤（科目老师只看本科目数据）
-    不传 subject 则返回全部数据（管理员视图）
-    """
+    """题库总览 — 非 admin 强制用 session.subject 过滤"""
     from app.models.db_models import get_db_connection
 
-    subject = request.args.get('subject', '').strip()
+    subject = _session_subject()  # admin 返回 None → 全部
+    if subject is None:
+        subject = request.args.get('subject', '').strip() or None  # admin 可选过滤
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -2472,6 +2561,10 @@ def generate_rubric_points():
     standard_answer = data.get('standardAnswer', '').strip()
     rubric_rules = data.get('rubricRules', '').strip()
     subject = data.get('subject', 'general')
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj
 
     if not content:
         return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
@@ -2536,6 +2629,10 @@ def generate_rubric_script():
     rubric_points = data.get('rubricPoints', '').strip()
     ai_rubric = data.get('aiRubric', '').strip()
     subject = data.get('subject', 'general')
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj
 
     if not content:
         return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
@@ -2607,6 +2704,10 @@ def self_check_rubric():
     standard_answer = data.get('standardAnswer', '').strip()
     rubric_script = data.get('rubricScript', '').strip()
     subject = data.get('subject', 'general')
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj
 
     if not content:
         return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
@@ -2903,6 +3004,10 @@ def batch_check_consistency():
     subject = data.get('subject', '').strip()
     if not subject:
         return jsonify({'success': False, 'error': '请指定科目'}), 400
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj
 
     questions = [q for q in get_questions() if q.get('subject') == subject]
     if not questions:
@@ -3014,6 +3119,10 @@ def evaluate_question():
     difficulty = data.get('difficulty', '')
     content_type = data.get('contentType', '')
     subject = data.get('subject', 'general')
+    # 非 admin 强制用 session.subject
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj
 
     if not content and not original_text:
         return jsonify({'success': False, 'error': '题目内容不能为空'}), 400
@@ -3155,8 +3264,8 @@ def evaluate_question():
 
 @api_bp.route('/syllabus', methods=['GET'])
 def list_syllabus():
-    """获取大纲/教材列表，可按科目筛选"""
-    subject = request.args.get('subject')
+    """获取大纲/教材列表 — 非 admin 强制用 session.subject 过滤"""
+    subject = _session_subject() or request.args.get('subject')
     items = get_all_syllabus(subject)
     return jsonify({'success': True, 'data': items})
 
@@ -3164,6 +3273,8 @@ def list_syllabus():
 @api_bp.route('/syllabus/<subject>/<content_type>', methods=['GET'])
 def get_syllabus_detail(subject, content_type):
     """获取某科目某类型的大纲/教材内容"""
+    if not _check_subject_access(subject):
+        return jsonify({'success': False, 'error': '无权访问其他科目的大纲'}), 403
     item = get_syllabus(subject, content_type)
     if not item:
         return jsonify({'success': True, 'data': {'subject': subject, 'content_type': content_type, 'title': '', 'content': ''}})
@@ -3172,7 +3283,7 @@ def get_syllabus_detail(subject, content_type):
 
 @api_bp.route('/syllabus', methods=['POST'])
 def save_syllabus():
-    """保存（新增或更新）大纲/教材内容"""
+    """保存（新增或更新）大纲/教材内容 — 非 admin 强制 subject = session.subject"""
     data = request.json
     subject = data.get('subject', '').strip()
     content_type = data.get('content_type', '').strip()
@@ -3183,6 +3294,8 @@ def save_syllabus():
         return jsonify({'success': False, 'error': '科目不能为空'}), 400
     if content_type not in ('syllabus', 'textbook'):
         return jsonify({'success': False, 'error': '内容类型必须是 syllabus 或 textbook'}), 400
+    if not _check_subject_access(subject):
+        return jsonify({'success': False, 'error': '无权修改其他科目的大纲'}), 403
 
     row_id = upsert_syllabus(subject, content_type, title, content)
     logger.info(f"大纲/教材已保存: subject={subject}, type={content_type}, id={row_id}")
@@ -3192,6 +3305,8 @@ def save_syllabus():
 @api_bp.route('/syllabus/<subject>/<content_type>', methods=['DELETE'])
 def remove_syllabus(subject, content_type):
     """删除大纲/教材内容"""
+    if not _check_subject_access(subject):
+        return jsonify({'success': False, 'error': '无权删除其他科目的大纲'}), 403
     success = delete_syllabus(subject, content_type)
     if not success:
         return jsonify({'success': False, 'error': '内容不存在'}), 404
@@ -3204,16 +3319,16 @@ def remove_syllabus(subject, content_type):
 
 @api_bp.route('/test-cases/overview', methods=['GET'])
 def test_cases_overview():
-    """获取所有题目的测试用例统计概览，支持 ?subject= 筛选"""
-    subject = request.args.get('subject')
+    """获取所有题目的测试用例统计概览 — 非 admin 强制用 session.subject 过滤"""
+    subject = _session_subject() or request.args.get('subject')
     data = get_all_test_cases_overview(subject)
     return jsonify({'success': True, 'data': data})
 
 
 @api_bp.route('/test-cases/all', methods=['GET'])
 def test_cases_all():
-    """获取所有测试用例（含题目信息），支持 ?subject= 筛选"""
-    subject = request.args.get('subject')
+    """获取所有测试用例（含题目信息）— 非 admin 强制用 session.subject 过滤"""
+    subject = _session_subject() or request.args.get('subject')
     data = get_all_test_cases_with_question(subject)
     return jsonify({'success': True, 'data': data})
 
@@ -3232,6 +3347,13 @@ def list_test_cases(question_id):
 @api_bp.route('/questions/<int:question_id>/test-cases', methods=['POST'])
 def create_test_case(question_id):
     """添加测试用例"""
+    # 科目访问控制
+    q = get_question(question_id)
+    if not q:
+        return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权操作其他科目的测试用例'}), 403
+
     data = request.json
     answer_text = data.get('answer_text', '').strip()
     expected_score = data.get('expected_score')
@@ -3270,6 +3392,10 @@ def update_test_case_detail(question_id, test_case_id):
     tc = get_test_case(test_case_id)
     if not tc or tc['question_id'] != question_id:
         return jsonify({'success': False, 'error': '测试用例不存在'}), 404
+    # 科目访问控制
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的测试用例'}), 403
 
     success = update_test_case(
         test_case_id,
@@ -3295,6 +3421,10 @@ def delete_test_case_detail(question_id, test_case_id):
     tc = get_test_case(test_case_id)
     if not tc or tc['question_id'] != question_id:
         return jsonify({'success': False, 'error': '测试用例不存在'}), 404
+    # 科目访问控制
+    q = get_question(question_id)
+    if q and not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权删除其他科目的测试用例'}), 403
     delete_test_case(test_case_id)
     return jsonify({'success': True})
 
@@ -3305,6 +3435,8 @@ def generate_test_cases_for_question(question_id):
     q = get_question(question_id)
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权操作其他科目的题目'}), 403
 
     data = request.json or {}
     count = int(data.get('count', 7))
@@ -3515,6 +3647,8 @@ def generate_answer():
     q = get_question(int(question_id))
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权操作其他科目的题目'}), 403
 
     content = q.get('content', '')
     max_score = q.get('max_score', 10)
@@ -3589,6 +3723,8 @@ def get_question_script_history(question_id):
     q = get_question(question_id)
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权访问其他科目的版本历史'}), 403
     history = get_script_history(question_id)
     return jsonify({'success': True, 'data': history})
 
@@ -3608,6 +3744,8 @@ def rollback_script(question_id):
     q = get_question(question_id)
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权修改其他科目的评分脚本'}), 403
 
     # update_question 内部会自动快照当前版本
     update_question(
@@ -3659,6 +3797,9 @@ def verify_rubric():
     q = get_question(int(question_id))
     if not q:
         return jsonify({'success': False, 'error': '题目不存在'}), 404
+    # 科目访问控制
+    if not _check_subject_access(q.get('subject', '')):
+        return jsonify({'success': False, 'error': '无权验证其他科目的题目'}), 403
 
     # 加载测试用例
     cases = get_test_cases(int(question_id))
@@ -3833,11 +3974,15 @@ SUBJECT_TOPICS = {
 
 @api_bp.route('/auto-generate', methods=['POST'])
 def auto_generate():
-    """AI 自动出题 + 评分脚本 + 测试用例"""
+    """AI 自动出题 + 评分脚本 + 测试用例 — 非 admin 强制 subject = session.subject"""
     import re as _re
     import random
     data = request.json or {}
     subject = data.get('subject', 'politics')
+    # 科目访问控制
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj  # 非 admin 强制用 session 科目
     count = min(int(data.get('count', 5)), 50)
     testcase_count = min(int(data.get('testcase_count', 5)), 10)
     topic = data.get('topic', '')
@@ -4052,8 +4197,12 @@ def auto_generate():
 
 @api_bp.route('/sensitive-words', methods=['GET'])
 def list_sensitive_words():
-    """获取敏感词列表"""
-    subject = request.args.get('subject', '').strip() or None
+    """获取敏感词列表 — 非 admin 强制用 session.subject 过滤"""
+    session_subj = _session_subject()
+    if session_subj:
+        subject = session_subj  # 科目老师只看本科目
+    else:
+        subject = request.args.get('subject', '').strip() or None  # admin 可选过滤
     category = request.args.get('category', '').strip() or None
     severity = request.args.get('severity', '').strip() or None
     keyword = request.args.get('keyword', '').strip() or None
@@ -4064,14 +4213,17 @@ def list_sensitive_words():
 
 @api_bp.route('/sensitive-words', methods=['POST'])
 def create_sensitive_word():
-    """添加敏感词"""
+    """添加敏感词 — 非 admin 强制 subject = session.subject"""
     data = request.json
     word = data.get('word', '').strip()
     if not word:
         return jsonify({'success': False, 'message': '敏感词不能为空'}), 400
+    subject = data.get('subject', 'all')
+    if session.get('role') != 'admin':
+        subject = session.get('subject') or 'all'
     word_id = add_sensitive_word(
         word=word,
-        subject=data.get('subject', 'all'),
+        subject=subject,
         category=data.get('category', 'politics'),
         severity=data.get('severity', 'high')
     )
@@ -4099,17 +4251,21 @@ def remove_sensitive_word(word_id):
 
 @api_bp.route('/sensitive-words/batch', methods=['POST'])
 def batch_import_sensitive_words():
-    """批量导入敏感词"""
+    """批量导入敏感词 — 非 admin 强制 subject = session.subject"""
     data = request.json
     words = data.get('words', [])
     if not words:
         return jsonify({'success': False, 'message': '导入列表为空'}), 400
+    session_subj = session.get('subject') if session.get('role') != 'admin' else None
     # 支持纯文本格式（每行一个词）
     if isinstance(words, str):
         lines = [l.strip() for l in words.strip().split('\n') if l.strip()]
-        words = [{'word': l, 'subject': data.get('subject', 'all'),
+        words = [{'word': l, 'subject': session_subj or data.get('subject', 'all'),
                   'category': data.get('category', 'politics'),
                   'severity': data.get('severity', 'high')} for l in lines]
+    elif session_subj:
+        # 非 admin：覆盖每项的 subject
+        words = [dict(w, subject=session_subj) for w in words]
     count = batch_add_sensitive_words(words)
     return jsonify({'success': True, 'data': {'imported': count}})
 
