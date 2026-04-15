@@ -10,7 +10,7 @@
 4. 完成后把自己的记录从"正在进行"删掉，再 `git push`
 
 **文件归属（避免冲突）：**
-- 英语相关文件（`english_prompts.py`、`englishEditCore.js`、`/english/` 接口）→ 英语 Agent 负责
+- 英语相关文件（`english_prompts.py`、`englishEdit{Helpers,AI,ValidateSave,Core}.js`、`/english/` 接口）→ 英语 Agent 负责
 - 后端其余文件（`api_routes.py` 非英语部分、`db_models.py` 等）→ 后端 Agent 负责
 - `templates/question-bank.html` → 改之前先协商
 
@@ -48,7 +48,7 @@ config/
 ├── settings.py         # 默认配置 + .env 加载
 templates/              # Jinja2 页面（login/question-bank/test-cases/sensitive-words/user-management）
 dist/index.html         # 单题评分页（Vue 3 SPA）
-static/js/              # 前端模块：api.js + useXxx.js（组合式）+ englishEditCore.js
+static/js/              # 前端模块：api.js + useXxx.js（组合式）+ englishEdit{Helpers,AI,ValidateSave,Core}.js
 data/exam_system.db     # SQLite 数据库
 docs/                   # 设计文档
 exports/                # 评分脚本导出示例
@@ -141,7 +141,7 @@ GET  /api/batch/{task_id}  →  查询进度和结果
 - **总分由系统累加**: 不信任模型给出的总分，从 scoring_items 逐项累加
 - **不静默返回0分**: API/解析失败必重试3次，耗尽返回 score=null
 - **配置分层**: .env → Python 默认 → 数据库覆盖（DB 优先）
-- **前端非构建**: Vue 3 CDN 引入，原生 JS 组合式 API（useXxx.js）；题型编辑器用全局变量暴露（englishEditCore.js → window.EnglishEditCore）
+- **前端非构建**: Vue 3 CDN 引入，原生 JS 组合式 API（useXxx.js）；题型编辑器用全局变量暴露（englishEditCore.js → window.EnglishEditCore，子模块拆为 helpers/AI/validateSave 三个 IIFE）
 - **数据库无 ORM**: 直接 sqlite3 操作，ALTER TABLE 兼容旧库
 - **题型抽象**: 前端 EDITOR_REGISTRY 按 question_type 路由编辑器；后端按 rubric.type 分流评分函数；DB 通过 question_type + scope_type + answer_text 格式适配，不新建表
 - **编辑器产出 = 引擎输入**: buildApiPayload() 输出的 JSON 就是 english_scoring_point_match() 直接消费的格式，中间不做转换
@@ -161,7 +161,7 @@ question_answers / grading_params / rubrics / bug_log
 - `rubric` — JSON 格式，新格式含 `type` + `version` 字段
 
 ### 英语编辑器前端模块
-- `static/js/englishEditCore.js` — 5 步工作流状态机，通过 `window.EnglishEditCore` 全局暴露
+- `static/js/englishEditCore.js` — 5 步工作流状态机（编排层），通过 `window.EnglishEditCore` 全局暴露；子模块：`englishEditHelpers.js`（纯工具）、`englishEditAI.js`（AI API）、`englishEditValidateSave.js`（验证+保存）
 - 非 ES Module 模式（question-bank.html 用 `<script>` 引入）
 - 核心函数：`useEnglishEdit()` 返回响应式状态和方法集合
 - `buildApiPayload()` 生成的 JSON 必须与评分引擎 `english_scoring_point_match()` 消费格式完全一致
