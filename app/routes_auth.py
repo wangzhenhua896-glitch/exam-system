@@ -2,7 +2,7 @@
 登录/登出 API
 """
 from flask import request, jsonify, session
-from app.api_routes import api_bp  # 最终改为 from app.api_shared
+from app.api_shared import api_bp
 from app.models.db_models import get_user
 
 

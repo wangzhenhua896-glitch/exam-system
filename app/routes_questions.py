@@ -3,8 +3,7 @@
 """
 import json
 from flask import request, jsonify, session
-from app.api_routes import api_bp  # 最终改为 from app.api_shared
-from app.api_shared import _check_subject_access, _session_subject
+from app.api_shared import api_bp, _check_subject_access, _session_subject
 from app.models.db_models import (
     add_question, get_questions, get_question,
     update_question, delete_question,

@@ -1,6 +1,6 @@
 """去重/合并 API"""
 from flask import request, jsonify
-from app.api_routes import api_bp
+from app.api_shared import api_bp
 from app.api_shared import _session_subject, _check_subject_access
 from app.models.db_models import get_questions, get_db_connection
 from loguru import logger

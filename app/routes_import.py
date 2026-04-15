@@ -1,7 +1,7 @@
 """导入/导出 API"""
 import json
 from flask import request, jsonify, session, Response
-from app.api_routes import api_bp
+from app.api_shared import api_bp
 from app.api_shared import _session_subject, _check_subject_access
 from app.models.db_models import get_questions, add_question
 from loguru import logger

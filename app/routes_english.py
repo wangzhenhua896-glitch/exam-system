@@ -2,7 +2,7 @@
 英语编辑器 AI 接口
 """
 from flask import request, jsonify
-from app.api_routes import api_bp  # 最终改为 from app.api_shared
+from app.api_shared import api_bp
 from app.api_shared import _call_llm_sync, _parse_json_from_llm, _check_subject_access
 from loguru import logger
 

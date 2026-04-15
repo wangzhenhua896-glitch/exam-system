@@ -2,7 +2,7 @@
 敏感词管理 + 用户管理 API
 """
 from flask import request, jsonify, session
-from app.api_routes import api_bp  # 最终改为 from app.api_shared，过渡期用 api_routes
+from app.api_shared import api_bp
 from app.api_shared import _session_subject
 from app.models.db_models import (
     get_sensitive_words, add_sensitive_word, update_sensitive_word,
