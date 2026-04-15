@@ -269,6 +269,7 @@
 <script>
 const { ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 const { ArrowLeft } = ElementPlusIconsVue;
+const { ElMessage, ElMessageBox } = ElementPlus;
 
 // URL 参数
 const urlParams = new URLSearchParams(window.location.search);
@@ -620,6 +621,31 @@ const app = Vue.createApp({
         };
 
         // 自动解析文本
+        const generatingPoints = Vue.ref(false);
+
+        // 自动生成分数分布
+        const autoGeneratePoints = async () => {
+            if (!questionForm.content.trim()) { ElMessage.warning('请输入题目内容'); return; }
+            if (!questionForm.standardAnswer.trim()) { ElMessage.warning('请输入标准答案'); return; }
+            generatingPoints.value = true;
+            try {
+                const res = await axios.post('/api/generate-rubric-points', {
+                    content: questionForm.content,
+                    score: questionForm.score,
+                    standardAnswer: questionForm.standardAnswer,
+                    rubricRules: questionForm.rubricRules,
+                    subject: questionForm.subject
+                });
+                if (res.data.success) {
+                    questionForm.rubricPoints = res.data.data.rubricPoints;
+                    ElMessage.success('分数分布已生成');
+                } else {
+                    ElMessage.error('生成失败：' + (res.data.error || '未知错误'));
+                }
+            } catch (e) { handleApiError(e, '生成失败'); }
+            finally { generatingPoints.value = false; }
+        };
+
         const autoParseText = () => {
             const fullText = autoImportText.value.trim();
             if (!fullText) return;
@@ -798,6 +824,7 @@ const app = Vue.createApp({
             runConsistencyCheck, cleanAnswerScores,
             loadAnswers, addAnswer, removeAnswer, editAnswerText, editAnswerScoreRatio, parseScoringPointJson,
             autoParseText, clearAutoImport,
+            autoGeneratePoints, generatingPoints,
             initContentEditor, setContentEditorContent,
             // Icon 组件
             ArrowLeft

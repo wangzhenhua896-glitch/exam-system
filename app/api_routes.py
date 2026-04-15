@@ -1996,28 +1996,110 @@ def create_batch():
 
     task_id = create_batch_task(task_name, len(answers))
 
-    # 处理批量评分
+    # 处理批量评分 — 走三层并行评分（与单题评分一致）
+    from app.three_layer_grader import three_layer_grade
+    from app.qwen_engine import QwenGradingResult
+
     results = []
     for i, item in enumerate(answers):
-        # 如果传了 question_id，从 DB 获取 subject
+        # 如果传了 question_id，从 DB 获取完整题目信息
         subj = item.get('subject', 'general')
         qid = item.get('question_id')
+        rubric = item.get('rubric', {})
+        question_text = item.get('question', '')
+        max_score = item.get('max_score', 10.0)
+        question_answers_list = []
+        scoring_strategy = 'avg'
+
         if qid:
             q = get_question(int(qid))
-            if q and q.get('subject'):
-                subj = q['subject']
-        result = grading_engine.grade(
-            question=item.get('question', ''),
+            if q:
+                if q.get('subject'):
+                    subj = q['subject']
+                question_text = q.get('content') or question_text
+                max_score = q.get('max_score') or max_score
+                # 注入 rubric 字段
+                if not rubric:
+                    rubric = {}
+                if q.get('rubric_script'):
+                    rubric['rubricScript'] = q['rubric_script']
+                if q.get('rubric_rules'):
+                    rubric['rubricRules'] = q['rubric_rules']
+                if q.get('rubric_points'):
+                    rubric['rubricPoints'] = q['rubric_points']
+                if q.get('standard_answer'):
+                    rubric['standardAnswer'] = q['standard_answer']
+                if q.get('rubric'):
+                    try:
+                        db_rubric = json.loads(q['rubric']) if isinstance(q['rubric'], str) else q['rubric']
+                        if isinstance(db_rubric, dict):
+                            for k, v in db_rubric.items():
+                                if k not in rubric or not rubric[k]:
+                                    rubric[k] = v
+                    except Exception:
+                        pass
+                # 加载满分答案列表
+                question_answers_list = get_question_answers(int(qid))
+                # 英语父题：额外加载子题的采分点
+                if q.get('subject') == 'english' and not q.get('parent_id'):
+                    children = get_child_questions(int(qid))
+                    for child in children:
+                        child_answers = get_question_answers(child['id'])
+                        question_answers_list.extend(child_answers)
+                # 评分策略
+                if q.get('scoring_strategy'):
+                    scoring_strategy = q['scoring_strategy']
+                else:
+                    scoring_strategy = get_grading_param('scoring_strategy', 'avg') or 'avg'
+
+        # 三层并行评分
+        grade_result = three_layer_grade(
+            grading_engine=grading_engine,
+            question=question_text,
             answer=item.get('answer', ''),
-            rubric=item.get('rubric', {}),
-            max_score=item.get('max_score', 10.0),
-            subject=subj
+            rubric=rubric,
+            max_score=max_score,
+            subject=subj,
+            question_answers=question_answers_list,
+            strategy=scoring_strategy,
         )
+        llm_result = grade_result.get('llm_result')
+        final_score = grade_result.get('final_score')
+
+        # 英语采分点精确命中时，llm_result 为 None
+        if llm_result is None and subj == 'english':
+            sp_detail = grade_result['layer_details'].get('keyword', {})
+            sp_score = grade_result['layer_scores'].get('keyword', 0)
+            if sp_score is not None and sp_score > 0:
+                llm_result = QwenGradingResult(
+                    final_score=sp_score,
+                    confidence=0.95,
+                    strategy='scoring_point_match',
+                    total_score=max_score,
+                    comment=sp_detail.get('comment', f'命中采分点，得{sp_score}分。'),
+                    needs_review=False,
+                    scoring_items=sp_detail.get('scoring_items', []),
+                )
+
+        if llm_result is None:
+            llm_result = QwenGradingResult(
+                final_score=final_score if final_score is not None else 0,
+                confidence=0.3,
+                strategy='fallback',
+                total_score=max_score,
+                comment='评分过程中出现问题，得分可能不准确。',
+                needs_review=True,
+                scoring_items=[],
+            )
+
+        if final_score is not None:
+            llm_result.final_score = final_score
+
         results.append({
             'index': i,
-            'score': result.final_score,
-            'confidence': result.confidence,
-            'comment': result.comment
+            'score': llm_result.final_score,
+            'confidence': llm_result.confidence,
+            'comment': llm_result.comment
         })
         update_batch_task(task_id, i + 1, json.dumps(results, ensure_ascii=False), 'running')
 
