@@ -334,7 +334,7 @@
         // 解析 rubric 获取计分公式
         var rubric = child.rubric;
         if (typeof rubric === 'string') {
-          try { rubric = JSON.parse(rubric); } catch (e) { rubric = {}; }
+          try { rubric = JSON.parse(rubric); } catch (_) { rubric = {}; }
         }
         if (rubric && rubric.scoring_strategy === 'max_hit_score') {
           sq.scoreFormulaType = 'max_hit_score';
@@ -355,7 +355,7 @@
               console.warn('解析采分点 JSON 失败', e);
             }
           }
-        } catch (e) { /* ignore */ }
+        } catch (_) { /* ignore */ }
 
         // 从 workflow_status 恢复状态
         if (workflowStatus.value && workflowStatus.value.question_status) {
@@ -836,7 +836,7 @@
         if (sq.scoringPoints.length === 0) {
           results.push({ rule: 'V2', level: 'error', message: 'Q' + (qi + 1) + ' 没有采分点' });
         }
-        sq.scoringPoints.forEach(function (sp, si) {
+        sq.scoringPoints.forEach(function (sp) {
           if (sp.keywords.length === 0) {
             results.push({ rule: 'V3', level: 'error', message: 'Q' + (qi + 1) + ' 采分点 ' + sp.id + ' 没有关键词' });
           }

@@ -32,7 +32,7 @@ export function useHistory({ selectedQuestion }) {
                     time: r.graded_at || ''
                 }));
             }
-        } catch (e) {
+        } catch (_) {
             history.value = JSON.parse(localStorage.getItem('grading-history') || '[]');
             ElMessage.info('无法加载远程历史，显示本地缓存');
         }
