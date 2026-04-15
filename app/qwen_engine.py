@@ -81,6 +81,7 @@ class QwenGradingEngine:
                 client = OpenAI(
                     api_key=cfg["api_key"],
                     base_url=cfg["base_url"],
+                    timeout=60.0,
                 )
                 model = preferred_model or cfg["model"]
                 return client, model, preferred_provider
@@ -93,6 +94,7 @@ class QwenGradingEngine:
                 client = OpenAI(
                     api_key=cfg["api_key"],
                     base_url=cfg["base_url"],
+                    timeout=60.0,
                 )
                 return client, cfg["model"], provider
 
@@ -100,7 +102,7 @@ class QwenGradingEngine:
         api_key = os.getenv("OPENAI_API_KEY")
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
         return client, model, "openai"
 
     def grade(

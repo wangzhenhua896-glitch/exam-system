@@ -239,7 +239,7 @@ def test_model(provider):
         return jsonify({'provider': provider, 'name': config['name'], 'success': False, 'error': '未配置 API Key', 'latency_ms': 0})
 
     try:
-        client = OpenAI(api_key=config['api_key'], base_url=config['base_url'])
+        client = OpenAI(api_key=config['api_key'], base_url=config['base_url'], timeout=30.0)
         start = time.time()
         response = client.chat.completions.create(
             model=config['model'],
@@ -301,7 +301,7 @@ def test_all_models():
         else:
             models_to_test = [{'id': config['model'], 'name': config['model']}]
 
-        client = OpenAI(api_key=config['api_key'], base_url=config['base_url'])
+        client = OpenAI(api_key=config['api_key'], base_url=config['base_url'], timeout=30.0)
 
         for m in models_to_test:
             model_id = m['id']
