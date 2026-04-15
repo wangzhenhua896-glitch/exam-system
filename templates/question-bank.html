@@ -30,7 +30,7 @@
                 <div class="subtitle">国产大模型 · 高精度评分</div>
             </div>
             <div class="header-right">
-                <el-tag size="small" type="success" style="cursor: pointer;" @click="switchSubject">
+                <el-tag v-if="showExtraColumns" size="small" type="success" style="cursor: pointer;" @click="switchSubject">
                     {{ currentSubjectLabel }}
                 </el-tag>
                 <div class="status-badge">
@@ -43,7 +43,7 @@
 
         <div class="main-container">
             <!-- 左侧导航 -->
-            <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+            <div v-if="showExtraColumns" class="sidebar" :class="{ collapsed: sidebarCollapsed }">
                 <div class="menu-group-title">题库管理</div>
                 <el-menu :default-active="currentPage" @select="handleMenuSelect" :collapse="false">
                     <el-menu-item @click="go('/dashboard')"><el-icon><DataAnalysis /></el-icon><span>题库总览</span></el-menu-item>
@@ -67,10 +67,13 @@
                 <div v-if="currentPage === 'question-list'">
                     <div class="page-card">
                         <div class="page-header" style="display: flex; align-items: center; justify-content: space-between;">
-                            <div class="page-title">题目列表</div>
                             <div style="display: flex; align-items: center; gap: 16px;">
+                                <div class="page-title" style="margin-bottom: 0;">题目列表</div>
                                 <span style="color: #909399; font-size: 13px;">共 {{ filteredQuestions.length }} 题</span>
-                                <div class="page-desc" style="margin-bottom: 0;">浏览所有题目，点击「开始评分」进入聚焦评分模式（题目自动预填）</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <el-switch v-model="showExtraColumns" active-text="显示分值/质量/删除" size="small" />
+                                <div class="page-desc" style="margin-bottom: 0;">浏览所有题目，点击「测试评分」进入聚焦评分模式（题目自动预填）</div>
                             </div>
                         </div>
                         <el-table :data="paginatedQuestions" stripe style="width: 100%" class="question-table"
@@ -115,8 +118,8 @@
                                     <div v-else style="max-height: 60px; overflow: hidden; line-height: 1.5; font-size: 14px;">{{ scope.row.content }}</div>
                                 </template>
                             </el-table-column>
-                            <el-table-column prop="max_score" label="分值" width="60"></el-table-column>
-                            <el-table-column label="质量" width="80">
+                            <el-table-column v-if="showExtraColumns" prop="max_score" label="分值" width="60"></el-table-column>
+                            <el-table-column v-if="showExtraColumns" label="质量" width="80">
                                 <template #default="scope">
                                     <el-tag v-if="scope.row.quality_score !== null && scope.row.quality_score !== undefined"
                                             :type="scope.row.quality_score >= 80 ? 'success' : scope.row.quality_score >= 60 ? 'warning' : 'danger'"
@@ -126,12 +129,12 @@
                                     <el-tag v-else type="info" size="small">未评</el-tag>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="操作" width="300" fixed="right">
+                            <el-table-column label="操作" :width="showExtraColumns ? 300 : 210" fixed="right">
                                 <template #default="scope">
                                     <el-button type="primary" size="small" plain @click="viewQuestion(scope.row.id)">查看</el-button>
                                     <el-button type="warning" size="small" plain @click="editQuestion(scope.row.id)">编辑</el-button>
                                     <el-button type="success" size="small" @click="startGrading(scope.row.id)">测试评分</el-button>
-                                    <el-popconfirm title="确定删除此题目？" @confirm="deleteQuestion(scope.row.id)">
+                                    <el-popconfirm v-if="showExtraColumns" title="确定删除此题目？" @confirm="deleteQuestion(scope.row.id)">
                                         <template #reference>
                                             <el-button type="danger" size="small" plain>删除</el-button>
                                         </template>
@@ -141,7 +144,7 @@
                         </el-table>
                         <el-empty v-if="filteredQuestions.length === 0" description="暂无题目，请先在「人工出题」中创建题目"></el-empty>
                         <div v-if="filteredQuestions.length > 0" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; gap: 8px;">
+                            <div v-if="showExtraColumns" style="display: flex; gap: 8px;">
                                 <el-button size="small" type="primary" plain @click="go('/import')">
                                     <el-icon><Upload /></el-icon> 导入
                                 </el-button>
@@ -647,7 +650,7 @@
 const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
 const { ElMessage, ElMessageBox } = ElementPlus;
 
-const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, SUBJECT_LABELS, getSubjectLabel, sanitizeHtml, handleApiError } = window.SharedApp;
+const { SUBJECT_STORAGE_KEY, CURRENT_SUBJECT_KEY, DEFAULT_SUBJECTS, sanitizeHtml, handleApiError } = window.SharedApp;
 
 const app = createApp({
     setup() {
@@ -660,8 +663,6 @@ const app = createApp({
         const questions = ref([]);
         const stats = ref({});
 
-        const subjectList = ref([]);
-
         // 全局科目状态 — 从登录页存入的 localStorage 读取
         const currentSubject = ref(localStorage.getItem(CURRENT_SUBJECT_KEY) || '');
 
@@ -673,7 +674,8 @@ const app = createApp({
         // 当前科目显示名称
         const currentSubjectLabel = Vue.computed(() => {
             try {
-                const subjects = JSON.parse(localStorage.getItem(SUBJECT_STORAGE_KEY) || '[]');
+                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
+                const subjects = saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
                 const found = subjects.find(s => s.value === currentSubject.value);
                 return found ? found.label : currentSubject.value;
             } catch (e) {
@@ -690,42 +692,8 @@ const app = createApp({
                     { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
                 );
             } catch { return; }
-
             localStorage.removeItem(CURRENT_SUBJECT_KEY);
             window.location.href = '/login';
-        };
-
-        // 加载科目列表
-        const loadSubjects = () => {
-            try {
-                const saved = localStorage.getItem(SUBJECT_STORAGE_KEY);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    // 只保留默认科目中已定义的，过滤掉旧的废弃科目
-                    const defaultValues = DEFAULT_SUBJECTS.map(s => s.value);
-                    subjectList.value = parsed.filter(s => defaultValues.includes(s.value));
-                    // 如果过滤后为空，重置为默认
-                    if (subjectList.value.length === 0) {
-                        subjectList.value = [...DEFAULT_SUBJECTS];
-                    }
-                    saveSubjects();
-                } else {
-                    subjectList.value = [...DEFAULT_SUBJECTS];
-                    saveSubjects();
-                }
-            } catch (e) {
-                subjectList.value = [...DEFAULT_SUBJECTS];
-            }
-        };
-
-        // 保存科目列表到本地存储
-        const saveSubjects = () => {
-            localStorage.setItem(SUBJECT_STORAGE_KEY, JSON.stringify(subjectList.value));
-        };
-
-        // 获取科目显示名称（优先从动态科目列表查找）
-        const getSubjectLabel = (value) => {
-            return window.SharedApp.getSubjectLabel(value, subjectList.value);
         };
 
         // 加载数据
@@ -742,7 +710,7 @@ const app = createApp({
 
         const loadQuestions = async () => {
             try {
-                const res = await axios.get('/api/questions');
+                const res = await axios.get('/api/questions', { params: { subject: currentSubject.value } });
                 if (res.data.success) {
                     const all = res.data.data;
                     // 为父题附加子题数据，为子题附加父题标题
@@ -827,7 +795,7 @@ const app = createApp({
         };
 
         // 题目列表筛选/搜索/分页
-        const filterSubject = ref(currentSubject.value);
+        const showExtraColumns = ref(false);
         const searchKeyword = ref('');
         const filterQuality = ref('');
         const listPage = ref(1);
@@ -835,9 +803,6 @@ const app = createApp({
         const filteredQuestions = Vue.computed(() => {
             // 只显示父题和独立题（子题在展开行中显示）
             let list = questions.value.filter(q => !q.parent_id);
-            if (filterSubject.value) {
-                list = list.filter(q => q.subject === filterSubject.value);
-            }
             if (searchKeyword.value) {
                 const kw = searchKeyword.value.toLowerCase();
                 list = list.filter(q =>
@@ -869,20 +834,18 @@ const app = createApp({
         });
 
         // 筛选条件变化时回到第一页
-        Vue.watch([filterSubject, searchKeyword, filterQuality], () => { listPage.value = 1; });
+        Vue.watch([searchKeyword, filterQuality], () => { listPage.value = 1; });
 
         onMounted(() => {
-            loadSubjects();
             loadStats();
             loadQuestions();
         });
 
         return {
-            sidebarCollapsed, currentPage, questions, stats, subjectList,
+            sidebarCollapsed, currentPage, questions, stats,
             sanitizeHtml,
             currentSubject, currentSubjectLabel, switchSubject,
-            filterSubject, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
-            loadSubjects, saveSubjects, getSubjectLabel,
+            showExtraColumns, searchKeyword, filterQuality, listPage, filteredQuestions, paginatedQuestions,
             handleMenuSelect, goToList, startGrading, deleteQuestion,
             viewQuestion, editQuestion, addChildQuestion,
             englishEdit, go
