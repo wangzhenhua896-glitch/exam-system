@@ -517,12 +517,15 @@
                             </div>
                         </div>
 
-                        <!-- Step3: 评分脚本 -->
+                        <!-- Step3: 评分细则 -->
                         <div v-else-if="englishEdit.currentStep === 'script'">
                             <el-card shadow="never">
                                 <template #header>
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-weight: 600;">评分脚本</span>
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <span style="font-weight: 600;">评分细则</span>
+                                            <el-tag type="info" size="small">共 {{ englishEdit.subQuestions.length }} 小问，满分 {{ englishEdit.parentMaxScore }} 分</el-tag>
+                                        </div>
                                         <div style="display: flex; gap: 8px;">
                                             <el-button type="primary" plain :loading="englishEdit.scriptGenerating" @click="englishEdit.generateScript()">生成评分脚本</el-button>
                                             <el-button type="warning" plain :loading="englishEdit.selfCheckLoading" :disabled="!englishEdit.generatedScript" @click="englishEdit.selfCheckScript()">自查脚本</el-button>
@@ -530,11 +533,82 @@
                                         </div>
                                     </div>
                                 </template>
-                                <el-collapse v-model="englishEdit.scriptCollapseActive">
-                                    <el-collapse-item title="评分脚本内容" name="script">
+
+                                <!-- 评分细则卡片视图 -->
+                                <div v-if="englishEdit.rubricViewMode === 'cards'">
+                                    <el-collapse>
+                                        <el-collapse-item v-for="(sq, qi) in englishEdit.subQuestions" :key="qi" :name="qi">
+                                            <template #title>
+                                                <span style="font-weight: 600;">第{{ qi + 1 }}题</span>
+                                                <el-tag size="small" type="info" style="margin-left: 8px;">{{ sq.maxScore }} 分</el-tag>
+                                                <el-tag v-if="sq.scoreFormulaType === 'max_hit_score'" size="small" type="warning" style="margin-left: 4px;">取最高命中分</el-tag>
+                                                <el-tag v-else size="small" type="success" style="margin-left: 4px;">按命中计数</el-tag>
+                                            </template>
+
+                                            <!-- 子题题目 -->
+                                            <div v-if="sq.text" style="margin-bottom: 12px; padding: 8px 12px; background: #f5f7fa; border-radius: 4px; font-size: 13px; color: #606266; line-height: 1.6;">
+                                                {{ sq.text }}
+                                            </div>
+
+                                            <!-- 采分点列表 -->
+                                            <div v-if="sq.scoringPoints && sq.scoringPoints.length > 0">
+                                                <div v-for="(sp, si) in sq.scoringPoints" :key="si" style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid #ebeef5; border-radius: 4px;">
+                                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                                        <span style="font-weight: 600; font-size: 13px;">采分点 {{ sp.id }}</span>
+                                                        <el-tag size="small" type="primary">{{ sp.score }} 分</el-tag>
+                                                    </div>
+                                                    <div v-if="sp.keywords && sp.keywords.length > 0" style="margin-bottom: 4px;">
+                                                        <span style="font-size: 12px; color: #909399; margin-right: 6px;">关键词</span>
+                                                        <el-tag v-for="(kw, ki) in sp.keywords" :key="ki" size="small" type="info" style="margin-right: 4px; margin-bottom: 4px;">{{ kw }}</el-tag>
+                                                    </div>
+                                                    <div v-if="sp.synonyms && sp.synonyms.length > 0">
+                                                        <span style="font-size: 12px; color: #909399; margin-right: 6px;">等价表述</span>
+                                                        <el-tag v-for="(syn, si2) in sp.synonyms" :key="si2" size="small" type="success" plain style="margin-right: 4px; margin-bottom: 4px;">{{ syn }}</el-tag>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-else style="padding: 12px; text-align: center; color: #c0c4cc; font-size: 13px;">
+                                                暂无采分点配置，请返回上一步添加
+                                            </div>
+
+                                            <!-- 排除词 -->
+                                            <div v-if="sq.excludeList && sq.excludeList.length > 0" style="margin-bottom: 8px;">
+                                                <span style="font-size: 12px; color: #909399; margin-right: 6px;">排除词</span>
+                                                <el-tag v-for="(ex, ei) in sq.excludeList" :key="ei" size="small" type="danger" style="margin-right: 4px;">{{ ex }}</el-tag>
+                                            </div>
+
+                                            <!-- 拼音白名单 -->
+                                            <div v-if="sq.pinyinWhitelist && sq.pinyinWhitelist.length > 0" style="margin-bottom: 8px;">
+                                                <span style="font-size: 12px; color: #909399; margin-right: 6px;">拼音白名单</span>
+                                                <el-tag v-for="(pw, pi) in sq.pinyinWhitelist" :key="pi" size="small" type="warning" style="margin-right: 4px;">{{ pw }}</el-tag>
+                                            </div>
+
+                                            <!-- hit_count 规则表格 -->
+                                            <div v-if="sq.scoreFormulaType === 'hit_count' && sq.scoringRules && sq.scoringRules.length > 0" style="margin-top: 8px;">
+                                                <div style="font-size: 12px; color: #909399; margin-bottom: 4px;">计分规则</div>
+                                                <el-table :data="sq.scoringRules" size="small" border style="max-width: 300px;">
+                                                    <el-table-column label="命中数" align="center">
+                                                        <template #default="scope">≥ {{ scope.row.minHits }} 个关键词</template>
+                                                    </el-table-column>
+                                                    <el-table-column prop="score" label="得分" align="center">
+                                                        <template #default="scope">{{ scope.row.score }} 分</template>
+                                                    </el-table-column>
+                                                </el-table>
+                                            </div>
+                                        </el-collapse-item>
+                                    </el-collapse>
+                                </div>
+
+                                <!-- 原始脚本（默认隐藏） -->
+                                <el-collapse v-model="englishEdit.scriptCollapseActive" style="margin-top: 12px;">
+                                    <el-collapse-item name="script">
+                                        <template #title>
+                                            <span style="font-size: 12px; color: #c0c4cc;">原始脚本</span>
+                                        </template>
                                         <el-input v-model="englishEdit.generatedScript" type="textarea" :rows="16" placeholder='点击"生成评分脚本"按钮，AI 将根据采分点配置自动生成…' />
                                     </el-collapse-item>
                                 </el-collapse>
+
                                 <!-- 自查结果 -->
                                 <div v-if="englishEdit.selfCheckResult" style="margin-top: 12px; padding: 12px; background: #fdf6ec; border: 1px solid #e6a23c; border-radius: 4px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">

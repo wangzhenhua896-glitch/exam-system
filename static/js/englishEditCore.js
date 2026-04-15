@@ -18,7 +18,7 @@
   var WORKFLOW_STEPS = [
     { id: 'extract', label: '原题解析', icon: 'el-icon-document' },
     { id: 'per_question', label: '逐小问配置', icon: 'el-icon-edit' },
-    { id: 'script', label: '评分脚本', icon: 'el-icon-files' },
+    { id: 'script', label: '评分细则', icon: 'el-icon-files' },
     { id: 'validate', label: '一致性验证', icon: 'el-icon-circle-check' },
     { id: 'save', label: '确认保存', icon: 'el-icon-upload' },
   ];
@@ -54,7 +54,8 @@
 
     // ---- 评分脚本 ----
     var generatedScript = ref('');
-    var scriptCollapseActive = ref(['script']);
+    var scriptCollapseActive = ref([]);
+    var rubricViewMode = ref('cards'); // 'cards' | 'script'
     var selfCheckLoading = ref(false);
     var selfCheckResult = ref(null);
     var qualityLoading = ref(false);
@@ -568,6 +569,10 @@
       scriptGenerating.value = false;
     }
 
+    function toggleRubricViewMode() {
+      rubricViewMode.value = rubricViewMode.value === 'cards' ? 'script' : 'cards';
+    }
+
     async function selfCheckScript() {
       if (!generatedScript.value) return;
       selfCheckLoading.value = true;
@@ -688,6 +693,7 @@
       subQuestions: subQuestions,
       generatedScript: generatedScript,
       scriptCollapseActive: scriptCollapseActive,
+      rubricViewMode: rubricViewMode,
       validationResults: validationResults,
       validationPassed: validationPassed,
       extractingLoading: extractingLoading,
@@ -729,6 +735,7 @@
       clearExcludeSuggestions: clearExcludeSuggestions,
       extractScoringPoints: extractScoringPoints,
       generateScript: generateScript,
+      toggleRubricViewMode: toggleRubricViewMode,
       selfCheckScript: selfCheckScript,
       applyImprovedScript: applyImprovedScript,
       evaluateQuality: evaluateQuality,

@@ -10,7 +10,9 @@
 
 ## 正在进行
 
-（目前无人作业）
+| Agent | 改动文件 | 说明 |
+|-------|---------|------|
+| （空闲）| | |
 
 ---
 
@@ -26,7 +28,7 @@
 
 | 时间 | 功能 | 备注 |
 |------|------|------|
-| （暂无）| | |
+| 2026-04-15 | 英语编辑器第3步评分细则卡片视图 | Playwright 自动化测试通过：卡片渲染、采分点标签、原始脚本收起、无控制台错误 |
 
 ---
 
@@ -36,7 +38,8 @@
 |------|------|
 | `app/english_prompts.py` | 英语 Agent |
 | `static/js/englishEditCore.js` | 英语 Agent |
+| `static/js/englishEdit{Helpers,AI,ValidateSave}.js` | 英语 Agent |
 | `app/api_routes.py` 中 `/english/` 接口 | 英语 Agent |
 | `app/api_routes.py` 其余部分 | 后端 Agent |
 | `app/models/db_models.py` | 后端 Agent |
-| `templates/question-bank.html` | 协商后再动 |
+| `templates/question-bank.html` | **当前 Agent 正在改第3步区域（520行起）** |
