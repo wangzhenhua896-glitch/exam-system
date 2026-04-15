@@ -6,8 +6,13 @@
 
 1. `git pull` 拉取最新代码
 2. 查看 `WORKING.md`，了解其他 Agent 正在改哪些文件
-3. 把自己要改的文件写进 `WORKING.md` 的"正在进行"栏，然后 `git push`
-4. 完成后把自己的记录从"正在进行"删掉，再 `git push`
+3. 把自己要改的文件写进 `WORKING.md` 的"正在进行"栏，然后 `git push gitea master`
+4. 完成后把自己的记录从"正在进行"删掉，再 `git push gitea master`
+
+**Git 推送铁律：只能推 Gitea，禁止推 GitHub。**
+- 推送命令必须写全：`git push gitea master`，禁止用 `git push`（默认推 origin = GitHub）
+- `origin` 是 GitHub 只读镜像，**永远不要推它**
+- 每次推送前执行 `git remote -v` 确认 remote 是 gitea
 
 **文件归属（避免冲突）：**
 - 英语相关文件（`english_prompts.py`、`englishEdit{Helpers,AI,ValidateSave,Core}.js`、`/english/` 接口）→ 英语 Agent 负责
