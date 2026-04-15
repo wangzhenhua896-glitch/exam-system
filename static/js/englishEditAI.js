@@ -81,7 +81,7 @@
         excludeList: data.exclude_list ? data.exclude_list.slice() : null,
       };
     }
-    return null;
+    throw new Error(res.data.error || '采分点提取失败');
   }
 
   // ============================================================
@@ -105,7 +105,7 @@
         return { term: s.term, confidence: s.confidence, disabled: exists };
       });
     }
-    return null;
+    throw new Error(res.data.error || '同义词补全失败');
   }
 
   // ============================================================
@@ -132,7 +132,7 @@
         return { term: s.term, reason: s.reason, disabled: exists };
       });
     }
-    return null;
+    throw new Error(res.data.error || '排除词建议失败');
   }
 
   // ============================================================

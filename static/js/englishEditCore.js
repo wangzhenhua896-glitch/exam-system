@@ -10,6 +10,7 @@
 
   var handleApiError = window.SharedApp.handleApiError;
   var ElMessage = ElementPlus.ElMessage;
+  var ElMessageBox = ElementPlus.ElMessageBox;
   var H = window.EnglishEditHelpers;
   var AI = window.EnglishEditAI;
   var VS = window.EnglishEditValidateSave;
@@ -64,6 +65,7 @@
 
     // ---- AI loading ----
     var extractingLoading = ref(false);
+    var scoringPointExtractingMap = ref({});
     var synonymLoadingMap = ref({});
     var excludeLoading = ref(false);
     var scriptGenerating = ref(false);
@@ -95,11 +97,12 @@
     });
 
     var subScoreSum = computed(function () {
-      return subQuestions.value.reduce(function (sum, sq) { return sum + (sq.maxScore || 0); }, 0);
+      var raw = subQuestions.value.reduce(function (sum, sq) { return sum + (sq.maxScore || 0); }, 0);
+      return Math.round(raw * 10) / 10;
     });
 
     var scoreMatch = computed(function () {
-      return subScoreSum.value === parentMaxScore.value;
+      return Math.abs(subScoreSum.value - parentMaxScore.value) < 0.01;
     });
 
     // ============================================================
@@ -143,6 +146,7 @@
       parentContentEditing.value = false;
       scriptGenerating.value = false;
       extractingLoading.value = false;
+      scoringPointExtractingMap.value = {};
     }
 
     // ============================================================
@@ -211,8 +215,14 @@
 
     function goToQuestion(index) {
       if (index >= 0 && index < subQuestions.value.length) {
-        for (var i = index; i < subQuestions.value.length; i++) {
-          subQuestions.value[i].status = 'pending';
+        // 只重置 index 到当前 activeQuestionIndex 之间的题，不重置之后已完成的题
+        var currentActive = activeQuestionIndex.value;
+        var resetStart = Math.min(index, currentActive);
+        var resetEnd = Math.max(index, currentActive);
+        for (var i = resetStart; i <= resetEnd; i++) {
+          if (i !== index) {
+            subQuestions.value[i].status = 'pending';
+          }
           subQuestions.value[i].expanded = false;
         }
         collapseAllSubQuestions();
@@ -443,7 +453,7 @@
 
     async function extractScoringPoints(sq) {
       if (!sq.text || !sq.standardAnswer) return;
-      extractingLoading.value = true;
+      scoringPointExtractingMap.value[sq.tempId] = true;
       try {
         var result = await AI.extractScoringPoints(sq);
         if (result) {
@@ -454,7 +464,7 @@
       } catch (e) {
         handleApiError(e, '采分点提取失败');
       }
-      extractingLoading.value = false;
+      scoringPointExtractingMap.value[sq.tempId] = false;
     }
 
     async function suggestSynonyms(sq, spIndex) {
@@ -620,6 +630,7 @@
         await VS.saveAll(state);
         markStepCompleted('save');
         await saveWorkflowStatus();
+        ElMessage.success('保存成功！');
       } catch (e) {
         handleApiError(e, '保存失败');
       }
@@ -634,6 +645,16 @@
     // ============================================================
     // 重置
     // ============================================================
+    function confirmResetAll() {
+      ElMessageBox.confirm(
+        '重新提取将清空当前所有采分点和评分脚本配置，确定？',
+        '确认',
+        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      ).then(function () {
+        resetAll();
+      }).catch(function () {});
+    }
+
     function resetAll() {
       subQuestions.value = [];
       activeQuestionIndex.value = 0;
@@ -667,6 +688,7 @@
       validationResults: validationResults,
       validationPassed: validationPassed,
       extractingLoading: extractingLoading,
+      scoringPointExtractingMap: scoringPointExtractingMap,
       synonymLoadingMap: synonymLoadingMap,
       excludeLoading: excludeLoading,
       scriptGenerating: scriptGenerating,
@@ -714,6 +736,7 @@
       validateAll: validateAll,
       saveAll: saveAll,
       isQuestionComplete: H.isQuestionComplete,
+      confirmResetAll: confirmResetAll,
       resetAll: resetAll,
       addTag: H.addTag,
       removeTag: H.removeTag,
