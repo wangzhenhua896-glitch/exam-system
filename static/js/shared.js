@@ -69,6 +69,22 @@
   }
 
   /**
+   * 安全 JSON.parse，解析失败返回 fallback 而非抛异常
+   * @param {string} raw - 待解析的字符串
+   * @param {*} fallback - 解析失败时的默认值
+   */
+  function safeJsonParse(raw, fallback) {
+    try { return JSON.parse(raw); } catch (_) { return fallback; }
+  }
+
+  /**
+   * 从 localStorage 安全加载科目列表
+   */
+  function loadSubjectsFromStorage() {
+    return safeJsonParse(localStorage.getItem(SUBJECT_STORAGE_KEY), DEFAULT_SUBJECTS) || DEFAULT_SUBJECTS;
+  }
+
+  /**
    * HTML 消毒（需要 DOMPurify 已加载）
    */
   function sanitizeHtml(html) {
@@ -89,5 +105,7 @@
     getSubjectLabel: getSubjectLabel,
     handleApiError: handleApiError,
     sanitizeHtml: sanitizeHtml,
+    safeJsonParse: safeJsonParse,
+    loadSubjectsFromStorage: loadSubjectsFromStorage,
   };
 })();

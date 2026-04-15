@@ -34,6 +34,7 @@ export function useHistory({ selectedQuestion }) {
             }
         } catch (e) {
             history.value = JSON.parse(localStorage.getItem('grading-history') || '[]');
+            ElMessage.info('无法加载远程历史，显示本地缓存');
         }
     }
 

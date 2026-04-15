@@ -284,13 +284,18 @@
 
         // 解析阅读材料
         parentContent.value = extractReadingMaterial(parent.content || '');
-        // 保留 HTML 格式的原始材料（来自 original_text 或 content_html）
-        parentContentHtml.value = parent.original_text || parent.content_html || '';
+        // 保留 HTML 格式的原始材料（来自 original_text 或 content_html 或含 HTML 的 content）
+        parentContentHtml.value = parent.original_text || parent.content_html || (parent.content && parent.content.includes('<') ? parent.content : '');
 
         // 恢复 workflow_status
         if (parent.workflow_status) {
-          workflowStatus.value = typeof parent.workflow_status === 'string'
-            ? JSON.parse(parent.workflow_status) : parent.workflow_status;
+          try {
+            workflowStatus.value = typeof parent.workflow_status === 'string'
+              ? JSON.parse(parent.workflow_status) : parent.workflow_status;
+          } catch (_) {
+            console.warn('workflow_status 解析失败，重置为空');
+            workflowStatus.value = {};
+          }
         }
 
         // 加载子题
@@ -1017,6 +1022,7 @@
         });
       } catch (e) {
         console.warn('workflow_status 保存失败', e);
+        if (typeof ElMessage !== 'undefined') ElMessage.warning('编辑进度保存失败');
       }
     }
 

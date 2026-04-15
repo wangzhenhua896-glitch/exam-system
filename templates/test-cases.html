@@ -557,7 +557,7 @@ const app = createApp({
                     if (res.data.success && res.data.data.length > 0) {
                         currentScriptVersion.value = res.data.data[0].version;
                     }
-                }).catch(() => {});
+                }).catch(e => { console.warn('加载脚本版本失败', e); });
             }
         }
 

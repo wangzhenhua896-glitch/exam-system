@@ -597,7 +597,7 @@ const app = Vue.createApp({
             try {
                 const data = JSON.parse(text);
                 if (data.scoring_points) return data;
-            } catch (e) {}
+            } catch (e) { console.warn('解析采分点 JSON 失败', e); }
             return null;
         };
         const editAnswerText = async (answer) => {

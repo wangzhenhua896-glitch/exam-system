@@ -167,6 +167,7 @@ createApp({
                     user.teacher_name = name;
                 } catch (e) {
                     console.error('保存科目老师姓名失败', e);
+                    ElMessage.warning('保存设置失败');
                 }
             }
 

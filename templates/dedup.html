@@ -404,7 +404,8 @@
                                 '确认删除',
                                 { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
                             );
-                        } catch {
+                        } catch (e) {
+                            if (e !== 'cancel' && e?.message !== 'cancel') handleApiError(e, '确认删除失败');
                             return;
                         }
                     }
@@ -466,7 +467,8 @@
                                 '确认删除',
                                 { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
                             );
-                        } catch {
+                        } catch (e) {
+                            if (e !== 'cancel' && e?.message !== 'cancel') handleApiError(e, '确认删除失败');
                             return;
                         }
                     }

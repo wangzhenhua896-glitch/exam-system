@@ -6,18 +6,18 @@
 
 | 项目 | 说明 |
 |------|------|
-| **版本** | v2.0.0 |
+| **版本** | v3.0.0 |
 | **技术栈** | Python 3.12 + Flask 3.0 + SQLite + Vue 3 + Element Plus |
-| **服务端口** | 5005 |
+| **服务端口** | 5001 |
 | **数据库** | SQLite (`data/exam_system.db`) |
-| **评分引擎** | QwenGradingEngine（单模型，temperature=0.0） |
+| **评分引擎** | 三层并行 + 策略取分（关键词/向量/LLM） |
 
 ### 访问地址
 
 | 页面 | 地址 | 说明 |
 |------|------|------|
-| 题库管理 | http://localhost:5005/management | Vue 3 + Element Plus SPA |
-| 聚焦评分 | http://localhost:5005/grading | 暗色主题 Vanilla JS |
+| 题库管理 | http://localhost:5001/management | Vue 3 + Element Plus |
+| 聚焦评分 | http://localhost:5001/grading | 暗色主题 Vanilla JS |
 
 ---
 
@@ -25,47 +25,42 @@
 
 ```
 ai-grading-system/
-├── main.py                    # 入口：启动 Flask，端口 5005
+├── main.py                    # 入口：启动 Flask，端口 5001
 ├── requirements.txt           # Python 依赖
 ├── start.sh                   # 快速启动脚本
 ├── .env                       # API 密钥（不入库）
 ├── .env.example               # 环境变量模板
 │
 ├── app/
-│   ├── __init__.py            # 包初始化，version "2.0.0"
+│   ├── __init__.py            # 包初始化，version "3.0.0"
 │   ├── app.py                 # Flask 应用工厂，路由注册
-│   ├── api_routes.py          # 主 API（题目、评分、大纲、测试用例）
-│   ├── qwen_engine.py         # 评分引擎（核心）
-│   ├── routes.py              # 【遗留】多模型聚合评分路由
-│   ├── batch_routes.py        # 【遗留】批量评分路由
-│   ├── validation_routes.py   # 【遗留】规则验证路由
-│   ├── tuning_routes.py       # 【遗留】自动调优路由
-│   ├── engine.py              # 【遗留】多模型聚合引擎
-│   ├── validation.py          # 【遗留】验证引擎
-│   ├── auto_tuning.py         # 【遗留】自动调优引擎
-│   ├── test_data.py           # 硬编码测试数据集
+│   ├── api_routes.py          # 主 API（题目、评分、大纲、测试用例、英语编辑器）
+│   ├── qwen_engine.py         # 核心评分引擎 QwenGradingEngine
+│   ├── english_grader.py      # 英语采分点精确匹配引擎
+│   ├── english_prompts.py     # 英语科目 Prompt（含编辑器 AI 接口提示词）
+│   ├── three_layer_grader.py  # 三层并行评分调度
+│   ├── semantic_checker.py    # 语义校验（text2vec 向量相似度纠偏）
+│   ├── validation.py          # 验证引擎
+│   ├── config_routes.py       # 模型配置管理 API
 │   └── models/
-│       ├── __init__.py
-│       ├── base.py            # 抽象 BaseModelClient
-│       ├── registry.py        # 模型注册表（单例）
-│       ├── qwen.py            # 通义千问客户端
-│       ├── glm.py             # 智谱 GLM 客户端
-│       ├── ernie.py           # 百度文心客户端
-│       ├── minimax.py         # MiniMax 客户端
-│       └── doubao.py          # 字节豆包客户端
+│       ├── db_models.py       # SQLite 原始操作（无 ORM）
+│       └── registry.py        # 模型注册表
 │
 ├── config/
 │   └── settings.py            # 模型配置、评分配置、服务配置
 │
 ├── templates/
-│   ├── question-bank.html     # 题目列表 + 英语编辑器（~1087 行）
-│   ├── question-edit.html     # 题目编辑（1459 行）
-│   ├── dedup.html             # 去重合并（524 行）
-│   ├── import.html            # 导入题目（392 行）
-│   ├── ai-generate.html       # AI 批量出题（175 行）
-│   ├── syllabus.html          # 考试大纲/教材（204 行）
-│   ├── export-rubrics.html    # 导出评分脚本（~135 行）
-│   ├── consistency-check.html # 一致检查（~158 行）
+│   ├── question-bank.html     # 题目列表 + 英语编辑器（~898 行）
+│   ├── question-edit.html     # 题目编辑（~813 行）
+│   ├── question-view.html     # 题目详情（~133 行）
+│   ├── dashboard.html         # 题库总览仪表盘（~200 行）
+│   ├── dedup.html             # 去重合并（~526 行）
+│   ├── import.html            # 导入题目（~392 行）
+│   ├── ai-generate.html       # AI 批量出题（~175 行）
+│   ├── syllabus.html          # 考试大纲/教材（~204 行）
+│   ├── export-rubrics.html    # 导出评分脚本（~134 行）
+│   ├── consistency-check.html # 一致检查（~159 行）
+│   ├── rubric-workbench.html  # 评分脚本工作台（~704 行）
 │   ├── login.html             # 登录
 │   ├── test-cases.html        # 测试集管理
 │   ├── sensitive-words.html   # 敏感词管理
@@ -78,25 +73,36 @@ ai-grading-system/
 ├── data/
 │   └── exam_system.db         # SQLite 数据库
 │
-├── docs/
-│   └── PROJECT_SUMMARY.md     # 本文档
+├── docs/                      # 设计文档
 │
-├── static/                    # 基础样式和脚本（未使用）
-├── tests/                     # 空测试目录
+├── static/
+│   ├── css/
+│   │   ├── question-bank.css  # 题库页面共享样式
+│   │   └── style.css          # 暗色主题（dist/index.html 用）
+│   └── js/
+│       ├── shared.js          # 公共常量、工具函数（handleApiError、safeJsonParse 等）
+│       ├── englishEditCore.js # 英语编辑器 5 步工作流（~600 行）
+│       ├── autoParse.js       # 中英文自动解析（~237 行）
+│       ├── api.js             # API 基础封装
+│       ├── useApp.js          # 题库管理 composable
+│       ├── useQuestion.js     # 题目操作 composable
+│       ├── useHistory.js      # 评分历史 composable
+│       └── useGrading.js      # 评分 composable
+│
+├── tests/                     # 测试目录
 └── logs/                      # 评分日志
 ```
 
 ### 重要说明
 
-- **活跃代码**：`api_routes.py` + `qwen_engine.py` 是当前实际使用的后端
-- **遗留代码**：`routes.py`、`batch_routes.py`、`validation_routes.py`、`tuning_routes.py`、`engine.py` 等是早期多模型聚合方案的遗留，对应的前端页面已标记为"暂未开放"
-- **端口不一致**：`main.py` 硬编码 5005，`start.sh` 写 5000，`settings.py` 默认 5001。以 `main.py` 为准
+- **活跃代码**：`api_routes.py` + `qwen_engine.py` + `english_grader.py` + `three_layer_grader.py` 是当前实际使用的后端
+- **端口**：统一为 5001
 
 ---
 
 ## 3. 数据库设计
 
-SQLite，共 6 张表：
+SQLite，共 12 张表（questions / grading_records / test_cases / model_configs / rubric_script_history / syllabus / batch_tasks / users / sensitive_words / question_answers / grading_params / rubrics）：
 
 ### questions（题目）
 ```sql
@@ -266,15 +272,16 @@ CREATE TABLE syllabus (
 | 页面 | 路由 | 文件 | 行数 | 功能 |
 |------|------|------|------|------|
 | 题库管理 | `/management` | question-bank.html | ~898 | 题目列表 + 英语编辑器 |
-| 题库总览 | `/dashboard` | dashboard.html | ~180 | 统计卡片、覆盖率、质量分布、趋势 |
-| 题目详情 | `/question-view` | question-view.html | ~90 | 查看题目详情 |
-| 题目编辑 | `/question-edit` | question-edit.html | 1459 | 新建/编辑/查看题目 |
-| 去重合并 | `/dedup` | dedup.html | 524 | 去重处理 + 合并同题 |
-| 导入 | `/import` | import.html | 392 | Excel/Word 导入 |
-| AI 批量出题 | `/ai-generate` | ai-generate.html | 175 | AI 自动生成题目 |
-| 考试资料 | `/syllabus` | syllabus.html | 204 | 考试大纲 + 教材内容 |
-| 导出评分脚本 | `/export-rubrics` | export-rubrics.html | ~135 | 批量导出评分脚本 |
-| 一致检查 | `/consistency-check` | consistency-check.html | ~158 | 批量一致检查 |
+| 题库总览 | `/dashboard` | dashboard.html | ~200 | 统计卡片、覆盖率、质量分布、趋势 |
+| 题目详情 | `/question-view` | question-view.html | ~133 | 查看题目详情 |
+| 题目编辑 | `/question-edit` | question-edit.html | ~813 | 新建/编辑/查看题目 |
+| 去重合并 | `/dedup` | dedup.html | ~526 | 去重处理 + 合并同题 |
+| 导入 | `/import` | import.html | ~392 | Excel/Word 导入 |
+| AI 批量出题 | `/ai-generate` | ai-generate.html | ~175 | AI 自动生成题目 |
+| 考试资料 | `/syllabus` | syllabus.html | ~204 | 考试大纲 + 教材内容 |
+| 导出评分脚本 | `/export-rubrics` | export-rubrics.html | ~134 | 批量导出评分脚本 |
+| 一致检查 | `/consistency-check` | consistency-check.html | ~159 | 批量一致检查 |
+| 评分脚本工作台 | `/rubric-workbench` | rubric-workbench.html | ~704 | 评分脚本编辑/验证/发布 |
 
 所有页面均为 Vue 3 + Element Plus 独立应用，通过 `send_file` 返回静态 HTML（避免 Jinja2 与 Vue `{{ }}` 冲突）。
 
@@ -347,12 +354,8 @@ tar xzf ai-grading-system-backup-YYYYMMDD_HHMMSS.tar.gz
 
 ### 技术债
 
-1. **遗留代码清理** — `routes.py`、`batch_routes.py`、`validation_routes.py`、`tuning_routes.py`、`engine.py`、`auto_tuning.py`、`validation.py`、`test_data.py` 以及 `app/models/` 下的多模型客户端均未被实际使用，可清理
-2. **async 伪装** — `api_routes.py` 中 `grade_answer`、`create_batch`、`verify_rubric` 标记为 `async def`，但使用同步 OpenAI 客户端，实际会阻塞
-3. **端口不一致** — `main.py`(5005)、`start.sh`(5000)、`settings.py`(5001) 三处不一致
-4. **rubrics 表未使用** — 已定义但无任何路由引用
-5. **static/ 目录未使用** — 两个前端均不依赖此目录
-6. **templates/index.html** — 旧版遗留，已被 question-bank.html 替代
+1. **遗留代码清理** — `routes.py`、`batch_routes.py`、`validation_routes.py`、`tuning_routes.py`、`auto_tuning.py`、`test_data.py` 以及 `app/models/` 下的多模型客户端均未被实际使用，可清理（`engine.py` 已删除）
+2. **rubrics 表未使用** — 已定义但无任何路由引用
 
 ### 功能缺口
 
